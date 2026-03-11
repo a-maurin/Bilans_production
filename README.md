@@ -205,3 +205,15 @@ parametrer_cartes.bat
 | **Bilan global** (objectif 1) | `out/bilan_global/` (PDF, CSV par domaine/thème) |
 | **Bilan thématique** (objectif 2) | `out/bilan_<profil>/` (PDF, CSV filtré, graphiques) |
 | **Cartes** (generer_cartes.bat) | `out/generateur_de_cartes/carte_*.png` |
+
+## Licence
+
+Le code de ce dépôt est publié sous licence **Apache 2.0** (voir le fichier `LICENSE` à la racine du projet).
+
+Les jeux de données externes éventuellement utilisés (référentiels géographiques, etc.) restent soumis à leurs **licences propres** ; leur réutilisation doit respecter ces conditions.
+
+## Contact
+
+- **Auteur** : Aguirre MAURIN  
+- **Service** : Service départemental de la Côte-d'Or – Office Français de la Biodiversité  
+- **Courriel** : aguirre.maurin@ofb.gouv.fr

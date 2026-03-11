@@ -1,0 +1,36 @@
+Bilans_production
+==================
+
+Ce projet est développé par :
+
+  Office Français de la Biodiversité  
+  Service départemental de la Côte-d'Or  
+  Auteur principal : Aguirre MAURIN  
+  Courriel : aguirre.maurin@ofb.gouv.fr
+
+Le code de ce dépôt est distribué sous licence Apache License, Version 2.0.
+Une copie de la licence est fournie dans le fichier LICENSE à la racine du projet
+et est également disponible à l'adresse suivante :
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Sauf mention contraire, tous les fichiers source et la documentation
+sont soumis à cette licence.
+
+Composants tiers
+----------------
+
+Ce projet peut s'appuyer sur des bibliothèques et outils tiers (par exemple :
+Python, pandas, geopandas, QGIS, etc.), distribués sous leurs propres licences.
+Merci de vous référer à la documentation de ces projets pour les conditions
+complètes de licence.
+
+Données et référentiels externes
+--------------------------------
+
+Les données et référentiels externes éventuellement utilisés (données OSCEAN,
+référentiels géographiques, etc.) restent soumis à leurs propres licences de
+diffusion et d'utilisation. Leur réutilisation doit respecter les conditions
+publiées par les producteurs de données (par exemple sur data.gouv.fr ou
+les plateformes des organismes concernés).
+

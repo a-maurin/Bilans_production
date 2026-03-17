@@ -301,6 +301,13 @@ def load_pej(
     # Alias pour compatibilité si le classeur utilise "NATINF" au lieu de "NATINF_PEJ"
     if "NATINF" in df.columns and "NATINF_PEJ" not in df.columns:
         df["NATINF_PEJ"] = df["NATINF"]
+    # Alias "type_usager" pour filtrage des bilans usagers ciblés
+    # (dans le classeur PEJ, la colonne s'appelle typiquement "USAGER").
+    if "type_usager" not in df.columns:
+        for cand in ("USAGER", "USGAER", "TYPE_USAGER", "Type usager", "type_usager"):
+            if cand in df.columns:
+                df["type_usager"] = df[cand]
+                break
     df["DATE_CONSTATATION"] = pd.to_datetime(df["DATE_CONSTATATION"], errors="coerce")
     df["DATE_OUVERTURE_PROCEDURE"] = pd.to_datetime(
         df["DATE_OUVERTURE_PROCEDURE"], errors="coerce"

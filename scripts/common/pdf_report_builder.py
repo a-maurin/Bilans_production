@@ -43,7 +43,7 @@ from scripts.common.ofb_charte import (
     PAGE_W,
     _get_styles,
 )
-from scripts.common.pdf_utils import key_figures_table, ofb_table
+from scripts.common.pdf_utils import key_figures_table, ofb_table, ofb_table_wide
 
 
 class PDFReportBuilder:
@@ -308,12 +308,21 @@ class PDFReportBuilder:
         col_widths: Optional[list] = None,
         col_aligns: Optional[list] = None,
         keep_together: bool = False,
+        wide_headers: bool = False,
     ) -> None:
         block: List = []
         if caption:
             block.append(Paragraph(caption, self.styles["TableCaption"]))
             block.append(Spacer(1, 2 * mm))
-        tbl = ofb_table(data_rows, col_widths=col_widths, col_aligns=col_aligns)
+        if wide_headers:
+            tbl = ofb_table_wide(
+                data_rows,
+                col_widths=col_widths,
+                col_aligns=col_aligns,
+                avail_w=self.avail_w,
+            )
+        else:
+            tbl = ofb_table(data_rows, col_widths=col_widths, col_aligns=col_aligns)
         block.append(tbl)
         block.append(Spacer(1, 6 * mm))
         if keep_together:

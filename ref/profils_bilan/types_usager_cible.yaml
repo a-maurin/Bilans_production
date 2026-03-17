@@ -21,4 +21,4 @@ options:
   cartes:
     label: Intégration des cartes
     default: true
-    ask: false
+    ask: true

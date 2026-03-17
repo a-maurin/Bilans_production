@@ -264,7 +264,7 @@ def analyse_annuelle_global(
         )
         rows.append(
             {
-                "annee": int(year),
+                "periode": str(year),
                 "nb_controles": nb_ctrl,
                 "nb_controles_non_conformes": nb_ctrl_inf,
                 "taux_infraction_controles": (nb_ctrl_inf / nb_ctrl) if nb_ctrl > 0 else pd.NA,
@@ -276,6 +276,91 @@ def analyse_annuelle_global(
 
     pd.DataFrame(rows).to_csv(
         out_dir / "indicateurs_global_par_annee.csv", sep=";", index=False
+    )
+
+
+def analyse_trimestrielle_global(
+    point: pd.DataFrame,
+    pa: pd.DataFrame,
+    pej: pd.DataFrame,
+    pve: pd.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Construit les indicateurs trimestriels globaux (T1=janv-mars, T2=avr-juin, T3=juil-sept, T4=oct-déc)."""
+    # Trimestre = (mois - 1) // 3 + 1
+    periods: set[tuple[int, int]] = set()
+
+    if not point.empty and "date_ctrl" in point.columns:
+        for _, r in point["date_ctrl"].dropna().items():
+            t = r
+            if hasattr(t, "year") and hasattr(t, "month"):
+                q = (t.month - 1) // 3 + 1
+                periods.add((int(t.year), q))
+    if not pej.empty and "DATE_REF" in pej.columns:
+        for _, r in pej["DATE_REF"].dropna().items():
+            t = r
+            if hasattr(t, "year") and hasattr(t, "month"):
+                q = (t.month - 1) // 3 + 1
+                periods.add((int(t.year), q))
+    if not pa.empty and "DATE_REF" in pa.columns:
+        for _, r in pa["DATE_REF"].dropna().items():
+            t = r
+            if hasattr(t, "year") and hasattr(t, "month"):
+                q = (t.month - 1) // 3 + 1
+                periods.add((int(t.year), q))
+    if not pve.empty and "INF-DATE-INTG" in pve.columns:
+        for _, r in pve["INF-DATE-INTG"].dropna().items():
+            t = r
+            if hasattr(t, "year") and hasattr(t, "month"):
+                q = (t.month - 1) // 3 + 1
+                periods.add((int(t.year), q))
+
+    rows = []
+    for (year, quarter) in sorted(periods):
+        # Mois du trimestre : T1=1,2,3 T2=4,5,6 T3=7,8,9 T4=10,11,12
+        m1 = (quarter - 1) * 3 + 1
+        m2 = quarter * 3
+
+        nb_ctrl = 0
+        if not point.empty and "date_ctrl" in point.columns:
+            dt = point["date_ctrl"]
+            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+            nb_ctrl = int(mask.sum())
+        nb_ctrl_inf = 0
+        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
+            dt = point["date_ctrl"]
+            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2) & (point["resultat"] == "Infraction")
+            nb_ctrl_inf = int(mask.sum())
+        nb_pej = 0
+        if not pej.empty and "DATE_REF" in pej.columns:
+            dt = pej["DATE_REF"]
+            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+            nb_pej = int(mask.sum())
+        nb_pa = 0
+        if not pa.empty and "DATE_REF" in pa.columns:
+            dt = pa["DATE_REF"]
+            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+            nb_pa = int(mask.sum())
+        nb_pve = 0
+        if not pve.empty and "INF-DATE-INTG" in pve.columns:
+            dt = pve["INF-DATE-INTG"]
+            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+            nb_pve = int(mask.sum())
+
+        rows.append(
+            {
+                "periode": f"{year}-T{quarter}",
+                "nb_controles": nb_ctrl,
+                "nb_controles_non_conformes": nb_ctrl_inf,
+                "taux_infraction_controles": (nb_ctrl_inf / nb_ctrl) if nb_ctrl > 0 else pd.NA,
+                "nb_pej": nb_pej,
+                "nb_pa": nb_pa,
+                "nb_pve": nb_pve,
+            }
+        )
+
+    pd.DataFrame(rows).to_csv(
+        out_dir / "indicateurs_global_par_trimestre.csv", sep=";", index=False
     )
 
 

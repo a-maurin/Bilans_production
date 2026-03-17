@@ -534,11 +534,46 @@ def _safe_type_usager_for_filename(label: str) -> str:
     """Retourne une version du libellé type usager sûre pour les noms de fichiers."""
     if not label or not isinstance(label, str):
         return "type_usager"
+    import hashlib
+    import unicodedata
+
     s = label.strip()
+    # Normaliser en ASCII pour éviter les caractères illégaux/encodages (ex. "propriété" → "propriete")
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     s = re.sub(r"[\s'\-]+", "_", s)
-    s = "".join(c if c.isalnum() or c == "_" else "" for c in s)
+    s = "".join(c if (c.isalnum() or c == "_") else "" for c in s)
     s = re.sub(r"_+", "_", s).strip("_")
-    return s or "type_usager"
+    if not s:
+        return "type_usager"
+
+    # Sécuriser la longueur des chemins Windows (et éviter des noms de fichiers énormes)
+    if len(s) > 120:
+        h = hashlib.md5(label.encode("utf-8", errors="ignore")).hexdigest()[:8]
+        s = f"{s[:100]}_{h}"
+    return s
+
+
+def _short_type_usager_code(label: str) -> str:
+    """Code court et lisible pour un type d'usager (pour noms de fichiers/cartes)."""
+    if not isinstance(label, str):
+        return "AUT"
+    txt = label.lower()
+    # Codes explicites pour les types usuels
+    if "agriculteur" in txt:
+        return "AGR"
+    if "particulier" in txt:
+        return "PAR"
+    if "collectivit" in txt:
+        return "COLL"
+    if "entreprise" in txt:
+        return "ENTR"
+    if "sylvicole" in txt:
+        return "SYLV"
+    if "autre" in txt:
+        return "AUTR"
+    # Fallback : dériver un code court à partir du libellé normalisé
+    base = _safe_type_usager_for_filename(label)
+    return (base[:8] or "AUT").upper()
 
 
 def _derive_keywords(label: str) -> list[str]:
@@ -586,6 +621,12 @@ def _filter_pej(
             ].copy()
 
     if ft == "procedures":
+        return pej.copy()
+
+    if ft == "type_usager":
+        targets = (profile.get("filter", {}) or {}).get("type_usager_target") or []
+        if targets and "type_usager" in pej.columns:
+            return _filter_by_type_usager(pej, targets)
         return pej.copy()
 
     # Filtre par mots-clés
@@ -1006,7 +1047,7 @@ def _run_aggregations(
             if not top_pej.empty:
                 results["pej_top_infractions"] = top_pej
 
-    # Agrégation annuelle (pour les périodes multi-annuelles)
+    # Agrégation annuelle ou trimestrielle (selon la durée de la période)
     if ventilation_mode == "annuelle":
         years: set[int] = set()
         if not point_filtered.empty and "date_ctrl" in point_filtered.columns:
@@ -1028,7 +1069,7 @@ def _run_aggregations(
 
         rows: list[dict[str, Any]] = []
         for year in sorted(years):
-            year_row: dict[str, Any] = {"annee": int(year)}
+            year_row: dict[str, Any] = {"periode": str(year)}
 
             if not point_filtered.empty and "date_ctrl" in point_filtered.columns:
                 p_year = point_filtered[point_filtered["date_ctrl"].dt.year == year]
@@ -1077,6 +1118,90 @@ def _run_aggregations(
                 axis=1,
             )
             results["agg_annuelle"] = yearly
+            results["ventilation_temporelle_type"] = "annuelle"
+
+    elif ventilation_mode == "trimestrielle":
+        # Trimestres : T1=janv-mars, T2=avr-juin, T3=juil-sept, T4=oct-déc
+        periods: set[tuple[int, int]] = set()
+        if not point_filtered.empty and "date_ctrl" in point_filtered.columns:
+            for _, r in point_filtered["date_ctrl"].dropna().items():
+                t = r
+                if hasattr(t, "year") and hasattr(t, "month"):
+                    q = (t.month - 1) // 3 + 1
+                    periods.add((int(t.year), q))
+        if not pej_filtered.empty and "DATE_REF" in pej_filtered.columns:
+            for _, r in pej_filtered["DATE_REF"].dropna().items():
+                t = r
+                if hasattr(t, "year") and hasattr(t, "month"):
+                    q = (t.month - 1) // 3 + 1
+                    periods.add((int(t.year), q))
+        if not pa_filtered.empty and "DATE_REF" in pa_filtered.columns:
+            for _, r in pa_filtered["DATE_REF"].dropna().items():
+                t = r
+                if hasattr(t, "year") and hasattr(t, "month"):
+                    q = (t.month - 1) // 3 + 1
+                    periods.add((int(t.year), q))
+        if not pve_filtered.empty and "INF-DATE-INTG" in pve_filtered.columns:
+            for _, r in pve_filtered["INF-DATE-INTG"].dropna().items():
+                t = r
+                if hasattr(t, "year") and hasattr(t, "month"):
+                    q = (t.month - 1) // 3 + 1
+                    periods.add((int(t.year), q))
+
+        rows_trim: list[dict[str, Any]] = []
+        for (year, quarter) in sorted(periods):
+            m1 = (quarter - 1) * 3 + 1
+            m2 = quarter * 3
+            row_t: dict[str, Any] = {"periode": f"{year}-T{quarter}"}
+
+            if not point_filtered.empty and "date_ctrl" in point_filtered.columns:
+                dt = point_filtered["date_ctrl"]
+                mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+                row_t["nb_controles"] = int(mask.sum())
+                if "resultat" in point_filtered.columns:
+                    mask_inf = mask & (point_filtered["resultat"] == "Infraction")
+                    row_t["nb_controles_non_conformes"] = int(mask_inf.sum())
+                else:
+                    row_t["nb_controles_non_conformes"] = 0
+            else:
+                row_t["nb_controles"] = 0
+                row_t["nb_controles_non_conformes"] = 0
+
+            if not pej_filtered.empty and "DATE_REF" in pej_filtered.columns:
+                dt = pej_filtered["DATE_REF"]
+                mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+                row_t["nb_pej"] = int(mask.sum())
+            else:
+                row_t["nb_pej"] = 0
+
+            if not pa_filtered.empty and "DATE_REF" in pa_filtered.columns:
+                dt = pa_filtered["DATE_REF"]
+                mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+                row_t["nb_pa"] = int(mask.sum())
+            else:
+                row_t["nb_pa"] = 0
+
+            if not pve_filtered.empty and "INF-DATE-INTG" in pve_filtered.columns:
+                dt = pve_filtered["INF-DATE-INTG"]
+                mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
+                row_t["nb_pve"] = int(mask.sum())
+            else:
+                row_t["nb_pve"] = 0
+
+            rows_trim.append(row_t)
+
+        if rows_trim:
+            trimestriel = pd.DataFrame(rows_trim)
+            trimestriel["taux_infraction_controles"] = trimestriel.apply(
+                lambda r: (
+                    (r["nb_controles_non_conformes"] / r["nb_controles"])
+                    if r["nb_controles"] > 0
+                    else pd.NA
+                ),
+                axis=1,
+            )
+            results["agg_annuelle"] = trimestriel
+            results["ventilation_temporelle_type"] = "trimestrielle"
 
     return results
 
@@ -1172,11 +1297,17 @@ def _export_csv(
             out_dir / f"synthese_{prefix}_par_zone.csv", sep=";", index=False
         )
 
-    # Agrégation annuelle
+    # Agrégation temporelle (annuelle ou trimestrielle)
+    vent_type = results.get("ventilation_temporelle_type")
     if "agg_annuelle" in results and isinstance(results["agg_annuelle"], pd.DataFrame):
-        results["agg_annuelle"].to_csv(
-            out_dir / f"indicateurs_{prefix}_par_annee.csv", sep=";", index=False
-        )
+        if vent_type == "trimestrielle":
+            results["agg_annuelle"].to_csv(
+                out_dir / f"indicateurs_{prefix}_par_trimestre.csv", sep=";", index=False
+            )
+        else:
+            results["agg_annuelle"].to_csv(
+                out_dir / f"indicateurs_{prefix}_par_annee.csv", sep=";", index=False
+            )
 
     # PEJ durée (procedures)
     if "pej_duree_resume" in results:
@@ -1344,10 +1475,14 @@ def _generate_pdf(
             else:
                 main_label = ", ".join(targets[:-1]) + f" et {targets[-1]}"
 
+    subtitle_sources = "Sources des données : OFB/OSCEAN"
+    if nb_pve > 0:
+        subtitle_sources += " – MININT/AGC-PVe"
+
     builder.add_title_page(
         title_lines=[f"Bilan thématique : {main_label}", f"pour la {dept_name}"],
         period_str=f"Période : {period_str}",
-        subtitle="Sources des données : OFB/OSCEAN – MININT/AGC-PVe",
+        subtitle=subtitle_sources,
     )
     builder.add_toc(sections)
 
@@ -1392,15 +1527,19 @@ def _generate_pdf(
 
     # ── ANALYSE DE L'ENSEMBLE DE LA PÉRIODE DU BILAN ──
     agg_annuelle = results.get("agg_annuelle")
+    vent_temp_type = results.get("ventilation_temporelle_type", "annuelle")
     if isinstance(agg_annuelle, pd.DataFrame) and not agg_annuelle.empty:
         anchor, title = sections[sec_idx]; sec_idx += 1
         builder.add_section(anchor, title)
+        is_trim = vent_temp_type == "trimestrielle"
+        texte_vent = "par trimestre " if is_trim else "par année "
         builder.add_paragraph(
-            "Ventilation des principaux indicateurs par année "
-            "sur l'ensemble de la période du bilan."
+            "Ventilation des principaux indicateurs " + texte_vent
+            + "sur l'ensemble de la période du bilan."
         )
+        label_col = "Trimestre" if is_trim else "Année"
         tbl = [[
-            "Année",
+            label_col,
             "Nb contrôles",
             "Contrôles non-conformes",
             "Taux d'infraction",
@@ -1415,7 +1554,7 @@ def _generate_pdf(
                 else "n.d."
             )
             tbl.append([
-                str(int(row["annee"])),
+                str(row["periode"]),
                 str(int(row["nb_controles"])),
                 str(int(row["nb_controles_non_conformes"])),
                 taux,
@@ -1425,7 +1564,7 @@ def _generate_pdf(
             ])
         builder.add_table(
             tbl,
-            caption="Indicateurs annuels",
+            caption="Indicateurs " + ("trimestriels" if is_trim else "annuels"),
             col_widths=[
                 avail_w * 0.12,
                 avail_w * 0.14,
@@ -1438,7 +1577,9 @@ def _generate_pdf(
             col_aligns=["RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"],
         )
 
-        year_labels = [str(int(v)) for v in agg_annuelle["annee"].tolist()]
+        period_labels = [str(v) for v in agg_annuelle["periode"].tolist()]
+        titre_ctrl = "Contrôles par trimestre (conformes / non-conformes)" if is_trim else "Contrôles par année (conformes / non-conformes)"
+        titre_proc = "Procédures et PVe par trimestre" if is_trim else "Procédures et PVe par année"
 
         # Graphique 1 : barres empilées — contrôles conformes vs non-conformes
         conformes = [
@@ -1451,14 +1592,14 @@ def _generate_pdf(
             "Non-conformes": non_conformes,
         }
         stacked_path = chart_bar_stacked(
-            year_labels, stacked_ctrl,
-            "Contrôles par année (conformes / non-conformes)",
+            period_labels, stacked_ctrl,
+            titre_ctrl,
             "Nombre de contrôles",
             tmp_dir, "bar_annuel_ctrl_stacked.png",
         )
         builder.add_image(Path(stacked_path), width_ratio=0.78)
 
-        # Graphique 2 : barres empilées — procédures et PVe par année
+        # Graphique 2 : barres empilées — procédures et PVe par période
         series_proc = {
             "PEJ": [int(v) for v in agg_annuelle["nb_pej"].tolist()],
             "PA": [int(v) for v in agg_annuelle["nb_pa"].tolist()],
@@ -1467,8 +1608,8 @@ def _generate_pdf(
         has_proc = any(sum(vals) > 0 for vals in series_proc.values())
         if has_proc:
             stacked_proc_path = chart_bar_stacked(
-                year_labels, series_proc,
-                "Procédures et PVe par année",
+                period_labels, series_proc,
+                titre_proc,
                 "Nombre",
                 tmp_dir, "bar_annuel_proc_stacked.png",
             )
@@ -1481,7 +1622,7 @@ def _generate_pdf(
             taux_values.append(round(float(val) * 100, 1) if pd.notna(val) else 0)
         if any(v > 0 for v in taux_values):
             line_path = chart_line_evolution(
-                year_labels,
+                period_labels,
                 {"Taux d'infraction (%)": taux_values},
                 "Évolution du taux d'infraction",
                 "Taux (%)",
@@ -1572,7 +1713,14 @@ def _generate_pdf(
                 tbl = [list(df_ud.columns)]
                 for _, row in df_ud.head(20).iterrows():
                     tbl.append([str(v) for v in row.values])
-                builder.add_table(tbl, caption="Usagers × Domaine")
+                n_cols = len(df_ud.columns)
+                col_aligns = ["LEFT"] + ["RIGHT"] * (n_cols - 1)
+                builder.add_table(
+                    tbl,
+                    caption="Usagers × Domaine",
+                    col_aligns=col_aligns,
+                    wide_headers=True,
+                )
 
         # Résultats des contrôles pour l'usager ciblé (tableau + camembert)
         # (placés avant les tableaux \"par domaine\")
@@ -2224,7 +2372,7 @@ def run_engine(
     elif vent_type == "globale":
         ventilation_mode = "globale"
     else:
-        ventilation_mode = "annuelle" if duree_jours > seuil_jours else "globale"
+        ventilation_mode = "annuelle" if duree_jours > seuil_jours else "trimestrielle"
     print(
         f"Ventilation temporelle : {ventilation_mode} "
         f"(type={vent_type}, seuil={seuil_jours} j, durée={duree_jours} j)"
@@ -2273,11 +2421,11 @@ def run_engine(
 
     # Déterminer l'identifiant cartographique à utiliser pour retrouver la carte.
     # Pour le profil "types_usager_cible", le nom de carte doit dépendre des
-    # types d'usagers réellement sélectionnés.
+    # types d'usagers réellement sélectionnés, via des codes courts lisibles.
     targets = (profile.get("filter", {}) or {}).get("type_usager_target") or []
     if profil_id == "types_usager_cible" and targets:
-        safe_targets = [_safe_type_usager_for_filename(t) for t in targets]
-        map_id = "_".join([t for t in safe_targets if t]) or profil_id
+        codes = [_short_type_usager_code(t) for t in targets]
+        map_id = "_".join([c for c in codes if c]) or profil_id
     else:
         map_id = profil_id
     profile["_map_id"] = map_id
@@ -2315,11 +2463,19 @@ def run_engine(
         profile.pop("_single_usager", None)
 
     # Nommage des fichiers de sortie pour le bilan ciblé :
-    # Bilan_{type(s)_usager(s)} (avec normalisation sûre pour les noms de fichiers).
+    # - mono-usager : Bilan_{type_usager normalisé}
+    # - multi-usagers : Bilan_{codes_courts} (AGR_PAR_COLL_...) limité en longueur.
     if profil_id == "types_usager_cible" and targets:
-        safe_targets = [_safe_type_usager_for_filename(t) for t in targets]
-        safe_join = "_".join([t for t in safe_targets if t]) or "type_usager"
-        profile["_export_prefix"] = f"Bilan_{safe_join}"
+        if len(targets) == 1:
+            safe_join = _safe_type_usager_for_filename(targets[0]) or "type_usager"
+            profile["_export_prefix"] = f"Bilan_{safe_join}"
+        else:
+            codes = [_short_type_usager_code(t) for t in targets]
+            joined = "_".join(codes)
+            # Si jamais trop long, tronquer proprement.
+            if len(joined) > 40:
+                joined = "_".join(codes[:5])
+            profile["_export_prefix"] = f"Bilan_{joined}"
     else:
         profile.pop("_export_prefix", None)
 

@@ -52,6 +52,7 @@ from bilans.bilan_global.core import (
     analyse_pej_pa_global,
     analyse_pve_global,
     analyse_annuelle_global,
+    analyse_trimestrielle_global,
 )
 
 
@@ -91,10 +92,12 @@ def resolve_ventilation_mode_global(date_deb: pd.Timestamp, date_fin: pd.Timesta
         return "annuelle"
     if vent_type == "globale":
         return "globale"
-    return "annuelle" if duree_jours > int(VENTILATION_SEUIL_JOURS_GLOBAL) else "globale"
+    if duree_jours > int(VENTILATION_SEUIL_JOURS_GLOBAL):
+        return "annuelle"
+    return "trimestrielle"
 
 
-def generate_pdf_report(out_dir: Path) -> None:
+def generate_pdf_report(out_dir: Path, ventilation_mode: str = "globale") -> None:
     """Génère le PDF du bilan global (page de garde, sommaire, chiffres clés, contrôles par domaine/thème, résultats, PEJ/PA/PVe)."""
     # Appliquer le style matplotlib pour utiliser la police Marianne
     from scripts.common.charts import apply_mpl_style
@@ -103,12 +106,12 @@ def generate_pdf_report(out_dir: Path) -> None:
     styles = _get_styles()
     tmp_dir = Path(tempfile.mkdtemp(prefix="ofb_global_"))
     try:
-        _generate_pdf_content(out_dir, tmp_dir, styles)
+        _generate_pdf_content(out_dir, tmp_dir, styles, ventilation_mode)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
+def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles, ventilation_mode: str = "globale") -> None:
     """Corps de la génération PDF, séparé pour garantir le nettoyage de tmp_dir."""
     avail_w = PAGE_W - MARGIN_LEFT - MARGIN_RIGHT
 
@@ -118,7 +121,10 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
     agg_usager = _load_csv_opt(out_dir, "controles_global_par_usager.csv")
     cross_usager_dom = _load_csv_opt(out_dir, "controles_global_usager_par_domaine.csv")
     usagers_resume = _load_csv_opt(out_dir, "controles_global_usagers_resume.csv")
-    agg_annuelle = _load_csv_opt(out_dir, "indicateurs_global_par_annee.csv")
+    if ventilation_mode == "trimestrielle":
+        agg_periode = _load_csv_opt(out_dir, "indicateurs_global_par_trimestre.csv")
+    else:
+        agg_periode = _load_csv_opt(out_dir, "indicateurs_global_par_annee.csv")
     pej_resume = _load_csv_opt(out_dir, "pej_global_resume.csv")
     pa_resume = _load_csv_opt(out_dir, "pa_global_resume.csv")
     pve_resume = _load_csv_opt(out_dir, "pve_global_resume.csv")
@@ -135,7 +141,7 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
     sections = [
         ("sec1", "I. Chiffres clés"),
     ]
-    if agg_annuelle is not None and not agg_annuelle.empty:
+    if agg_periode is not None and not agg_periode.empty:
         sections.append(("sec1b", "I bis. Analyse de l'ensemble de la période du bilan"))
     sections.extend([
         ("sec2", "II. Localisations de contrôle par domaine"),
@@ -199,10 +205,13 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
             f"Période : {DATE_DEB.date():%d/%m/%Y} au {DATE_FIN.date():%d/%m/%Y}",
         )
         canvas.setFont(FONT_FAMILY, 11)
+        subtitle = "Sources des données : OFB/OSCEAN"
+        if nb_pve > 0:
+            subtitle += " – MININT/AGC-PVe"
         canvas.drawCentredString(
             cx,
             PAGE_H * 0.42,
-            "Sources des données : OFB/OSCEAN – MININT/AGC-PVe",
+            subtitle,
         )
         canvas.setFont(f"{FONT_FAMILY}-Bold", 7)
         canvas.setFillColor(rl_colors.HexColor(COLOR_SECONDARY))
@@ -242,18 +251,21 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
     story.append(Spacer(1, 6 * mm))
 
     # I bis. Analyse de l’ensemble de la période du bilan
-    if agg_annuelle is not None and not agg_annuelle.empty:
+    if agg_periode is not None and not agg_periode.empty:
+        is_trimestriel = ventilation_mode == "trimestrielle"
+        label_periode = "Trimestre" if is_trimestriel else "Ann\u00e9e"
+        texte_ventilation = "par trimestre " if is_trimestriel else "par ann\u00e9e "
         story.append(Paragraph(
             '<a name="sec1b"/>I bis. Analyse de l\u2019ensemble de la p\u00e9riode du bilan',
             styles["Heading1"],
         ))
         story.append(Paragraph(
-            "Ventilation des principaux indicateurs globaux par ann\u00e9e "
-            "sur l\u2019ensemble de la p\u00e9riode du bilan.",
+            "Ventilation des principaux indicateurs globaux " + texte_ventilation
+            + "sur l\u2019ensemble de la p\u00e9riode du bilan.",
             styles["BodyText"],
         ))
         tbl = [[
-            "Ann\u00e9e",
+            label_periode,
             "Nb contr\u00f4les",
             "Contr\u00f4les non-conformes",
             "Taux d\u2019infraction",
@@ -261,14 +273,14 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
             "PA",
             "PVe",
         ]]
-        for _, row in agg_annuelle.iterrows():
+        for _, row in agg_periode.iterrows():
             taux_str = (
                 f"{float(row['taux_infraction_controles']):.1%}"
                 if pd.notna(row.get("taux_infraction_controles"))
                 else "n.d."
             )
             tbl.append([
-                str(int(row["annee"])),
+                str(row["periode"]),
                 str(int(row["nb_controles"])),
                 str(int(row["nb_controles_non_conformes"])),
                 taux_str,
@@ -296,17 +308,19 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
         from PIL import Image as PILImage
         from reportlab.platypus import Image as RLImage
 
-        year_labels = [str(int(v)) for v in agg_annuelle["annee"].tolist()]
+        year_labels = [str(v) for v in agg_periode["periode"].tolist()]
+        titre_ctrl = "Contr\u00f4les par trimestre (conformes / non-conformes)" if ventilation_mode == "trimestrielle" else "Contr\u00f4les par ann\u00e9e (conformes / non-conformes)"
+        titre_proc = "Proc\u00e9dures et PVe par trimestre" if ventilation_mode == "trimestrielle" else "Proc\u00e9dures et PVe par ann\u00e9e"
 
         conformes = [
             int(row["nb_controles"]) - int(row["nb_controles_non_conformes"])
-            for _, row in agg_annuelle.iterrows()
+            for _, row in agg_periode.iterrows()
         ]
-        non_conformes = [int(v) for v in agg_annuelle["nb_controles_non_conformes"].tolist()]
+        non_conformes = [int(v) for v in agg_periode["nb_controles_non_conformes"].tolist()]
         stacked_ctrl_path = chart_bar_stacked(
             year_labels,
             {"Conformes": conformes, "Non-conformes": non_conformes},
-            "Contr\u00f4les par ann\u00e9e (conformes / non-conformes)",
+            titre_ctrl,
             "Nombre de contr\u00f4les",
             tmp_dir, "bar_global_ctrl_stacked.png",
         )
@@ -318,14 +332,14 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
         story.append(Spacer(1, 4 * mm))
 
         series_proc = {
-            "PEJ": [int(v) for v in agg_annuelle["nb_pej"].tolist()],
-            "PA": [int(v) for v in agg_annuelle["nb_pa"].tolist()],
-            "PVe": [int(v) for v in agg_annuelle["nb_pve"].tolist()],
+            "PEJ": [int(v) for v in agg_periode["nb_pej"].tolist()],
+            "PA": [int(v) for v in agg_periode["nb_pa"].tolist()],
+            "PVe": [int(v) for v in agg_periode["nb_pve"].tolist()],
         }
         if any(sum(vals) > 0 for vals in series_proc.values()):
             stacked_proc_path = chart_bar_stacked(
                 year_labels, series_proc,
-                "Proc\u00e9dures et PVe par ann\u00e9e",
+                titre_proc,
                 "Nombre",
                 tmp_dir, "bar_global_proc_stacked.png",
             )
@@ -337,7 +351,7 @@ def _generate_pdf_content(out_dir: Path, tmp_dir: Path, styles) -> None:
             story.append(Spacer(1, 4 * mm))
 
         taux_values = []
-        for _, row in agg_annuelle.iterrows():
+        for _, row in agg_periode.iterrows():
             val = row.get("taux_infraction_controles")
             taux_values.append(round(float(val) * 100, 1) if pd.notna(val) else 0)
         if any(v > 0 for v in taux_values):
@@ -621,10 +635,12 @@ def run_global(date_deb: str, date_fin: str, dept_code: str) -> int:
             analyse_pve_global(pve, out_dir)
             if ventilation_mode == "annuelle":
                 analyse_annuelle_global(point, pa, pej, pve, out_dir)
+            elif ventilation_mode == "trimestrielle":
+                analyse_trimestrielle_global(point, pa, pej, pve, out_dir)
             else:
-                # Conserver un fichier prévisible même en mode global.
+                # Mode globale : pas de ventilation temporelle
                 pd.DataFrame(columns=[
-                    "annee",
+                    "periode",
                     "nb_controles",
                     "nb_controles_non_conformes",
                     "taux_infraction_controles",
@@ -643,7 +659,7 @@ def run_global(date_deb: str, date_fin: str, dept_code: str) -> int:
 
         print("Étape 4/4 : génération du PDF...")
         with Spinner():
-            generate_pdf_report(out_dir)
+            generate_pdf_report(out_dir, ventilation_mode=ventilation_mode)
 
         print("Bilan global généré dans out/bilan_global.")
         return 0

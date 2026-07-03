@@ -131,3 +131,7 @@ Pour les automatisations ou les tâches de traitement par lots, vous pouvez exé
 *   **Auteur** : Aguirre Maurin
 *   **Service** : Office Français de la Biodiversité (OFB), Service Départemental de la Côte-d'Or
 *   **Courriel** : [aguirre.maurin@ofb.gouv.fr](mailto:aguirre.maurin@ofb.gouv.fr)
+
+## Contribution
+
+Les contributions sont les bienvenues. Veuillez respecter la licence Apache 2.0 et conserver les mentions de copyright lors de toute modification.

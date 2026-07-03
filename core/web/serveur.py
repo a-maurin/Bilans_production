@@ -889,6 +889,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         date_val = row.get("date_ctrl")
                         action_val = row.get("type_action")
 
+                        dept_raw = row.get("num_depart")
+                        if pd.notna(dept_raw) and str(dept_raw).strip() not in ("", "nan", "None"):
+                            # Supprimer la partie décimale si float (ex: 25.0 -> "25")
+                            dept_str = str(dept_raw).strip()
+                            if "." in dept_str:
+                                dept_str = dept_str.split(".")[0]
+                            # Normaliser en 2 chars (ou 3 pour DOM/TOM)
+                            dept_str = dept_str.strip()
+                            if dept_str.isdigit() and len(dept_str) <= 2:
+                                code_dept_val = dept_str.zfill(2)
+                            elif dept_str.isdigit() and len(dept_str) == 3:
+                                code_dept_val = dept_str  # DOM/TOM ex: 971
+                            else:
+                                code_dept_val = dept_str.upper()  # 2A, 2B
+                        else:
+                            # Fallback : 2 premiers chars du code INSEE commune
+                            insee_raw = row.get("insee_comm", "")
+                            insee_str = str(insee_raw).strip() if pd.notna(insee_raw) else ""
+                            code_dept_val = insee_str[:2] if len(insee_str) >= 2 else ""
+
                         points.append({
                             "dc_id": str(dc_val).strip() if pd.notna(dc_val) else "",
                             "date_ctrl": str(date_val)[:10] if pd.notna(date_val) else "",
@@ -898,6 +918,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "type_action": str(action_val).strip() if pd.notna(action_val) else "",
                             "type_usager": str(usager_val).strip() if pd.notna(usager_val) else "",
                             "nom_commun": str(com_val).strip() if pd.notna(com_val) else "",
+                            "code_dept": code_dept_val,
                             "x": float(row["x"]) if pd.notna(row.get("x")) else 0.0,
                             "y": float(row["y"]) if pd.notna(row.get("y")) else 0.0
                         })
@@ -918,12 +939,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_valid = df.loc[mask].dropna(subset=["x", "y"])
                     col_ta = "type_actio" if "type_actio" in df.columns else ("type_action" if "type_action" in df.columns else None)
                     for _, r in df_valid.iterrows():
+                        dept_raw = r.get("num_depart")
+                        if pd.notna(dept_raw) and str(dept_raw).strip() not in ("", "nan", "None"):
+                            dept_str = str(dept_raw).strip()
+                            if "." in dept_str:
+                                dept_str = dept_str.split(".")[0]
+                            code_dept_proc = dept_str.zfill(2) if dept_str.isdigit() and len(dept_str) <= 2 else dept_str
+                        else:
+                            insee_raw = r.get("insee_comm", "")
+                            insee_str = str(insee_raw).strip() if pd.notna(insee_raw) else ""
+                            code_dept_proc = insee_str[:2] if len(insee_str) >= 2 else ""
                         arr.append({
                             "type": label,
                             "dc_id": str(r.get("dc_id", "")).strip() if pd.notna(r.get("dc_id")) else "",
                             "date_ctrl": str(r.get("date_ctrl", ""))[:10] if pd.notna(r.get("date_ctrl")) else "",
                             "type_action": str(r.get(col_ta, "Non renseigné")).strip() if col_ta and pd.notna(r.get(col_ta)) else "Non renseigné",
                             "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
+                            "code_dept": code_dept_proc,
                             "x": float(r["x"]),
                             "y": float(r["y"])
                         })
@@ -957,12 +989,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if not df_pej_loc.empty and "x_faits" in df_pej_loc.columns and "y_faits" in df_pej_loc.columns:
                             df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"])
                             for _, r in df_pej_valid.iterrows():
+                                dept_raw_pej = r.get("num_depart") or r.get("NUM_DEPART")
+                                if pd.notna(dept_raw_pej) and str(dept_raw_pej).strip() not in ("", "nan", "None"):
+                                    dept_str_pej = str(dept_raw_pej).strip()
+                                    if "." in dept_str_pej:
+                                        dept_str_pej = dept_str_pej.split(".")[0]
+                                    code_dept_pej = dept_str_pej.zfill(2) if dept_str_pej.isdigit() and len(dept_str_pej) <= 2 else dept_str_pej
+                                else:
+                                    code_dept_pej = ""
                                 procedures.append({
                                     "type": "PEJ",
                                     "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
                                     "date_ctrl": str(r.get("DATE_REF", ""))[:10] if pd.notna(r.get("DATE_REF")) else "",
                                     "type_action": str(r.get("TYPE_ACTION", "Non renseigné")).strip() if pd.notna(r.get("TYPE_ACTION")) else "Non renseigné",
                                     "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
+                                    "code_dept": code_dept_pej,
                                     "x": float(r["x_faits"]),
                                     "y": float(r["y_faits"])
                                 })
@@ -1018,12 +1059,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         col_ta_pve = "type_action" if "type_action" in df_pve.columns else ("THEME" if "THEME" in df_pve.columns else ("type_actio" if "type_actio" in df_pve.columns else None))
                         col_usager_pve = "type_usager" if "type_usager" in df_pve.columns else ("USAGER" if "USAGER" in df_pve.columns else None)
                         for _, r in pve_valid.iterrows():
+                            pve_insee_raw = str(r.get("INF-INSEE", "")).strip()
+                            code_dept_pve = pve_insee_raw[:2] if len(pve_insee_raw) >= 2 else ""
                             procedures.append({
                                 "type": "PVe",
                                 "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
                                 "date_ctrl": str(r.get(date_col_pve, ""))[:10] if pd.notna(r.get(date_col_pve)) else "",
                                 "type_action": str(r.get(col_ta_pve, "Non renseigné")).strip() if col_ta_pve and pd.notna(r.get(col_ta_pve)) else "Non renseigné",
                                 "type_usager": str(r.get(col_usager_pve, "Non renseigné")).strip() if col_usager_pve and pd.notna(r.get(col_usager_pve)) else "Non renseigné",
+                                "code_dept": code_dept_pve,
                                 "x": float(r[x_col]),
                                 "y": float(r[y_col])
                             })

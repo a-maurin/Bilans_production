@@ -751,62 +751,128 @@ document.addEventListener('DOMContentLoaded', () => {
         loadData();
     });
 
-    const markersGroup = L.layerGroup(); // Les points individuels sans cluster (si besoin de bascule)
-    const markersClusterGroup = L.markerClusterGroup({
+    const markersGroup = L.layerGroup();
+
+    /**
+     * Clustering cloisonné par territoire administratif.
+     * clusterParent : FeatureGroup parent ajouté à la carte (visible dans le contrôle des couches).
+     * clustersByTerritory : Map JS { clé_territoire -> L.markerClusterGroup }
+     * Idem pour PEJ, PA, PVe.
+     */
+    const clusterParent    = L.featureGroup().addTo(map);
+    const pejParent        = L.featureGroup().addTo(map);
+    const paParent         = L.featureGroup().addTo(map);
+    const pveParent        = L.featureGroup().addTo(map);
+
+    let clustersByTerritory = new Map();
+    let pejByTerritory      = new Map();
+    let paByTerritory       = new Map();
+    let pveByTerritory      = new Map();
+
+    // FeatureGroups et Maps pour la période N-1 (séparés pour ne jamais fusionner avec N)
+    const clusterParentN1 = L.featureGroup().addTo(map);
+    const pejParentN1     = L.featureGroup().addTo(map);
+    const paParentN1      = L.featureGroup().addTo(map);
+    const pveParentN1     = L.featureGroup().addTo(map);
+
+    let clustersByTerritoryN1 = new Map();
+    let pejByTerritoryN1      = new Map();
+    let paByTerritoryN1       = new Map();
+    let pveByTerritoryN1      = new Map();
+
+    // Options réutilisées pour chaque sous-groupe de clusters
+    const baseClusterOpts = {
         chunkedLoading: true,
         disableClusteringAtZoom: 14,
         maxClusterRadius: function (zoom) { return (zoom < 8) ? 80 : (zoom < 11) ? 50 : 30; }
-    }).addTo(map);
-    const pejGroup = L.markerClusterGroup({
-        chunkedLoading: true,
-        disableClusteringAtZoom: 14,
-        maxClusterRadius: function (zoom) { return (zoom < 8) ? 80 : (zoom < 11) ? 50 : 30; },
+    };
+    const makeProcClusterOpts = (color) => ({
+        ...baseClusterOpts,
         iconCreateFunction: function (cluster) {
             const count = cluster.getChildCount();
             return L.divIcon({
-                html: `<div style="background-color:rgba(59, 130, 246, 0.85);border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
+                html: `<div style="background-color:${color};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
                 className: '',
                 iconSize: [30, 30]
             });
         }
-    }).addTo(map);
+    });
 
-    const paGroup = L.markerClusterGroup({
-        chunkedLoading: true,
-        disableClusteringAtZoom: 14,
-        maxClusterRadius: function (zoom) { return (zoom < 8) ? 80 : (zoom < 11) ? 50 : 30; },
+    // Options N-1 : même couleur mais plus pâle (opacité 0.45, bord en tirets)
+    const makeN1ClusterOpts = (color) => ({
+        ...baseClusterOpts,
         iconCreateFunction: function (cluster) {
             const count = cluster.getChildCount();
             return L.divIcon({
-                html: `<div style="background-color:rgba(139, 92, 246, 0.85);border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
+                html: `<div style="background-color:${color};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
                 className: '',
-                iconSize: [30, 30]
+                iconSize: [28, 28]
             });
         }
-    }).addTo(map);
+    });
 
-    const pveGroup = L.markerClusterGroup({
-        chunkedLoading: true,
-        disableClusteringAtZoom: 14,
-        maxClusterRadius: function (zoom) { return (zoom < 8) ? 80 : (zoom < 11) ? 50 : 30; },
-        iconCreateFunction: function (cluster) {
-            const count = cluster.getChildCount();
-            return L.divIcon({
-                html: `<div style="background-color:rgba(249, 115, 22, 0.85);border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
-                className: '',
-                iconSize: [30, 30]
-            });
+    /**
+     * Normalise un code département brut en chaîne 2 chars (ou 3 pour DOM/TOM, 2A/2B).
+     * Retourne null si la valeur est absente, vide ou non exploitable.
+     */
+    function normalizeDeptCode(raw) {
+        if (raw === null || raw === undefined) return null;
+        let s = String(raw).trim();
+        // Nettoyer suffixe float (ex: "25.0")
+        if (/^\d+\.0*$/.test(s)) s = s.split('.')[0];
+        if (!s || s === 'nan' || s === 'None' || s === '') return null;
+        // DOM/TOM (3 chiffres) ou alphanumérique (2A, 2B)
+        if (/^\d{3}$/.test(s)) return s;
+        if (/^2[AB]$/i.test(s)) return s.toUpperCase();
+        // Cas standard : forcer 2 chiffres
+        if (/^\d{1,2}$/.test(s)) return s.padStart(2, '0');
+        return null; // format inconnu
+    }
+
+    /**
+     * Retourne la clé de territoire stricte pour le cloisonnement.
+     * - échelle 'region' ou 'national' : code région INSEE (depuis DEPT_TO_REG)
+     * - toute autre échelle (département, pnf, bmi) : code département normalisé
+     * - absence de territoire valide : bucket '_fallback' unique (jamais de crash Leaflet)
+     */
+    function getTerritoryKey(codeDeptRaw) {
+        const normalized = normalizeDeptCode(codeDeptRaw);
+        if (!normalized) return '_fallback';
+        return 'dept_' + normalized;
+    }
+
+    /**
+     * Récupère ou crée le L.markerClusterGroup pour une clé territoire et un parent donnés.
+     */
+    function getOrCreateCluster(key, parentFG, byTerritoryMap, extraOpts = {}) {
+        if (!byTerritoryMap.has(key)) {
+            const grp = L.markerClusterGroup({ ...baseClusterOpts, ...extraOpts });
+            parentFG.addLayer(grp);
+            byTerritoryMap.set(key, grp);
         }
-    }).addTo(map);
+        return byTerritoryMap.get(key);
+    }
+
+    /**
+     * Vide et supprime de la carte tous les sous-groupes d'une Map de clusters.
+     */
+    function clearTerritoryMap(parentFG, byTerritoryMap) {
+        byTerritoryMap.forEach(grp => {
+            grp.clearLayers();
+            parentFG.removeLayer(grp);
+        });
+        byTerritoryMap.clear();
+    }
+
     let heatmapLayer = null;
 
     // Contrôle des couches
     const baseMaps = {};
     const overlayMaps = {
-        "Contrôles (Clusters/Points)": markersClusterGroup,
-        "PEJ": pejGroup,
-        "PA": paGroup,
-        "PVe": pveGroup
+        "Contrôles (Clusters/Points)": clusterParent,
+        "PEJ": pejParent,
+        "PA": paParent,
+        "PVe": pveParent
     };
     L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
 
@@ -951,10 +1017,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 markersGroup.clearLayers();
-                markersClusterGroup.clearLayers();
-                pejGroup.clearLayers();
-                paGroup.clearLayers();
-                pveGroup.clearLayers();
+                // Nettoyage des clusters cloisonnés N et N-1
+                clearTerritoryMap(clusterParent,   clustersByTerritory);
+                clearTerritoryMap(pejParent,        pejByTerritory);
+                clearTerritoryMap(paParent,         paByTerritory);
+                clearTerritoryMap(pveParent,        pveByTerritory);
+                clearTerritoryMap(clusterParentN1,  clustersByTerritoryN1);
+                clearTerritoryMap(pejParentN1,      pejByTerritoryN1);
+                clearTerritoryMap(paParentN1,       paByTerritoryN1);
+                clearTerritoryMap(pveParentN1,      pveByTerritoryN1);
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);
                     heatmapLayer = null;
@@ -967,12 +1038,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const heatData = [];
                 const isHeatmapMode = document.querySelector('input[name="map-mode"]:checked')?.value === 'heatmap';
 
-                const newMarkers = [];
-                const newPejMarkers = [];
-                const newPaMarkers = [];
-                const newPveMarkers = [];
+
 
                 if (resN.points && resN.points.length > 0) {
+                    // Map temporaire pour batching : clé -> tableau de markers
+                    const markersByKey = new Map();
+
                     resN.points.forEach(pt => {
                         const lat = parseFloat(pt.y);
                         const lng = parseFloat(pt.x);
@@ -1004,41 +1075,54 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
-                            newMarkers.push(marker);
+
+                            // Cloisonnement : on groupe par clé territoire avant d'injecter
+                            const tKey = getTerritoryKey(pt.code_dept);
+                            if (!markersByKey.has(tKey)) markersByKey.set(tKey, []);
+                            markersByKey.get(tKey).push(marker);
                         }
+                    });
+
+                    // Injection en masse dans chaque sous-groupe cloisonné
+                    markersByKey.forEach((markers, tKey) => {
+                        const grp = getOrCreateCluster(tKey, clusterParent, clustersByTerritory);
+                        grp.addLayers(markers);
                     });
                 }
 
                 if (isHeatmapMode) {
-                    map.removeLayer(markersClusterGroup);
+                    clusterParent.eachLayer(l => map.removeLayer(l));
                     heatmapLayer = L.heatLayer(heatData, {
                         radius: 20,
                         blur: 15,
                         maxZoom: 12
                     }).addTo(map);
                 } else {
-                    if (!map.hasLayer(markersClusterGroup)) {
-                        markersClusterGroup.addTo(map);
+                    if (heatmapLayer) {
+                        map.removeLayer(heatmapLayer);
+                        heatmapLayer = null;
+                    }
+                    if (!map.hasLayer(clusterParent)) {
+                        clusterParent.addTo(map);
                     }
                 }
                 // Render procedure markers (if any)
                 if (resN.procedures && resN.procedures.length > 0) {
+                    const pejByKey = new Map(), paByKey = new Map(), pveByKey = new Map();
+
                     resN.procedures.forEach(p => {
                         let lat = parseFloat(p.y);
                         let lng = parseFloat(p.x);
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             let procColor = '#3B82F6';
                             const ptype = (p.type || '').toUpperCase();
-                            let targetGroup = pejGroup;
+                            let targetMap = pejByKey;
                             if (ptype.includes('PEJ')) {
-                                procColor = '#3B82F6';
-                                targetGroup = pejGroup;
+                                procColor = '#3B82F6'; targetMap = pejByKey;
                             } else if (ptype.includes('PA')) {
-                                procColor = '#8B5CF6';
-                                targetGroup = paGroup;
+                                procColor = '#8B5CF6'; targetMap = paByKey;
                             } else if (ptype.includes('PVE')) {
-                                procColor = '#F97316';
-                                targetGroup = pveGroup;
+                                procColor = '#F97316'; targetMap = pveByKey;
                             }
 
                             const marker = L.circleMarker([lat, lng], {
@@ -1057,15 +1141,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             Usager visé : ${p.type_usager || 'Non renseigné'}
                         `;
                             marker.bindPopup(popup);
-                            if (targetGroup === pejGroup) newPejMarkers.push(marker);
-                            else if (targetGroup === paGroup) newPaMarkers.push(marker);
-                            else if (targetGroup === pveGroup) newPveMarkers.push(marker);
+
+                            const tKey = getTerritoryKey(p.code_dept);
+                            if (!targetMap.has(tKey)) targetMap.set(tKey, []);
+                            targetMap.get(tKey).push(marker);
                         }
                     });
+
+                    pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, makeProcClusterOpts('rgba(59,130,246,0.85)')).addLayers(markers));
+                    paByKey.forEach( (markers, tKey) => getOrCreateCluster(tKey, paParent,  paByTerritory,  makeProcClusterOpts('rgba(139,92,246,0.85)')).addLayers(markers));
+                    pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, makeProcClusterOpts('rgba(249,115,22,0.85)')).addLayers(markers));
                 }
 
-                // Render points N-1
+                // Render points N-1 (heatmap/cluster group global, style semi-transparent)
                 if (isCompare && resN1 && resN1.points && resN1.points.length > 0) {
+                    const markersByKeyN1 = new Map();
                     resN1.points.forEach(pt => {
                         const lat = parseFloat(pt.y);
                         const lng = parseFloat(pt.x);
@@ -1093,29 +1183,37 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
-                            newMarkers.push(marker);
+
+                            const tKey = getTerritoryKey(pt.code_dept);
+                            if (!markersByKeyN1.has(tKey)) markersByKeyN1.set(tKey, []);
+                            markersByKeyN1.get(tKey).push(marker);
                         }
+                    });
+
+                    // N-1 : sous-groupes séparés (jamais mélangés avec N)
+                    markersByKeyN1.forEach((markers, tKey) => {
+                        const grp = getOrCreateCluster(tKey, clusterParentN1, clustersByTerritoryN1, makeN1ClusterOpts('rgba(100,116,139,0.8)'));
+                        grp.addLayers(markers);
                     });
                 }
 
-                // Render procedure markers N-1
+                // Render procedure markers N-1 (cloisonnés)
                 if (isCompare && resN1 && resN1.procedures && resN1.procedures.length > 0) {
+                    const pejByKeyN1 = new Map(), paByKeyN1 = new Map(), pveByKeyN1 = new Map();
+
                     resN1.procedures.forEach(p => {
                         let lat = parseFloat(p.y);
                         let lng = parseFloat(p.x);
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             let procColor = '#3B82F6';
                             const ptype = (p.type || '').toUpperCase();
-                            let targetGroup = pejGroup;
+                            let targetMap = pejByKeyN1;
                             if (ptype.includes('PEJ')) {
-                                procColor = '#3B82F6';
-                                targetGroup = pejGroup;
+                                procColor = '#3B82F6'; targetMap = pejByKeyN1;
                             } else if (ptype.includes('PA')) {
-                                procColor = '#8B5CF6';
-                                targetGroup = paGroup;
+                                procColor = '#8B5CF6'; targetMap = paByKeyN1;
                             } else if (ptype.includes('PVE')) {
-                                procColor = '#F97316';
-                                targetGroup = pveGroup;
+                                procColor = '#F97316'; targetMap = pveByKeyN1;
                             }
 
                             const marker = L.circleMarker([lat, lng], {
@@ -1135,18 +1233,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             Usager visé : ${p.type_usager || 'Non renseigné'}
                         `;
                             marker.bindPopup(popup);
-                            if (targetGroup === pejGroup) newPejMarkers.push(marker);
-                            else if (targetGroup === paGroup) newPaMarkers.push(marker);
-                            else if (targetGroup === pveGroup) newPveMarkers.push(marker);
+
+                            const tKey = getTerritoryKey(p.code_dept);
+                            if (!targetMap.has(tKey)) targetMap.set(tKey, []);
+                            targetMap.get(tKey).push(marker);
                         }
                     });
+
+                    pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, makeN1ClusterOpts('rgba(59,130,246,0.72)')).addLayers(markers));
+                    paByKeyN1.forEach( (markers, tKey) => getOrCreateCluster(tKey, paParentN1,  paByTerritoryN1,  makeN1ClusterOpts('rgba(139,92,246,0.72)')).addLayers(markers));
+                    pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, makeN1ClusterOpts('rgba(249,115,22,0.72)')).addLayers(markers));
                 }
 
-                // Ajout en masse aux clusters
-                markersClusterGroup.addLayers(newMarkers);
-                pejGroup.addLayers(newPejMarkers);
-                paGroup.addLayers(newPaMarkers);
-                pveGroup.addLayers(newPveMarkers);
+                // Plus de addLayers global — déjà injecté dans les sous-groupes cloisonnés ci-dessus
 
                 // Render boundary if available
                 if (resN.geojson) {

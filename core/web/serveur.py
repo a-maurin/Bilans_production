@@ -280,6 +280,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if val_id and val_label:
                                 if any(p["value"] == val_id for p in profils_list):
                                     continue
+                                if val_id in {"pnf_foret", "_defaults"}:
+                                    continue
                                     
                                 sources_cfg = data.get("sources", {})
                                 sources = {

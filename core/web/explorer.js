@@ -2121,10 +2121,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('input[name="map-mode"]').forEach(radio => {
         radio.addEventListener('change', () => {
             const isHeatmapMode = radio.value === 'heatmap';
+            const allParents = [
+                clusterParent, pejParent, paParent, pveParent,
+                clusterParentN1, pejParentN1, paParentN1, pveParentN1
+            ];
+
             if (isHeatmapMode) {
-                if (map.hasLayer(markersClusterGroup)) {
-                    map.removeLayer(markersClusterGroup);
-                }
+                allParents.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
+                try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch(e){}
+
                 const heatData = activePoints
                     .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
                     .filter(coords => !isNaN(coords[0]) && !isNaN(coords[1]) && coords[0] !== 0 && coords[1] !== 0);
@@ -2142,9 +2147,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     map.removeLayer(heatmapLayer);
                     heatmapLayer = null;
                 }
-                if (!map.hasLayer(markersClusterGroup)) {
-                    markersClusterGroup.addTo(map);
-                }
+                allParents.forEach(p => { if (!map.hasLayer(p)) p.addTo(map); });
+                try { if (typeof markersClusterGroup !== 'undefined' && !map.hasLayer(markersClusterGroup)) markersClusterGroup.addTo(map); } catch(e){}
             }
         });
     });

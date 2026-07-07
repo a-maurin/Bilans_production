@@ -173,8 +173,6 @@ def infer_cartographie_mode(profile: dict | None, profil_id: str) -> str:
     if isinstance(carto, dict) and carto.get("fichiers") and pipeline == "global" and pid != "global":
         return "synthese"
 
-    if ft == "all" and pid == "pnf_foret":
-        return "dedie"
     if ft in ("agrainage", "chasse", "piegeage", "procedures", "type_usager"):
         return "dedie"
     if ft == "keywords" or ft == "":

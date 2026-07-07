@@ -1670,7 +1670,7 @@ def _run_spatial_analyses(
         results["agg_pnf"] = agg_pnf
         results["point_with_pnf"] = pt
         # Bilan PNF : détail par zone (cœur vs aire d'adhésion).
-        if str(profil_id or "").strip().lower() in {"pnf", "pnf_foret"}:
+        if str(profil_id or "").strip().lower() == "pnf":
             rows = []
             if "pnf_zone_sig" in pt.columns:
                 coeur = pt[pt["pnf_zone_sig"] == "Coeur_PNF"].copy()
@@ -1713,7 +1713,7 @@ def _run_spatial_analyses(
         if pve_insee:
             base_z = _zone_count(pve_filtered, pve_insee, tub_codes, pnf_codes)
             pid = str(profil_id or "").strip().lower()
-            if pid in {"pnf", "pnf_foret"}:
+            if pid == "pnf":
                 insee = pve_filtered[pve_insee].astype(str).str.zfill(5)
                 mask_pnf = insee.isin(pnf_codes)
                 nb_ensemble = int(mask_pnf.sum())
@@ -2393,7 +2393,7 @@ def _run_aggregations(
         and "coeur_hors_coeur" in pej_det.columns
     ):
         results["zone_pej"] = build_zone_pej_from_proc_detail_lecteur(pej_det)
-    elif str(profil_id or "").strip().lower() in {"pnf", "pnf_foret"}:
+    elif str(profil_id or "").strip().lower() == "pnf":
         if isinstance(pej_det, pd.DataFrame) and not pej_det.empty and "coeur_hors_coeur" in pej_det.columns:
             ch = pej_det["coeur_hors_coeur"].astype(str).str.strip()
             nb_coeur = int((ch == "Cœur").sum())
@@ -5322,7 +5322,7 @@ def _generate_pdf(
     has_zone_table = zone_ctrl_annex is not None and not zone_ctrl_annex.empty
     has_pnf = bool(options.get("pnf", False)) and results.get("agg_pnf") is not None
     has_tub = bool(options.get("tub", False)) and has_zone_table
-    is_pnf_profile = str(profil_id).strip().lower() in {"pnf", "pnf_foret"}
+    is_pnf_profile = str(profil_id).strip().lower() == "pnf"
     show_usagers_sec = is_type_usager or is_section_enabled(presentation_cfg, "sec4", False)
     methodo = build_sec6_methodology_html(
         effective_cfg=presentation_cfg,

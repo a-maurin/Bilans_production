@@ -24,6 +24,18 @@ def resolve_profile_output_dir(profil_id: str, code: str = "", *, root: Path | N
     from core.engine.orchestrateur_profils import load_profile_config
 
     base = root or PROJECT_ROOT
+    
+    if profil_id == "global":
+        code_suffix = f"_{code}" if code else ""
+        candidates = []
+        out_root = base / "data" / "out"
+        if out_root.exists():
+            for d in out_root.iterdir():
+                if d.is_dir() and d.name.startswith("bilan_") and d.name.endswith(code_suffix):
+                    candidates.append(d)
+        if candidates:
+            return max(candidates, key=lambda d: d.stat().st_mtime)
+
     profile = load_profile_config(base, profil_id)
     pipeline = str(profile.get("pipeline", "thematic")).strip().lower()
     if pipeline == "global":
@@ -45,9 +57,27 @@ def resolve_profile_output_dir(profil_id: str, code: str = "", *, root: Path | N
     return get_out_dir(out_subdir)
 
 
-def _list_generated_pdf_files(profil_id: str, started_at_epoch: float, code: str = "") -> list[Path]:
+def _list_generated_pdf_files(profil_id: str, started_at_epoch: float, code: str = "", cli_options: dict | None = None) -> list[Path]:
     """Retourne les PDF générés/écrasés pendant le run du profil."""
-    out_dir = resolve_profile_output_dir(profil_id, code=code)
+    cli_opts = cli_options or {}
+    filter_label = None
+    if profil_id == "global":
+        if cli_opts.get("themes"):
+            filter_label = ", ".join(cli_opts["themes"])
+        elif cli_opts.get("domaines"):
+            filter_label = ", ".join(cli_opts["domaines"])
+
+    if filter_label:
+        from core.engine.orchestrateur_profils import _safe_type_usager_for_filename
+        safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
+        out_subdir = f"bilan_{safe_filter}"
+        code_norm = str(code).strip()
+        if code_norm:
+            out_subdir = f"{out_subdir}_{code_norm}"
+        out_dir = get_out_dir(out_subdir)
+    else:
+        out_dir = resolve_profile_output_dir(profil_id, code=code)
+
     if not out_dir.exists():
         return []
     pdfs: list[Path] = []
@@ -151,7 +181,7 @@ def run_profiles_batch(
             ret = run_profile(pid, date_deb, date_fin, echelle, code, options=cli_options)
             if ret != 0:
                 return ret
-            generated_pdfs_last_profile = _list_generated_pdf_files(pid, started_at, code=code)
+            generated_pdfs_last_profile = _list_generated_pdf_files(pid, started_at, code=code, cli_options=cli_options)
         (out_combine / "README.txt").write_text(
             f"Bilan combiné : {', '.join(profils)}\n"
             f"Période : {date_deb} au {date_fin}, périmètre : {echelle} {code}.\n"
@@ -186,7 +216,7 @@ def run_profiles_batch(
         ret = run_profile(pid, date_deb, date_fin, echelle, code, options=cli_options)
         if ret != 0:
             return ret
-        generated_pdfs_last_profile = _list_generated_pdf_files(pid, started_at, code=code)
+        generated_pdfs_last_profile = _list_generated_pdf_files(pid, started_at, code=code, cli_options=cli_options)
     if not (cli_options and cli_options.get("no_open")):
         _open_generated_pdfs(generated_pdfs_last_profile)
     return 0

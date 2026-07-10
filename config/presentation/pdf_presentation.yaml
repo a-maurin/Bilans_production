@@ -289,6 +289,39 @@ scopes:
         sec33: "4.3 Procédures administratives (PA)"
         sec5: "5. Localisation cartographique"
 
+  filtre_thematique:
+    title:
+      line2_mode: profile_label
+    title_page:
+      subtitle_mode: none
+    notice_methodology:
+      data_source_paragraph: >
+        Les données relatives aux contrôles et aux procédures présentées dans ce document 
+        sont extraites de la base du logiciel OSCEAN et ciblées sur le thème ou domaine sélectionné. 
+        Les informations concernant d'autres thématiques ont été volontairement masquées.
+    sections:
+      order: ["sec1", "sec2", "sec21", "sec23", "sec4", "sec41", "sec42", "sec43", "sec44", "sec3", "sec31", "sec32", "sec33", "sec5", "sec6"]
+      titles:
+        sec2: "2. Contrôles et procédures"
+        sec23: "2.2. Résultats des contrôles au titre de la police administrative"
+        sec4: "3. Activité par type d’usager"
+        sec41: "3.1. Thème de contrôle par type d'usager"
+        sec42: "3.2. Résultats des contrôles par type d'usager"
+        sec43: "3.3. Procédures d'enquête judiciaire (PEJ) par type d'usager"
+        sec44: "3.4. Procédures administratives (PA) par type d'usager"
+        sec3: "4. Procédures (PEJ, PA, PVe)"
+        sec31: "4.1 Procès-verbaux électroniques (PVe)"
+        sec32: "4.2 Procédures d’enquête judiciaire (PEJ)"
+        sec33: "4.3 Procédures administratives (PA)"
+        sec5: "5. Localisation cartographique"
+    blocks:
+      sec22:
+        show_table: false
+        show_pie: false
+      sec4:
+        show_table_usagers_x_domaine: false
+
+
 profiles:
   # Agrainage : sections zone (2.x) puis usagers (3) puis procédures (4).
   agrainage:

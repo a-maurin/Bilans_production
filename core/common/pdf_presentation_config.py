@@ -615,7 +615,10 @@ def feature_registry_allows_scope(rule: Any, scope: str) -> bool:
     s = str(scope or "").strip().lower()
     if r in ("both", "all", ""):
         return True
+    if s == "filtre_thematique":
+        return r == "thematique"
     return r == s
+
 
 
 def apply_feature_registry_to_effective(

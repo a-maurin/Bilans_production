@@ -360,6 +360,15 @@ def _message_fin_generation_pdf(
     """Message console indiquant le dossier et le nom du PDF produit."""
     diffusion = str(resolved_opts.get("diffusion", "interne"))
     base = str(profile.get("output_filename", "")).strip() or f"{profile.get('id', 'global')}.pdf"
+    if str(profile.get("id", "global")).strip() == "global":
+        filter_label = None
+        if resolved_opts.get("themes"):
+            filter_label = ", ".join(resolved_opts["themes"])
+        elif resolved_opts.get("domaines"):
+            filter_label = ", ".join(resolved_opts["domaines"])
+        if filter_label:
+            safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
+            base = f"bilan_global_{safe_filter}.pdf"
     stem = Path(base).stem
     if str(profile.get("id", "")).strip() == "synthese_activite_PA_PJ":
         detailed_name = apply_diffusion_pdf_suffix(base, diffusion).name
@@ -417,6 +426,24 @@ def _run_global_profile_via_yaml(
     if options.get("chart_preset") and not chart_preset:
         chart_preset = options.get("chart_preset")
     resolved_opts = ask_interactive_options(profile, resolved_opts)
+
+    # Override dynamique pour filtre thématique / domaine
+    from copy import deepcopy
+    filter_label = None
+    if resolved_opts.get("themes"):
+        filter_label = ", ".join(resolved_opts["themes"])
+    elif resolved_opts.get("domaines"):
+        filter_label = ", ".join(resolved_opts["domaines"])
+
+    if filter_label:
+        profile = deepcopy(profile)
+        profile["label"] = filter_label
+        profile["title_label"] = filter_label
+        profile["presentation_scope"] = "filtre_thematique"
+        
+        safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
+        profile["out_subdir"] = f"bilan_{safe_filter}"
+
     root = PROJECT_ROOT
     date_deb_ts = pd.to_datetime(date_deb)
     date_fin_ts = pd.to_datetime(date_fin)
@@ -458,6 +485,44 @@ def _run_global_profile_via_yaml(
         mots_cles = resolved_opts.get("mots_cles")
         if mots_cles:
             point, pej, pa, pve = _apply_rech_av_filter(point, pej, pa, pve, root, mots_cles)
+
+        # Fusion des faits/localisations pour pej pour disposer des colonnes DOMAINE et THEME avant filtrage
+        if not pej.empty:
+            from core.common.chargeurs_donnees import merge_pej_faits_locations
+            pej = merge_pej_faits_locations(pej, root, echelle_norm, code_norm, log=logging.getLogger("ofbilan.spatial"))
+
+        # Filtrage par domaine et thème SNC (Options utilisateur / GUI)
+        target_domains = resolved_opts.get("domaines")
+        if target_domains:
+            td_lower = {d.strip().lower() for d in target_domains if d.strip()}
+            if td_lower:
+                if not point.empty and "domaine" in point.columns:
+                    point = point[point["domaine"].astype(str).str.strip().str.lower().isin(td_lower)].copy()
+                if not pej.empty and "DOMAINE" in pej.columns:
+                    pej = pej[pej["DOMAINE"].astype(str).str.strip().str.lower().isin(td_lower)].copy()
+                if not pa.empty and "DOMAINE" in pa.columns:
+                    pa = pa[pa["DOMAINE"].astype(str).str.strip().str.lower().isin(td_lower)].copy()
+
+        target_themes = resolved_opts.get("themes")
+        if target_themes:
+            tt_lower = {t.strip().lower() for t in target_themes if t.strip()}
+            if tt_lower:
+                if not point.empty:
+                    col_pt_theme = "theme" if "theme" in point.columns else ("type_actio" if "type_actio" in point.columns else None)
+                    if col_pt_theme:
+                        point = point[point[col_pt_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                if not pej.empty:
+                    col_pej_theme = "THEME" if "THEME" in pej.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pej.columns else None)
+                    if col_pej_theme:
+                        pej = pej[pej[col_pej_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                if not pa.empty:
+                    col_pa_theme = "THEME" if "THEME" in pa.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pa.columns else None)
+                    if col_pa_theme:
+                        pa = pa[pa[col_pa_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                if not pve.empty:
+                    col_pve_theme = "theme" if "theme" in pve.columns else ("THEME" if "THEME" in pve.columns else None)
+                    if col_pve_theme:
+                        pve = pve[pve[col_pve_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
 
     spatial_log = logging.getLogger("ofbilan.spatial")
     if not point.empty:
@@ -647,11 +712,20 @@ def _run_global_profile_via_yaml(
 
     print("[5/5] Mise en page et création du rapport PDF...")
     with Spinner():
-        profil_id = str(profile.get("id", "global")).strip()
+        pdf_prefix = str(profile.get("id", "global")).strip()
+        filter_label = None
+        if resolved_opts.get("themes"):
+            filter_label = ", ".join(resolved_opts["themes"])
+        elif resolved_opts.get("domaines"):
+            filter_label = ", ".join(resolved_opts["domaines"])
+        if filter_label:
+            safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
+            pdf_prefix = f"{pdf_prefix}_{safe_filter}"
+
         if code_norm:
-            output_filename = f"bilan_{profil_id}_{code_norm}.pdf"
+            output_filename = f"bilan_{pdf_prefix}_{code_norm}.pdf"
         else:
-            output_filename = f"bilan_{profil_id}.pdf"
+            output_filename = f"bilan_{pdf_prefix}.pdf"
         pdf_kwargs: dict = {
             "profile": profile,
             "date_deb": date_deb_ts,

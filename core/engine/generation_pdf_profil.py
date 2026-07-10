@@ -289,9 +289,10 @@ def _generate_pdf_content(
         else cfg.perimetre_name
     )
 
+    label = str((profile or {}).get("label", "")).strip() or "global"
     cover_title_lines, header_title_lines = build_title_lines_from_cfg(
         presentation_cfg,
-        profile_label="",
+        profile_label=label,
         perimetre_name_typo=perimetre_typo,
         echelle=cfg.echelle,
     )

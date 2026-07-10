@@ -538,6 +538,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 load_pej_flag = sources_cfg.get("pej", True)
                 load_pa_flag = sources_cfg.get("pa", True)
                 load_pve_flag = sources_cfg.get("pve", True)
+                
+                # Desactiver PVe si on filtre sur Domaines, Thèmes ou Type d'action (Optionnel)
+                if ((domaines and any(d.strip() for d in (domaines if isinstance(domaines, list) else [domaines]))) or
+                    (themes and any(t.strip() for t in (themes if isinstance(themes, list) else [themes]))) or
+                    (types_action and any(a.strip() for a in (types_action if isinstance(types_action, list) else [types_action])))):
+                    if profil == "global":
+                        profile_cfg = dict(profile_cfg)
+                        profile_cfg["analyse_PVe"] = False
+                        if "sources" in profile_cfg:
+                            profile_cfg["sources"] = dict(profile_cfg["sources"])
+                            profile_cfg["sources"]["pve"] = False
+                        load_pve_flag = False
 
                 cfg_obj = BilanConfig.from_strings(
                     date_deb=date_deb,
@@ -645,7 +657,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if tt_lower:
                         col_pej_theme = "THEME" if "THEME" in df_pej.columns else ("TYPE_ACTION" if "TYPE_ACTION" in df_pej.columns else None)
                         if col_pej_theme:
-                            df_pej = df_pej[df_pej[col_pej_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                            df_pej = df_pej[df_pej[col_pej_theme].astype(str).str.strip().str.lower().apply(
+                                lambda val: any(t in str(val) for t in tt_lower) if val else False
+                            )].copy()
                 if types_action:
                     ta_lower = {a.strip().lower() for a in types_action if a.strip()}
                     if ta_lower:
@@ -689,7 +703,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if tt_lower:
                             col_pa_theme = "THEME" if "THEME" in df_pa.columns else ("TYPE_ACTION" if "TYPE_ACTION" in df_pa.columns else None)
                             if col_pa_theme:
-                                df_pa = df_pa[df_pa[col_pa_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                                df_pa = df_pa[df_pa[col_pa_theme].astype(str).str.strip().str.lower().apply(
+                                    lambda val: any(t in str(val) for t in tt_lower) if val else False
+                                )].copy()
                     if types_action:
                         ta_lower = {a.strip().lower() for a in types_action if a.strip()}
                         if ta_lower:
@@ -717,7 +733,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if tt_lower:
                             col_pve_theme = "theme" if "theme" in df_pve.columns else ("THEME" if "THEME" in df_pve.columns else None)
                             if col_pve_theme:
-                                df_pve = df_pve[df_pve[col_pve_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                                df_pve = df_pve[df_pve[col_pve_theme].astype(str).str.strip().str.lower().apply(
+                                    lambda val: any(t in str(val) for t in tt_lower) if val else False
+                                )].copy()
                     if types_action:
                         ta_lower = {a.strip().lower() for a in types_action if a.strip()}
                         if ta_lower:
@@ -1123,9 +1141,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         traceback.print_exc(file=f_err)
                     print(f"Error loading boundary geojson: {e}")
 
+                total_usagers_controles = sum(usagers_counts.values()) if usagers_counts else 0
+
                 response_data = {
                     "stats": {
                         "total_controles": int(total_controles),
+                        "total_usagers_controles": int(total_usagers_controles),
                         "total_pej": int(total_pej),
                         "total_pa": int(total_pa),
                         "total_pve": int(total_pve)

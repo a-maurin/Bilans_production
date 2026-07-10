@@ -434,6 +434,8 @@ def _run_global_profile_via_yaml(
         filter_label = ", ".join(resolved_opts["themes"])
     elif resolved_opts.get("domaines"):
         filter_label = ", ".join(resolved_opts["domaines"])
+    elif resolved_opts.get("types_action"):
+        filter_label = ", ".join(resolved_opts["types_action"])
 
     if filter_label:
         profile = deepcopy(profile)
@@ -443,6 +445,10 @@ def _run_global_profile_via_yaml(
         
         safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
         profile["out_subdir"] = f"bilan_{safe_filter}"
+
+    if profile.get("id") == "global" and (resolved_opts.get("themes") or resolved_opts.get("domaines") or resolved_opts.get("types_action")):
+        profile = deepcopy(profile)
+        profile["analyse_PVe"] = False
 
     root = PROJECT_ROOT
     date_deb_ts = pd.to_datetime(date_deb)
@@ -480,7 +486,11 @@ def _run_global_profile_via_yaml(
             date_deb=date_deb_ts,
             date_fin=date_fin_ts,
         )
-        pve = load_pve(root, echelle=echelle_norm, code=code_norm, date_deb=date_deb_ts, date_fin=date_fin_ts)
+        pve = (
+            load_pve(root, echelle=echelle_norm, code=code_norm, date_deb=date_deb_ts, date_fin=date_fin_ts)
+            if profile.get("analyse_PVe", True)
+            else pd.DataFrame()
+        )
         
         mots_cles = resolved_opts.get("mots_cles")
         if mots_cles:
@@ -510,19 +520,56 @@ def _run_global_profile_via_yaml(
                 if not point.empty:
                     col_pt_theme = "theme" if "theme" in point.columns else ("type_actio" if "type_actio" in point.columns else None)
                     if col_pt_theme:
-                        point = point[point[col_pt_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        point = point[point[col_pt_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(t in str(val) for t in tt_lower) if val else False
+                        )].copy()
                 if not pej.empty:
                     col_pej_theme = "THEME" if "THEME" in pej.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pej.columns else None)
                     if col_pej_theme:
-                        pej = pej[pej[col_pej_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pej = pej[pej[col_pej_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(t in str(val) for t in tt_lower) if val else False
+                        )].copy()
                 if not pa.empty:
                     col_pa_theme = "THEME" if "THEME" in pa.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pa.columns else None)
                     if col_pa_theme:
-                        pa = pa[pa[col_pa_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pa = pa[pa[col_pa_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(t in str(val) for t in tt_lower) if val else False
+                        )].copy()
                 if not pve.empty:
                     col_pve_theme = "theme" if "theme" in pve.columns else ("THEME" if "THEME" in pve.columns else None)
                     if col_pve_theme:
-                        pve = pve[pve[col_pve_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pve = pve[pve[col_pve_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(t in str(val) for t in tt_lower) if val else False
+                        )].copy()
+
+        target_types_action = resolved_opts.get("types_action")
+        if target_types_action:
+            ta_lower = {ta.strip().lower() for ta in target_types_action if ta.strip()}
+            if ta_lower:
+                if not point.empty:
+                    col_pt_ta = "type_actio" if "type_actio" in point.columns else ("type_action" if "type_action" in point.columns else None)
+                    if col_pt_ta:
+                        point = point[point[col_pt_ta].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(ta in str(val) for ta in ta_lower) if val else False
+                        )].copy()
+                if not pej.empty:
+                    col_pej_ta = "TYPE_ACTION" if "TYPE_ACTION" in pej.columns else ("TYPE_ACTIO" if "TYPE_ACTIO" in pej.columns else None)
+                    if col_pej_ta:
+                        pej = pej[pej[col_pej_ta].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(ta in str(val) for ta in ta_lower) if val else False
+                        )].copy()
+                if not pa.empty:
+                    col_pa_ta = "TYPE_ACTION" if "TYPE_ACTION" in pa.columns else ("TYPE_ACTIO" if "TYPE_ACTIO" in pa.columns else None)
+                    if col_pa_ta:
+                        pa = pa[pa[col_pa_ta].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(ta in str(val) for ta in ta_lower) if val else False
+                        )].copy()
+                if not pve.empty:
+                    col_pve_ta = "type_actio" if "type_actio" in pve.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pve.columns else None)
+                    if col_pve_ta:
+                        pve = pve[pve[col_pve_ta].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(ta in str(val) for ta in ta_lower) if val else False
+                        )].copy()
 
     spatial_log = logging.getLogger("ofbilan.spatial")
     if not point.empty:
@@ -3852,7 +3899,7 @@ def _generate_pdf(
                         "Taux de non-conformité",
                         PDF_LABEL_PEJ,
                         "PA",
-                        "PVe",
+                        "Nombre de verbalisations au titre\nde la police judiciaire",
                     ]]
                     for _, row in agg_annuelle.iterrows():
                         taux = (
@@ -5297,6 +5344,10 @@ def _generate_pdf(
         )
         render_sec_region_detail(ctx_region)
 
+    if builder._pending_section is not None:
+        builder.story.extend(builder._pending_section)
+        builder._pending_section = None
+
     # ── CARTOGRAPHIE ──
     builder.add_section("sec5", section_title["sec5"], start_on_new_page=is_block_enabled(presentation_cfg, "sec5.start_on_new_page", False))
     if options.get("cartes", False):
@@ -5309,7 +5360,21 @@ def _generate_pdf(
             # Nom de base configuré ou par défaut
             carto_cfg = profile.get("cartographie", {})
             carto_files = carto_cfg.get("fichiers", [])
-            base_map_name = carto_files[0] if carto_files else f"carte_{map_id}.png"
+            
+            base_map_name = None
+            if carto_files:
+                base_map_name = carto_files[0]
+            else:
+                from core.common.cartographie_config import has_cartography_catalog
+                if has_cartography_catalog(profile):
+                    selected = profile.get("_cartes_selection") or options.get("cartes_profil") or []
+                    from core.common.cartographie_config import expected_map_filenames_for_selection
+                    expected = expected_map_filenames_for_selection(profile, selected)
+                    if expected:
+                        base_map_name = expected[0]
+                        
+            if not base_map_name:
+                base_map_name = f"carte_{map_id}.png"
             
             # Dériver le nom régional et les noms départementaux
             stem = Path(base_map_name).stem
@@ -5401,6 +5466,10 @@ def _generate_pdf(
                     )
     elif show_placeholder:
         builder.add_paragraph("<i>Cartographie désactivée pour ce bilan.</i>")
+
+    if builder._pending_section is not None:
+        builder.story.extend(builder._pending_section)
+        builder._pending_section = None
 
     # ── ANNEXES ──
     builder.add_section("sec6", section_title["sec6"], start_on_new_page=is_block_enabled(presentation_cfg, "sec6.start_on_new_page", False))
@@ -5687,19 +5756,27 @@ def _run_engine_thematic_pipeline(
                 if not point_filtered.empty:
                     col_pt_theme = "theme" if "theme" in point_filtered.columns else ("type_actio" if "type_actio" in point_filtered.columns else None)
                     if col_pt_theme:
-                        point_filtered = point_filtered[point_filtered[col_pt_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        point_filtered = point_filtered[point_filtered[col_pt_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(val in t or t in val for t in tt_lower) if val else False
+                        )].copy()
                 if not pej_filtered.empty:
                     col_pej_theme = "THEME" if "THEME" in pej_filtered.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pej_filtered.columns else None)
                     if col_pej_theme:
-                        pej_filtered = pej_filtered[pej_filtered[col_pej_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pej_filtered = pej_filtered[pej_filtered[col_pej_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(val in t or t in val for t in tt_lower) if val else False
+                        )].copy()
                 if not pa_filtered.empty:
                     col_pa_theme = "THEME" if "THEME" in pa_filtered.columns else ("TYPE_ACTION" if "TYPE_ACTION" in pa_filtered.columns else None)
                     if col_pa_theme:
-                        pa_filtered = pa_filtered[pa_filtered[col_pa_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pa_filtered = pa_filtered[pa_filtered[col_pa_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(val in t or t in val for t in tt_lower) if val else False
+                        )].copy()
                 if not pve_filtered.empty:
                     col_pve_theme = "theme" if "theme" in pve_filtered.columns else ("THEME" if "THEME" in pve_filtered.columns else None)
                     if col_pve_theme:
-                        pve_filtered = pve_filtered[pve_filtered[col_pve_theme].astype(str).str.strip().str.lower().isin(tt_lower)].copy()
+                        pve_filtered = pve_filtered[pve_filtered[col_pve_theme].astype(str).str.strip().str.lower().apply(
+                            lambda val: any(val in t or t in val for t in tt_lower) if val else False
+                        )].copy()
 
     spatial_log = logging.getLogger("ofbilan.spatial")
     restrict_geo_val = str(profile.get("restrict_geo") or "").strip().lower()

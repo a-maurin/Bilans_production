@@ -532,3 +532,26 @@ def test_sec6_methodology_config_resolution() -> None:
     resolved = resolve_sec6_methodology_config(effective)
     assert resolved["items"][0]["text"] == "<b>Test :</b> {profile_label}."
     assert len(resolved["items"]) >= 1
+
+
+def test_filtre_thematique_scope_inherits_global(tmp_path: Path) -> None:
+    _write_yaml(
+        tmp_path,
+        """
+version: 1
+defaults:
+  sections:
+    order: [sec1, sec2, sec3]
+scopes:
+  global:
+    sections:
+      order: [sec1, sec3, sec2]
+""".strip(),
+    )
+
+    resolved = resolve_pdf_presentation_config(tmp_path, scope="filtre_thematique", profile_id=None)
+    effective = resolved["effective"]
+
+    # Doit hériter de global pour l'ordre des sections
+    assert effective["sections"]["order"] == ["sec1", "sec3", "sec2"]
+

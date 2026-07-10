@@ -2,140 +2,254 @@
     /* Cache les éléments de l'interface qui ne doivent pas être imprimés */
     .app-header, .control-panel, #toggle-table-header, #table-container, 
     .btn, .btn-export-chart-png, .app-footer, .results-count-badge, .code-helper,
-    .no-print {
+    .no-print, #card-table-controles {
         display: none !important;
     }
 
     @page {
-        size: A4 portrait;
-        margin: 1cm;
+        size: A4 landscape;
+        margin: 0.4cm 0.8cm;
     }
 
     body, html {
         margin: 0;
         padding: 0;
         background: #fff;
-        color: #002F4B; /* Bleu profond OFB */
+        color: #002F4B;
         width: 100%;
-        height: 100%;
-    }
-
-    /* Rétablir le flux bloc pour l'impression (supprime les conflits Flex/Grid sur plusieurs pages) */
-    .explorer-container, .dashboard-split-grid, .explorer-panel {
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    div[style*="display: flex; flex-direction: column"] {
-        display: block !important;
+        height: auto;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     /* Titre d'impression */
     #print-title-container {
         display: flex !important;
         align-items: center;
-        border-bottom: 3px solid #00A3A6; /* Vert d'eau OFB */
-        padding-bottom: 10px;
-        margin-bottom: 15px;
+        border-bottom: 2px solid #00A3A6;
+        padding-bottom: 5px;
+        margin-bottom: 6px;
         page-break-after: avoid;
     }
 
     #print-title-container img.logo-rf {
-        height: 60px;
-        margin-right: 20px;
+        height: 45px;
+        margin-right: 12px;
     }
 
     #print-title-container img.logo-ofb {
-        height: 45px;
-        margin-right: 20px;
+        height: 34px;
+        margin-right: 12px;
     }
 
     #print-title {
-        font-size: 12pt;
+        font-size: 10pt;
         font-weight: bold;
         color: #002F4B;
     }
 
-    /* Suppression des styles superflus des cartes */
-    .card {
-        border: none !important;
-        box-shadow: none !important;
-        margin-bottom: 15px !important;
+    /* Conteneurs principaux */
+    .explorer-container, .explorer-panel {
+        display: block !important;
+        margin: 0 !important;
         padding: 0 !important;
     }
 
+    /* #print-title-container injecté dans col gauche par JS — visible dans le flux */
+    #print-title-container {
+        display: flex !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Grille principale */
+    .dashboard-split-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        page-break-inside: avoid;
+    }
+
+    .dashboard-split-grid > div:first-child {
+        width: 60% !important;
+        flex: 0 0 60% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+        overflow: hidden !important;
+    }
+
+    .dashboard-split-grid > div:last-child {
+        width: 38% !important;
+        flex: 0 0 38% !important;
+    }
+
+    div[style*="display: flex; flex-direction: column"] {
+        display: flex !important;
+    }
+
+    /* Cards : padding et marges réduits au strict minimum */
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 6px !important;
+        padding: 4px 6px !important;
+    }
+
     .card h2 {
-        font-size: 12pt !important;
+        font-size: 9pt !important;
         color: #00A3A6 !important;
         border-bottom: 1px solid #eee;
-        padding-bottom: 5px;
-        margin-bottom: 10px !important;
+        padding-bottom: 2px !important;
+        margin-bottom: 4px !important;
+        margin-top: 0 !important;
         page-break-after: avoid;
     }
 
-    /* Page 1 : Indicateurs Clés */
+    /* Masquer le h2 "Indicateurs Clés" et la ligne grise — via :has() quelle que soit la position DOM */
+    .card:has(> .stats-grid) > h2 {
+        display: none !important;
+    }
+    .card:has(> .stats-grid) {
+        border-bottom: none !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Indicateurs Clés */
     .stats-grid {
         display: flex !important;
         justify-content: space-between;
-        margin-bottom: 15px !important;
+        margin-bottom: 6px !important;
+        gap: 4px !important;
         page-break-inside: avoid;
     }
 
     .stat-card {
         flex: 1;
-        margin: 0 5px;
+        margin: 0 2px;
         border: 1px solid #002F4B !important;
+        border-radius: 4px !important;
+        box-sizing: border-box;
         background: #f0fdf4 !important;
-        padding: 8px !important;
+        padding: 4px 6px !important;
     }
 
     .stat-card .value {
         color: #002F4B !important;
-        font-size: 16pt !important;
+        font-size: 12pt !important;
+        line-height: 1.1 !important;
     }
 
     .stat-card .label {
-        font-size: 8pt !important;
+        font-size: 7pt !important;
+        line-height: 1.1 !important;
     }
 
-    /* Page 1 : Carte et Saisonnalité */
+    /* Carte */
     #map {
-        height: 350px !important;
-        border: 2px solid #002F4B !important;
-        margin-bottom: 15px !important;
-        page-break-inside: avoid;
-    }
-
-    #chart-seasonality {
-        max-height: 150px !important;
-        page-break-inside: avoid;
-        margin-bottom: 10px !important;
-    }
-
-    /* Forcer le saut de page avant les Répartitions et Statistiques */
-    .dashboard-split-grid > .card:last-child {
-        page-break-before: always;
-    }
-
-    /* Organisation des canvas */
-    canvas {
+        height: 120px !important;
+        width: 100% !important;
         max-width: 100% !important;
-        height: auto !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        border: 1px solid #002F4B !important;
+        border-radius: 4px !important;
+        margin-bottom: 4px !important;
         page-break-inside: avoid;
-        margin: 0 auto;
     }
 
-    /* Graphiques en grille sur la Page 2 */
+    /* Stopper l'expansion flex des cards en col gauche (la map card a flex:1 inline) */
+    .dashboard-split-grid > div:first-child .card {
+        flex: 0 0 auto !important;
+        min-height: unset !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* #map : stopper flex:1 inline pour qu'il reste exactement à 120px */
+    #map {
+        flex: none !important;
+    }
+
+    .leaflet-control-container {
+        display: none !important;
+    }
+
+    /* Saisonnalité */
+    #chart-seasonality {
+        max-height: 85px !important;
+        height: 85px !important;
+        page-break-inside: avoid;
+        margin-bottom: 0 !important;
+    }
+
+    /* Conteneurs barres col droite : stopper flex:1 sans forcer de hauteur */
+    .dashboard-split-grid > div:last-child .card > div[style*="flex: 1"],
+    .dashboard-split-grid > div:last-child .card > div[style*="flex:1"] {
+        flex: 0 0 auto !important;
+        overflow: hidden !important;
+    }
+
+    /* Graphiques en grille côte à côte */
     div[style*="grid-template-columns: 1fr 1fr"] {
         display: flex !important;
         justify-content: space-between;
-        margin-bottom: 15px !important;
+        gap: 4px !important;
+        margin-bottom: 5px !important;
     }
 
     div[style*="grid-template-columns: 1fr 1fr"] > div {
         width: 48%;
         page-break-inside: avoid;
         border: 1px solid #ddd !important;
+        padding: 4px !important;
+        min-height: unset !important;
+    }
+
+    /* Conteneurs donuts : supprimer le min-height inline qui force 250px */
+    div[style*="min-height: 250px"] {
+        min-height: unset !important;
+        height: auto !important;
+    }
+
+
+    /* Réduire les gaps entre sections de la col droite */
+    .dashboard-split-grid > div:last-child .card {
+        gap: 4px !important;
+    }
+    .dashboard-split-grid > div:last-child .card > div[style*="gap: 10px"],
+    .dashboard-split-grid > div:last-child .card > div[style*="gap: 15px"] {
+        gap: 4px !important;
+    }
+
+    /* Canvas global : NE PAS mettre height:auto — ça écrase chart.resize() */
+    canvas {
+        max-width: 100% !important;
+        page-break-inside: avoid;
+    }
+
+    /* Gaps internes des blocs flex — wrapper map+saisonnalité */
+    div[style*="gap: 15px"],
+    div[style*="gap: 10px"] {
+        gap: 2px !important;
+    }
+
+    /* Pas de saut de page forcé */
+    .dashboard-split-grid > .card:last-child {
+        page-break-before: avoid;
+    }
+
+    /* Titres h3 dans les graphiques */
+    h3[style*="font-size:11px"] {
+        font-size: 8pt !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Légendes DOM des donuts */
+    #legend-results,
+    #legend-usagers {
+        gap: 2px 4px !important;
+        margin-top: 2px !important;
+        font-size: 6pt !important;
     }
 }

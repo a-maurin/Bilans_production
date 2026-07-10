@@ -2127,6 +2127,9 @@ def merge_pej_faits_locations(
     if pej is None or pej.empty or "DC_ID" not in pej.columns:
         return pej
 
+    if "x_faits" in pej.columns and "y_faits" in pej.columns:
+        return pej.copy()
+
     path = get_points_infrac_pj_path(root)
     if not path.exists():
         lg.info("Couche FAITS PJ absente (%s) — PEJ sans coordonnées SIG.", path)

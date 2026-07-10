@@ -370,6 +370,8 @@ def main() -> int:
         cli_options["domaines"] = args.domaines
     if args.themes:
         cli_options["themes"] = args.themes
+    if args.types_action:
+        cli_options["types_action"] = args.types_action
 
     cartes = args.cartes
     if args.cartes_seules:

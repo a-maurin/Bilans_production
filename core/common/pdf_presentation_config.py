@@ -416,6 +416,10 @@ def resolve_pdf_presentation_config(
     effective = deepcopy(defaults if isinstance(defaults, dict) else {})
 
     scopes = raw.get("scopes", {})
+    if scope == "filtre_thematique":
+        global_cfg = scopes.get("global", {}) if isinstance(scopes, dict) else {}
+        if isinstance(global_cfg, dict):
+            effective = _deep_merge(effective, global_cfg)
     scope_cfg = scopes.get(scope, {}) if isinstance(scopes, dict) else {}
     if isinstance(scope_cfg, dict):
         effective = _deep_merge(effective, scope_cfg)
@@ -605,7 +609,7 @@ def get_effective_pdf_presentation(
     return effective if isinstance(effective, dict) else {}
 
 
-def feature_registry_allows_scope(rule: Any, scope: str) -> bool:
+def feature_registry_allows_scope(rule: Any, scope: str, section_id: str = "") -> bool:
     """
     Indique si une entrée ``feature_registry`` autorise la section pour ce moteur.
 
@@ -616,6 +620,8 @@ def feature_registry_allows_scope(rule: Any, scope: str) -> bool:
     if r in ("both", "all", ""):
         return True
     if s == "filtre_thematique":
+        if str(section_id).lower() in ("sec5", "sec5map", "sec5_map"):
+            return True
         return r == "thematique"
     return r == s
 
@@ -640,7 +646,7 @@ def apply_feature_registry_to_effective(
         canonical = normalize_section_id(str(sid), emit_alias_warning=False)
         if canonical in enabled or str(sid) in enabled:
             continue
-        if not feature_registry_allows_scope(rule, scope):
+        if not feature_registry_allows_scope(rule, scope, str(sid)):
             enabled[canonical] = False
 
 

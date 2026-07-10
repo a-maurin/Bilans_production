@@ -108,7 +108,7 @@ def get_qgis_env(python_exe: Path) -> dict[str, str]:
     
     python_paths = [
         str(qgis_apps / "python"),
-        str(PROJECT_ROOT / "src"),
+        str(PROJECT_ROOT / "core"),
         str(PROJECT_ROOT),
     ]
     existing_pythonpath = env.get("PYTHONPATH", "")
@@ -139,8 +139,7 @@ def can_import_pyqgis(python_exe: Path, env: dict[str, str] | None = None) -> bo
 def _cartography_launcher_bat() -> Path:
     return (
         PROJECT_ROOT
-        / "src"
-        / "ofbilan"
+        / "core"
         / "cartographie"
         / "lancer_production_cartographique.bat"
     )
@@ -172,7 +171,7 @@ def run_cartography_export_subprocess(
         if target_dir:
             qgis_env["CARTO_OUTPUT_DIR"] = str(target_dir)
         if can_import_pyqgis(qgis_python, env=qgis_env):
-            script = PROJECT_ROOT / "src" / "ofbilan" / "cartographie" / "production_cartographique.py"
+            script = PROJECT_ROOT / "core" / "cartographie" / "production_cartographique.py"
             cmd = [
                 str(qgis_python),
                 str(script),

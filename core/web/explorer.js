@@ -999,7 +999,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatElement('val-controles', resN.stats.total_controles, isCompare ? resN1.stats.total_controles : null);
                 updateStatElement('val-pej', resN.stats.total_pej, isCompare ? resN1.stats.total_pej : null);
                 updateStatElement('val-pa', resN.stats.total_pa, isCompare ? resN1.stats.total_pa : null);
+                updateStatElement('val-usagers-controles', resN.stats.total_usagers_controles, isCompare ? resN1.stats.total_usagers_controles : null);
                 updateStatElement('val-pve', resN.stats.total_pve, isCompare ? resN1.stats.total_pve : null);
+
+                const p1 = getParams();
+                const hidePve = p1.domaines.length > 0 || p1.themes.length > 0 || p1.types_action.length > 0;
+                const pveCard = document.getElementById('stat-card-pve');
+                if (pveCard) {
+                    pveCard.style.display = hidePve ? 'none' : 'block';
+                }
 
                 // Mise à jour des points actifs et du compteur (uniquement basés sur la période principale N)
                 activePoints = resN.points || [];
@@ -2503,10 +2511,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 titleEl.textContent = fullTitle;
             }
 
-            // Déclencher l'impression
+            // ── Réorganisation DOM pour l'impression (une seule page) ──────────
+            const titleContainer = document.getElementById('print-title-container');
+            const explorerPanel  = document.querySelector('.explorer-panel');
+            const statsCard      = explorerPanel ? explorerPanel.querySelector('.card') : null;
+            const splitGrid      = explorerPanel ? explorerPanel.querySelector('.dashboard-split-grid') : null;
+            const leftCol        = splitGrid     ? splitGrid.firstElementChild : null;
+
+            // Mémoriser les parents/voisins originaux pour restauration
+            const titleOriginalParent  = titleContainer ? titleContainer.parentNode : null;
+            const titleOriginalSibling = titleContainer ? titleContainer.nextSibling : null;
+            const statsOriginalParent  = statsCard      ? statsCard.parentNode      : null;
+            const statsOriginalSibling = statsCard      ? statsCard.nextSibling     : null;
+
+            if (leftCol && titleContainer) {
+                leftCol.insertBefore(titleContainer, leftCol.firstChild);
+            }
+            if (leftCol && statsCard) {
+                // Insérer après le titre (2e position)
+                const afterTitle = leftCol.children[1] || null;
+                leftCol.insertBefore(statsCard, afterTitle);
+            }
+
+            // ── Restauration après impression ────────────────────────────────
+            const restore = () => {
+                if (splitGrid) splitGrid.style.zoom = '';
+                if (titleOriginalParent && titleContainer) {
+                    titleOriginalParent.insertBefore(titleContainer, titleOriginalSibling);
+                }
+                if (statsOriginalParent && statsCard) {
+                    statsOriginalParent.insertBefore(statsCard, statsOriginalSibling);
+                }
+                window.removeEventListener('afterprint', restore);
+            };
+            window.addEventListener('afterprint', restore);
+
+            // ── Auto-zoom pour tenir sur une seule page A4 paysage ───────────
+            // Hauteur utile A4 paysage (210mm - 2×0.4cm marges) à 96dpi
+            const A4_LANDSCAPE_H_PX = 750;
+
             setTimeout(() => {
-                window.print();
-            }, 300);
+                if (splitGrid) {
+                    splitGrid.style.zoom = '';
+                    const leftH  = leftCol ? leftCol.scrollHeight : 0;
+                    const rightH = splitGrid.lastElementChild
+                                 ? splitGrid.lastElementChild.scrollHeight : 0;
+                    const contentH = Math.max(leftH, rightH);
+                    if (contentH > A4_LANDSCAPE_H_PX) {
+                        splitGrid.style.zoom = (A4_LANDSCAPE_H_PX / contentH).toFixed(3);
+                    }
+                }
+                setTimeout(() => window.print(), 150);
+            }, 350);
         });
     }
 });

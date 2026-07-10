@@ -300,7 +300,7 @@ scopes:
         sont extraites de la base du logiciel OSCEAN et ciblées sur le thème ou domaine sélectionné. 
         Les informations concernant d'autres thématiques ont été volontairement masquées.
     sections:
-      order: ["sec1", "sec2", "sec21", "sec23", "sec4", "sec41", "sec42", "sec43", "sec44", "sec3", "sec31", "sec32", "sec33", "sec5", "sec6"]
+      order: ["sec1", "sec2", "sec21", "sec23", "sec4", "sec41", "sec42", "sec43", "sec44", "sec3", "sec31", "sec32", "sec33", "sec5", "sec5map", "sec6"]
       titles:
         sec2: "2. Contrôles et procédures"
         sec23: "2.2. Résultats des contrôles au titre de la police administrative"

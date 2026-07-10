@@ -499,8 +499,29 @@ def _generate_pdf_content(
             if sid in ("sec5map", "sec6"):
                 insert_idx = i
                 break
-        sections.insert(insert_idx, ("secregion", "7. Détail par département"))
-        section_title["secregion"] = "7. Détail par département"
+        
+        # Déterminer le numéro du chapitre à insérer
+        num_chap = 5
+        if insert_idx > 0:
+            prev_title = sections[insert_idx - 1][1]
+            import re
+            m_prev = re.match(r"^(\d+)\.", prev_title)
+            if m_prev:
+                num_chap = int(m_prev.group(1)) + 1
+
+        secregion_title = f"{num_chap}. Détail par département"
+        sections.insert(insert_idx, ("secregion", secregion_title))
+        section_title["secregion"] = secregion_title
+
+        # Renuméroter les chapitres suivants
+        for idx in range(insert_idx + 1, len(sections)):
+            sid, title = sections[idx]
+            m_next = re.match(r"^(\d+)\.(.*)$", title)
+            if m_next:
+                num = int(m_next.group(1))
+                new_title = f"{num + 1}.{m_next.group(2)}"
+                sections[idx] = (sid, new_title)
+
 
     # Pilotage dynamique : on itère sur les sections résolues depuis le YAML
     for sec_id, _ in sections:

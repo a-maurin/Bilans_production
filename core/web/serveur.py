@@ -87,6 +87,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        # Route pour servir les logos et ressources du répertoire ref/
+        if parsed_path.startswith("/ref/"):
+            ref_path = SRC_DIR / parsed_path.lstrip('/')
+            if ref_path.exists() and ref_path.is_file():
+                self.send_response(200)
+                if ref_path.suffix == '.png':
+                    self.send_header('Content-Type', 'image/png')
+                elif ref_path.suffix == '.svg':
+                    self.send_header('Content-Type', 'image/svg+xml')
+                self.end_headers()
+                with open(ref_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+            else:
+                self.send_error(404, "File not found")
+                return
+
         if parsed_path == "/api/preload-status":
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -280,7 +297,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if val_id and val_label:
                                 if any(p["value"] == val_id for p in profils_list):
                                     continue
-                                if val_id in {"pnf_foret", "_defaults"}:
+                                if val_id in {"pnf_foret", "_defaults", "types_usager", "synthese_activite_PA_PJ"}:
                                     continue
                                     
                                 sources_cfg = data.get("sources", {})

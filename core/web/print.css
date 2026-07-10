@@ -1,0 +1,141 @@
+@media print {
+    /* Cache les éléments de l'interface qui ne doivent pas être imprimés */
+    .app-header, .control-panel, #toggle-table-header, #table-container, 
+    .btn, .btn-export-chart-png, .app-footer, .results-count-badge, .code-helper,
+    .no-print {
+        display: none !important;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 1cm;
+    }
+
+    body, html {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        color: #002F4B; /* Bleu profond OFB */
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Rétablir le flux bloc pour l'impression (supprime les conflits Flex/Grid sur plusieurs pages) */
+    .explorer-container, .dashboard-split-grid, .explorer-panel {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    div[style*="display: flex; flex-direction: column"] {
+        display: block !important;
+    }
+
+    /* Titre d'impression */
+    #print-title-container {
+        display: flex !important;
+        align-items: center;
+        border-bottom: 3px solid #00A3A6; /* Vert d'eau OFB */
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+        page-break-after: avoid;
+    }
+
+    #print-title-container img.logo-rf {
+        height: 60px;
+        margin-right: 20px;
+    }
+
+    #print-title-container img.logo-ofb {
+        height: 45px;
+        margin-right: 20px;
+    }
+
+    #print-title {
+        font-size: 12pt;
+        font-weight: bold;
+        color: #002F4B;
+    }
+
+    /* Suppression des styles superflus des cartes */
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 15px !important;
+        padding: 0 !important;
+    }
+
+    .card h2 {
+        font-size: 12pt !important;
+        color: #00A3A6 !important;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+        margin-bottom: 10px !important;
+        page-break-after: avoid;
+    }
+
+    /* Page 1 : Indicateurs Clés */
+    .stats-grid {
+        display: flex !important;
+        justify-content: space-between;
+        margin-bottom: 15px !important;
+        page-break-inside: avoid;
+    }
+
+    .stat-card {
+        flex: 1;
+        margin: 0 5px;
+        border: 1px solid #002F4B !important;
+        background: #f0fdf4 !important;
+        padding: 8px !important;
+    }
+
+    .stat-card .value {
+        color: #002F4B !important;
+        font-size: 16pt !important;
+    }
+
+    .stat-card .label {
+        font-size: 8pt !important;
+    }
+
+    /* Page 1 : Carte et Saisonnalité */
+    #map {
+        height: 350px !important;
+        border: 2px solid #002F4B !important;
+        margin-bottom: 15px !important;
+        page-break-inside: avoid;
+    }
+
+    #chart-seasonality {
+        max-height: 150px !important;
+        page-break-inside: avoid;
+        margin-bottom: 10px !important;
+    }
+
+    /* Forcer le saut de page avant les Répartitions et Statistiques */
+    .dashboard-split-grid > .card:last-child {
+        page-break-before: always;
+    }
+
+    /* Organisation des canvas */
+    canvas {
+        max-width: 100% !important;
+        height: auto !important;
+        page-break-inside: avoid;
+        margin: 0 auto;
+    }
+
+    /* Graphiques en grille sur la Page 2 */
+    div[style*="grid-template-columns: 1fr 1fr"] {
+        display: flex !important;
+        justify-content: space-between;
+        margin-bottom: 15px !important;
+    }
+
+    div[style*="grid-template-columns: 1fr 1fr"] > div {
+        width: 48%;
+        page-break-inside: avoid;
+        border: 1px solid #ddd !important;
+    }
+}

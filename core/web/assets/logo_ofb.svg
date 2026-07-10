@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
+  <rect width="400" height="100" fill="#002F4B"/>
+  <text x="200" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#00A3A6" text-anchor="middle" dominant-baseline="middle">OFB</text>
+  <text x="200" y="80" font-family="Arial, sans-serif" font-size="16" fill="#FFFFFF" text-anchor="middle">Office Français de la Biodiversité</text>
+</svg>

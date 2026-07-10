@@ -1093,9 +1093,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isHeatmapMode) {
                     clusterParent.eachLayer(l => map.removeLayer(l));
                     heatmapLayer = L.heatLayer(heatData, {
-                        radius: 20,
-                        blur: 15,
-                        maxZoom: 12
+                        radius: 25,
+                        blur: 18,
+                        maxZoom: 12,
+                        max: 2.5
                     }).addTo(map);
                 } else {
                     if (heatmapLayer) {
@@ -2138,9 +2139,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     map.removeLayer(heatmapLayer);
                 }
                 heatmapLayer = L.heatLayer(heatData, {
-                    radius: 20,
-                    blur: 15,
-                    maxZoom: 12
+                    radius: 25,
+                    blur: 18,
+                    maxZoom: 12,
+                    max: 2.5
                 }).addTo(map);
             } else {
                 if (heatmapLayer) {
@@ -2451,7 +2453,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPdf = document.getElementById('btn-pdf');
     if (btnPdf) {
         btnPdf.addEventListener('click', () => {
-            alert('La génération PDF à partir des données de l\'explorateur sera implémentée ultérieurement.');
+            // Construction dynamique du titre pour le PDF
+            const scale = selectEchelle.options[selectEchelle.selectedIndex].text;
+            const codes = getParsedCodes();
+            let territoryStr = '';
+            
+            if (selectEchelle.value === 'national') {
+                territoryStr = 'National';
+            } else if (codes.length > 0) {
+                const activeList = getActiveCodesList();
+                const labels = codes.map(c => {
+                    const found = activeList.find(i => i.value === c);
+                    return found ? found.label.replace(/^[^-]+-\s*/, '') : c; // Enlève le préfixe ex: "21 -"
+                });
+                territoryStr = labels.join(', ');
+            } else {
+                territoryStr = 'Non spécifié';
+            }
+
+            // Récupérer les filtres
+            let filtres = [];
+            if (inputUsager && inputUsager.getSelectedValues) {
+                const vals = inputUsager.getSelectedValues().filter(v => v);
+                if (vals.length > 0) filtres.push(...vals);
+            }
+            if (inputDomaineSNC && inputDomaineSNC.getSelectedValues) {
+                const vals = inputDomaineSNC.getSelectedValues().filter(v => v);
+                if (vals.length > 0) filtres.push(...vals);
+            }
+            if (inputThemeSNC && inputThemeSNC.getSelectedValues) {
+                const vals = inputThemeSNC.getSelectedValues().filter(v => v);
+                if (vals.length > 0) filtres.push(...vals);
+            }
+            
+            let activiteStr = 'Activité globale';
+            if (filtres.length > 0) {
+                activiteStr = 'Activité sur ' + filtres.join(', ');
+            }
+
+            // Dates
+            const dateDeb = dateDebEl ? dateDebEl.value.split('-').reverse().join('/') : '';
+            const dateFin = dateFinEl ? dateFinEl.value.split('-').reverse().join('/') : '';
+            const periodeStr = `période du ${dateDeb} au ${dateFin}`;
+
+            const fullTitle = `${activiteStr} — de l'échelle ${scale} : ${territoryStr} — ${periodeStr}`;
+            
+            const titleEl = document.getElementById('print-title');
+            if (titleEl) {
+                titleEl.textContent = fullTitle;
+            }
+
+            // Déclencher l'impression
+            setTimeout(() => {
+                window.print();
+            }, 300);
         });
     }
 });

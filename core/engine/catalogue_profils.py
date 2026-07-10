@@ -8,7 +8,7 @@ from __future__ import annotations
 from core.common.chargeurs_donnees import load_ref_themes_ctrl
 from core.chemins_projet import PROJECT_ROOT
 
-_HIDDEN_PROFILES: frozenset[str] = frozenset({"pnf_foret", "_defaults"})
+_HIDDEN_PROFILES: frozenset[str] = frozenset({"pnf_foret", "_defaults", "types_usager", "synthese_activite_PA_PJ"})
 
 
 def list_profiles() -> list[str]:

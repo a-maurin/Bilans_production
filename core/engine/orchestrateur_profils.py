@@ -387,17 +387,29 @@ def _run_global_profile_via_yaml(
     options: dict,
 ) -> int:
     """Exécute le profil global via le moteur unifié orienté profils (sans délégation backend)."""
-    aggregations_mod = __import__("ofbilan.engine.agregations_profil", fromlist=["_dummy"])
-    pdf_mod = __import__("ofbilan.engine.generation_pdf_profil", fromlist=["_dummy"])
+    try:
+        aggregations_mod = __import__("ofbilan.engine.agregations_profil", fromlist=["_dummy"])
+    except ModuleNotFoundError:
+        aggregations_mod = __import__("core.engine.agregations_profil", fromlist=["_dummy"])
+    try:
+        pdf_mod = __import__("ofbilan.engine.generation_pdf_profil", fromlist=["_dummy"])
+    except ModuleNotFoundError:
+        pdf_mod = __import__("core.engine.generation_pdf_profil", fromlist=["_dummy"])
     agg_adapter_name = str((profile.get("aggregation", {}) or {}).get("adapter", "run_profile_aggregations")).strip()
     pdf_adapter_name = str((profile.get("pdf", {}) or {}).get("adapter", "generate_profile_pdf_report")).strip()
     run_aggregations = getattr(aggregations_mod, agg_adapter_name, None)
     if run_aggregations is None:
-        synthese_agg = __import__("ofbilan.engine.synthese_aggregations", fromlist=[agg_adapter_name])
+        try:
+            synthese_agg = __import__("ofbilan.engine.synthese_aggregations", fromlist=[agg_adapter_name])
+        except ModuleNotFoundError:
+            synthese_agg = __import__("core.engine.synthese_aggregations", fromlist=[agg_adapter_name])
         run_aggregations = getattr(synthese_agg, agg_adapter_name)
     generate_pdf_impl = getattr(pdf_mod, pdf_adapter_name, None)
     if generate_pdf_impl is None:
-        synthese_pdf = __import__("ofbilan.engine.generation_pdf_synthese", fromlist=[pdf_adapter_name])
+        try:
+            synthese_pdf = __import__("ofbilan.engine.generation_pdf_synthese", fromlist=[pdf_adapter_name])
+        except ModuleNotFoundError:
+            synthese_pdf = __import__("core.engine.generation_pdf_synthese", fromlist=[pdf_adapter_name])
         generate_pdf_impl = getattr(synthese_pdf, pdf_adapter_name)
 
     resolved_opts = resolve_options(profile, options)

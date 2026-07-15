@@ -148,7 +148,7 @@
 
     /* Carte */
     #map {
-        height: 120px !important;
+        height: 320px !important;
         width: 100% !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
@@ -157,6 +157,7 @@
         border-radius: 4px !important;
         margin-bottom: 4px !important;
         page-break-inside: avoid;
+        flex: none !important;
     }
 
     /* Stopper l'expansion flex des cards en col gauche (la map card a flex:1 inline) */
@@ -188,6 +189,10 @@
     .dashboard-split-grid > div:last-child .card > div[style*="flex:1"] {
         flex: 0 0 auto !important;
         overflow: hidden !important;
+    }
+
+    #wrapper-domains, #wrapper-themes {
+        min-height: 250px !important;
     }
 
     /* Graphiques en grille côte à côte */

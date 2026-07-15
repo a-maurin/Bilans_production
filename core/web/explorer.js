@@ -2504,7 +2504,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateFin = dateFinEl ? dateFinEl.value.split('-').reverse().join('/') : '';
             const periodeStr = `période du ${dateDeb} au ${dateFin}`;
 
-            const fullTitle = `${activiteStr} — de l'échelle ${scale} : ${territoryStr} — ${periodeStr}`;
+            const fullTitle = `${activiteStr} — ${scale} : ${territoryStr} — ${periodeStr}`;
             
             const titleEl = document.getElementById('print-title');
             if (titleEl) {
@@ -2561,6 +2561,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         splitGrid.style.zoom = (A4_LANDSCAPE_H_PX / contentH).toFixed(3);
                     }
                 }
+                
+                // Recentrer la carte avec les limites correctes après un potentiel changement de zoom
+                if (typeof map !== 'undefined') {
+                    map.invalidateSize();
+                    if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
+                        try {
+                            map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
+                        } catch (e) {
+                            console.error("Erreur de centrage de la carte pour l'impression", e);
+                        }
+                    }
+                }
+
                 setTimeout(() => window.print(), 150);
             }, 350);
         });

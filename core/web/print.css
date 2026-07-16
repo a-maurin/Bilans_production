@@ -52,12 +52,14 @@
     /* Conteneurs principaux */
     .explorer-container {
         display: block !important;
+        background: #fff !important;
         width: 1062px !important;
         height: 764px !important;
         max-width: 1062px !important;
         margin: 0 auto !important;
         padding: 0 !important;
         box-sizing: border-box !important;
+        overflow: hidden !important;
     }
     .explorer-panel {
         display: block !important;
@@ -161,7 +163,7 @@
     }
 
     #map {
-        height: 400px !important;
+        height: 350px !important;
         width: 100% !important;
         box-sizing: border-box !important;
         overflow: hidden !important;

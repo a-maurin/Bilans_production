@@ -13,6 +13,8 @@
     <!-- Leaflet.markercluster CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <!-- Driver.js CSS pour la visite guidée -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css" />
     <style>
         /* Style Plein Écran Carte */
         .map-fullscreen {
@@ -267,6 +269,16 @@
                             d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
                     </svg>
                 </button>
+                <a href="#" onclick="openHelpModal(); return false;" class="nav-item"
+                    style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;"
+                    title="Guide et Aide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </a>
                 <a href="#" onclick="openSettingsModal(); return false;" class="nav-item"
                     style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;" title="Paramètres">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -545,7 +557,7 @@
                 <!-- Bloc Carte & Saisonnalité -->
                 <div style="display: flex; flex-direction: column; gap: 15px; min-width: 0;">
                     <div class="card"
-                        style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                        style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <h2 style="margin-bottom: 0 !important;">Localisation des données</h2>
@@ -570,7 +582,7 @@
                                     title="Télécharger l'image de la carte">📥 PNG</button>
                             </div>
                         </div>
-                        <div id="map" style="flex: 1; min-height: 380px; margin-bottom: 0;"></div>
+                        <div id="map" style="margin-bottom: 0;"></div>
                     </div>
                     <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
                         <div
@@ -643,7 +655,7 @@
                                 style="background: none; border: none; cursor: pointer; font-size: 10px; color: var(--color-primary); font-weight: 500;"
                                 title="Télécharger l'image">📥 PNG</button>
                         </div>
-                        <div id="wrapper-domains" style="position: relative; width: 100%;">
+                        <div id="wrapper-domains" style="position: relative; width: 100%; flex: 1; min-height: 0;">
                             <canvas id="chart-domains" style="width: 100%;"></canvas>
                         </div>
                     </div>
@@ -660,7 +672,7 @@
                                 style="background: none; border: none; cursor: pointer; font-size: 10px; color: var(--color-primary); font-weight: 500;"
                                 title="Télécharger l'image">📥 PNG</button>
                         </div>
-                        <div id="wrapper-themes" style="position: relative; width: 100%;">
+                        <div id="wrapper-themes" style="position: relative; width: 100%; flex: 1; min-height: 0;">
                             <canvas id="chart-themes" style="width: 100%;"></canvas>
                         </div>
                     </div>
@@ -726,8 +738,176 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- HTML2Canvas for Map Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Driver.js pour la visite guidée -->
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <!-- Frontend controller script -->
     <script src="explorer.js?v=1.2.0"></script>
+    <!-- Modal Aide / Guide Complet -->
+    <div id="help-modal" class="hidden"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999999; display: flex; justify-content: center; align-items: center;">
+        <div
+            style="background: var(--color-bg-card); border-radius: 8px; width: 900px; max-width: 95vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+
+            <!-- Header Modal -->
+            <div
+                style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0; font-size: 18px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        style="color: var(--color-primary);">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    Guide Complet d'OFBilan
+                </h2>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="startGuidedTour()" class="btn btn-secondary"
+                        style="font-size: 12px; padding: 6px 12px;">▶ Relancer la visite rapide</button>
+                    <button type="button" onclick="closeHelpModal()"
+                        style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+                </div>
+            </div>
+
+            <!-- Corps Modal : 2 Colonnes -->
+            <div style="display: flex; flex: 1; overflow: hidden;">
+
+                <!-- Colonne Gauche : Sommaire -->
+                <div
+                    style="width: 250px; background: #f1f5f9; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto;">
+                    <h3
+                        style="font-size: 13px; color: #64748b; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.5px;">
+                        Sommaire</h3>
+                    <ul
+                        style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;">
+                        <li><a href="#help-intro"
+                                style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;"
+                                onmouseover="this.style.background='#e2e8f0'"
+                                onmouseout="this.style.background='transparent'">1. Introduction</a></li>
+                        <li><a href="#help-filters"
+                                style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;"
+                                onmouseover="this.style.background='#e2e8f0'"
+                                onmouseout="this.style.background='transparent'">2. Les filtres d'exploration</a></li>
+                        <li><a href="#help-map"
+                                style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;"
+                                onmouseover="this.style.background='#e2e8f0'"
+                                onmouseout="this.style.background='transparent'">3. La carte interactive</a></li>
+                        <li><a href="#help-charts"
+                                style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;"
+                                onmouseover="this.style.background='#e2e8f0'"
+                                onmouseout="this.style.background='transparent'">4. Les graphiques statistiques</a></li>
+                        <li><a href="#help-pdf"
+                                style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;"
+                                onmouseover="this.style.background='#e2e8f0'"
+                                onmouseout="this.style.background='transparent'">5. Générer un bilan PDF</a></li>
+                    </ul>
+                </div>
+
+                <!-- Colonne Droite : Contenu -->
+                <div style="flex: 1; padding: 30px; overflow-y: auto; scroll-behavior: smooth;" id="help-content-area">
+
+                    <div id="help-intro" style="margin-bottom: 40px;">
+                        <h3
+                            style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
+                            1. Introduction à OFBilan</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Bienvenue dans OFBilan. Ce
+                            logiciel vous permet d'analyser visuellement les données de contrôle de votre territoire et
+                            d'en extraire des bilans PDF prêts à l'emploi. L'interface se lit de gauche à droite : vous
+                            paramétrez votre recherche à gauche, et les résultats s'affichent à droite.</p>
+                        <div
+                            style="background: #e2e8f0; border: 1px dashed #94a3b8; height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; margin-top: 15px; border-radius: 6px;">
+                            [Espace pour capture : Vue globale de l'interface]
+                        </div>
+                    </div>
+
+                    <div id="help-filters" style="margin-bottom: 40px;">
+                        <h3
+                            style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
+                            2. Les filtres d'exploration (Le panneau de gauche)</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">C'est ici que vous pilotez
+                            l'outil. Chaque modification dans ce panneau nécessite de cliquer sur le bouton vert
+                            <strong>"Charger les données"</strong> tout en bas pour mettre à jour la carte et les
+                            graphiques.
+                        </p>
+                        <ul
+                            style="font-size: 14px; line-height: 1.6; color: #334155; margin-top: 10px; padding-left: 20px;">
+                            <li><strong>Profil thématique :</strong> Permet de pré-remplir les filtres complexes en un
+                                clic (ex: Produits phytopharmaceutiques, Chasse).</li>
+                            <li><strong>Période :</strong> Définissez les dates de début et de fin. Vous pouvez aussi
+                                cocher la case pour comparer avec l'année précédente (N vs N-1).</li>
+                            <li><strong>Périmètre géographique :</strong> Choisissez l'échelle (Département, Région...)
+                                et indiquez le code (ex: 21 pour la Côte-d'Or).</li>
+                        </ul>
+                        <div
+                            style="background: #e2e8f0; border: 1px dashed #94a3b8; height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; margin-top: 15px; border-radius: 6px;">
+                            [Espace pour capture : Zoom sur le panneau des filtres]
+                        </div>
+                    </div>
+
+                    <div id="help-map" style="margin-bottom: 40px;">
+                        <h3
+                            style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
+                            3. La carte interactive</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">La carte se met à jour selon vos
+                            filtres. Elle regroupe les contrôles pour rester lisible.</p>
+                        <ul
+                            style="font-size: 14px; line-height: 1.6; color: #334155; margin-top: 10px; padding-left: 20px;">
+                            <li><strong>Zoomer :</strong> Utilisez la molette de la souris ou les boutons + et -. En
+                                cliquant sur un cercle regroupant des contrôles, la carte zoome automatiquement.</li>
+                            <li><strong>Points ou Chaleur :</strong> Au-dessus de la carte, basculez en vue "Chaleur"
+                                pour voir immédiatement les zones de forte densité d'action.</li>
+                            <li><strong>Plein écran & Export :</strong> Utilisez les boutons dédiés pour agrandir la
+                                carte ou télécharger une image PNG pour vos propres présentations.</li>
+                        </ul>
+                        <div
+                            style="background: #e2e8f0; border: 1px dashed #94a3b8; height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; margin-top: 15px; border-radius: 6px;">
+                            [Espace pour capture : Vue de la carte avec les boutons entourés]
+                        </div>
+                    </div>
+
+                    <div id="help-charts" style="margin-bottom: 40px;">
+                        <h3
+                            style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
+                            4. Les graphiques statistiques</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Plusieurs graphiques analysent les
+                            données chargées. Si vous survolez les éléments (barres, portions de camembert), des bulles
+                            avec les valeurs précises s'affichent.</p>
+                        <ul
+                            style="font-size: 14px; line-height: 1.6; color: #334155; margin-top: 10px; padding-left: 20px;">
+                            <li><strong>Saisonnalité :</strong> Montre l'évolution mois par mois. S'il y a une
+                                comparaison (N vs N-1), deux courbes s'affichent.</li>
+                            <li><strong>Résultats et Usagers :</strong> Cliquez sur une légende sous le graphique pour
+                                masquer/afficher une catégorie spécifique.</li>
+                        </ul>
+                        <div
+                            style="background: #e2e8f0; border: 1px dashed #94a3b8; height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; margin-top: 15px; border-radius: 6px;">
+                            [Espace pour capture : Graphique avec infobulle visible]
+                        </div>
+                    </div>
+
+                    <div id="help-pdf" style="margin-bottom: 40px;">
+                        <h3
+                            style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
+                            5. Générer un bilan PDF</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Une fois vos données filtrées et
+                            affichées correctement, il suffit de cliquer sur le bouton rouge <strong>"Édition
+                                PDF"</strong> en bas à gauche.</p>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155; margin-top: 10px;">Le logiciel va
+                            réorganiser l'affichage pour le format A4 (la navigation va disparaître), puis lancer la
+                            fenêtre d'impression de votre navigateur. Veillez à sélectionner "Enregistrer au format PDF"
+                            comme imprimante, et cochez l'option "Graphiques d'arrière-plan" dans les paramètres
+                            d'impression pour conserver les couleurs.</p>
+                        <div
+                            style="background: #e2e8f0; border: 1px dashed #94a3b8; height: 200px; display: flex; align-items: center; justify-content: center; color: #64748b; margin-top: 15px; border-radius: 6px;">
+                            [Espace pour capture : Bouton rouge Édition PDF et fenêtre d'impression]
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Paramètres -->
     <div id="settings-modal" class="hidden"
         style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999999; display: flex; justify-content: center; align-items: center;">
@@ -818,6 +998,46 @@
     </div>
 
     <script>
+        // --- Fonctions d'Aide et Tutoriel ---
+        function openHelpModal() {
+            document.getElementById('help-modal').classList.remove('hidden');
+        }
+
+        function closeHelpModal() {
+            document.getElementById('help-modal').classList.add('hidden');
+        }
+
+        function startGuidedTour() {
+            closeHelpModal(); // Fermer la modale d'aide si elle est ouverte
+
+            const driver = window.driver.js.driver;
+            const driverObj = driver({
+                showProgress: true,
+                doneBtnText: 'Terminer',
+                nextBtnText: 'Suivant',
+                prevBtnText: 'Précédent',
+                steps: [
+                    { element: '.control-panel', popover: { title: '1. Les Filtres', description: 'Sélectionnez vos critères de recherche ici (Période, Territoire...).', side: "right", align: 'start' } },
+                    { element: '#btn-update', popover: { title: '2. Charger les données', description: 'Cliquez toujours ici après avoir modifié vos filtres pour mettre à jour la vue.', side: "right", align: 'start' } },
+                    { element: '#map', popover: { title: '3. Carte Interactive', description: 'Visualisez vos données. Vous pouvez zoomer et basculer entre points et chaleur.', side: "left", align: 'start' } },
+                    { element: '.stats-grid', popover: { title: '4. Indicateurs Clés', description: 'Voici un résumé rapide de l\'activité sur la période sélectionnée.', side: "bottom", align: 'center' } },
+                    { element: '#chart-results', popover: { title: '5. Graphiques', description: 'Analysez la répartition. Survolez les éléments pour voir les valeurs précises.', side: "top", align: 'center' } },
+                    { element: '#btn-pdf', popover: { title: '6. Édition PDF', description: 'Prêt à exporter ? Cliquez ici pour générer un bilan PDF formaté.', side: "right", align: 'start' } }
+                ]
+            });
+            driverObj.drive();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('ofbilan_tour_done')) {
+                setTimeout(() => {
+                    startGuidedTour();
+                    localStorage.setItem('ofbilan_tour_done', 'true');
+                }, 1000); // Léger délai pour laisser la page se construire
+            }
+        });
+
+        // --- Fonctions Paramètres ---
         function openSettingsModal() {
             document.getElementById('settings-modal').classList.remove('hidden');
             loadSettings();

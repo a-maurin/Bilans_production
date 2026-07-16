@@ -1,3 +1,8 @@
+@page {
+    size: A4 landscape;
+    margin: 0.4cm 0.8cm;
+}
+
 @media print {
     /* Cache les éléments de l'interface qui ne doivent pas être imprimés */
     .app-header, .control-panel, #toggle-table-header, #table-container, 
@@ -6,18 +11,14 @@
         display: none !important;
     }
 
-    @page {
-        size: A4 landscape;
-        margin: 0.4cm 0.8cm;
-    }
-
     body, html {
-        margin: 0;
-        padding: 0;
-        background: #fff;
-        color: #002F4B;
-        width: 100%;
-        height: auto;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        color: #002F4B !important;
+        width: 1122px !important;
+        height: 794px !important;
+        overflow: hidden !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
@@ -49,7 +50,16 @@
     }
 
     /* Conteneurs principaux */
-    .explorer-container, .explorer-panel {
+    .explorer-container {
+        display: block !important;
+        width: 1062px !important;
+        height: 764px !important;
+        max-width: 1062px !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .explorer-panel {
         display: block !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -72,17 +82,20 @@
     }
 
     .dashboard-split-grid > div:first-child {
-        width: 60% !important;
-        flex: 0 0 60% !important;
+        width: 610px !important;
+        flex: 0 0 610px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 2px !important;
+        gap: 6px !important;
         overflow: hidden !important;
     }
 
     .dashboard-split-grid > div:last-child {
-        width: 38% !important;
-        flex: 0 0 38% !important;
+        width: 442px !important;
+        flex: 0 0 442px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 6px !important;
     }
 
     div[style*="display: flex; flex-direction: column"] {
@@ -113,7 +126,8 @@
     }
     .card:has(> .stats-grid) {
         border-bottom: none !important;
-        margin-bottom: 2px !important;
+        margin-bottom: 0px !important;
+        padding: 0 !important;
     }
 
     /* Indicateurs Clés */
@@ -146,54 +160,39 @@
         line-height: 1.1 !important;
     }
 
-    /* Carte */
     #map {
-        height: 320px !important;
+        height: 400px !important;
         width: 100% !important;
-        max-width: 100% !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
         border: 1px solid #002F4B !important;
         border-radius: 4px !important;
-        margin-bottom: 4px !important;
+        margin-bottom: 0px !important;
         page-break-inside: avoid;
-        flex: none !important;
     }
 
-    /* Stopper l'expansion flex des cards en col gauche (la map card a flex:1 inline) */
-    .dashboard-split-grid > div:first-child .card {
-        flex: 0 0 auto !important;
+    /* Stopper l'expansion flex (h-100 de Bootstrap) des cards */
+    .dashboard-split-grid .card {
+        flex: none !important;
         min-height: unset !important;
-        margin-bottom: 2px !important;
-    }
-
-    /* #map : stopper flex:1 inline pour qu'il reste exactement à 120px */
-    #map {
-        flex: none !important;
+        height: auto !important;
+        margin-bottom: 0px !important;
     }
 
     .leaflet-control-container {
         display: none !important;
     }
 
-    /* Saisonnalité */
+    div:has(> #chart-seasonality) {
+        height: 140px !important;
+        position: relative !important;
+    }
     #chart-seasonality {
-        max-height: 85px !important;
-        height: 85px !important;
         page-break-inside: avoid;
         margin-bottom: 0 !important;
     }
 
-    /* Conteneurs barres col droite : stopper flex:1 sans forcer de hauteur */
-    .dashboard-split-grid > div:last-child .card > div[style*="flex: 1"],
-    .dashboard-split-grid > div:last-child .card > div[style*="flex:1"] {
-        flex: 0 0 auto !important;
-        overflow: hidden !important;
-    }
-
-    #wrapper-domains, #wrapper-themes {
-        min-height: 250px !important;
-    }
+    /* Les conteneurs barres col droite peuvent désormais utiliser flex:1 */
 
     /* Graphiques en grille côte à côte */
     div[style*="grid-template-columns: 1fr 1fr"] {
@@ -204,17 +203,42 @@
     }
 
     div[style*="grid-template-columns: 1fr 1fr"] > div {
-        width: 48%;
+        width: 218px !important;
+        flex: 0 0 218px !important;
+        height: 190px !important;
         page-break-inside: avoid;
         border: 1px solid #ddd !important;
         padding: 4px !important;
         min-height: unset !important;
+        box-sizing: border-box !important;
     }
 
-    /* Conteneurs donuts : supprimer le min-height inline qui force 250px */
-    div[style*="min-height: 250px"] {
+    /* Redimensionner les donuts */
+    div[style*="grid-template-columns: 1fr 1fr"] > div > div[style*="height: 140px"] {
+        height: 110px !important;
+        position: relative !important;
+    }
+    #chart-results, #chart-usagers, #chart-domains, #chart-themes, #chart-seasonality {
+        width: 100% !important;
+        page-break-inside: avoid;
+    }
+
+    /* Domaines d'Activité */
+    #wrapper-domains {
+        height: 160px !important;
         min-height: unset !important;
-        height: auto !important;
+        width: 100% !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    /* Thématiques Fines */
+    #wrapper-themes {
+        height: 160px !important;
+        min-height: unset !important;
+        width: 100% !important;
+        position: relative !important;
+        overflow: hidden !important;
     }
 
 

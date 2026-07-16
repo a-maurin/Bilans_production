@@ -1270,7 +1270,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Center/zoom map
-                if (boundaryLayer) {
+                if (selectEchelle.value === 'national') {
+                    map.setView([46.2276, 2.2137], 6);
+                } else if (boundaryLayer) {
                     map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
                 } else if (coordinates.length > 0) {
                     const bounds = L.latLngBounds(coordinates);
@@ -1518,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .slice(0, 5);
 
                 const domainsN1 = isCompare ? (resN1.charts.domains || {}) : null;
-                const domainLabels = sortedDomainsN.map(d => splitLabel(d[0], 25));
+                const domainLabels = sortedDomainsN.map(d => splitLabel(d[0], 40));
 
                 const deptNames = {
                     "01": "Ain", "02": "Aisne", "03": "Allier", "04": "Alpes-de-Haute-Provence", "05": "Hautes-Alpes",
@@ -1562,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             data: sortedDomainsN.map(([domain]) => getDomainTotal(unitDomains[domain] || 0)),
                             backgroundColor: deptColorsDom[idx % deptColorsDom.length],
                             borderRadius: 4,
-                            barThickness: Math.max(6, 14 - resGeoUnits.length * 2)
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     });
                 } else if (isRegion) {
@@ -1580,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             borderWidth: 1,
                             stack: 'Stack N',
                             borderRadius: 4,
-                            barThickness: isCompare ? 16 : 24
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     });
                     if (isCompare && domainsN1) {
@@ -1598,7 +1600,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 borderWidth: 1,
                                 stack: 'Stack N-1',
                                 borderRadius: 4,
-                                barThickness: 16
+                                barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                             });
                         });
                     }
@@ -1608,7 +1610,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         data: sortedDomainsN.map(d => getDomainTotal(d[1])),
                         backgroundColor: '#003A76',
                         borderRadius: 4,
-                        barThickness: isCompare ? 8 : 12
+                        barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                     });
                     if (isCompare && domainsN1) {
                         const alignedN1 = sortedDomainsN.map(d => getDomainTotal(domainsN1[d[0]] || 0));
@@ -1617,17 +1619,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             data: alignedN1,
                             backgroundColor: '#93C5FD',
                             borderRadius: 4,
-                            barThickness: 8
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     }
                 }
 
                 const showDomainsLegend = isCompare || isRegion || isSpatial;
                 const domainTotalLines = domainLabels.reduce((sum, lines) => sum + lines.length, 0);
-                const domainHeight = Math.max(100, 45 + (domainLabels.length * (showDomainsLegend ? 36 : 24)) + (domainTotalLines - domainLabels.length) * 11);
+                // Augmentation de la hauteur de base et de l'espace par barre pour aérer l'affichage
+                const domainHeight = Math.max(150, 65 + (domainLabels.length * (showDomainsLegend ? 38 : 28)) + (domainTotalLines - domainLabels.length) * 14);
                 const wrapperDomains = document.getElementById('wrapper-domains');
                 if (wrapperDomains) {
-                    wrapperDomains.style.height = `${domainHeight}px`;
+                    wrapperDomains.style.minHeight = `${domainHeight}px`;
+                    wrapperDomains.style.height = '100%';
                 }
 
                 const ctxDomains = document.getElementById('chart-domains').getContext('2d');
@@ -1654,7 +1658,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         },
                         plugins: {
-                            legend: { display: showDomainsLegend, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                            legend: { 
+                                display: showDomainsLegend, 
+                                position: 'top', 
+                                labels: { 
+                                    boxWidth: 10, 
+                                    font: { size: 9 },
+                                    filter: function(item, chart) {
+                                        return !(isCompare && item.text && item.text.endsWith('N-1'));
+                                    }
+                                } 
+                            },
+                            subtitle: { 
+                                display: isCompare, 
+                                text: 'Les couleurs estompées désignent les données N-1', 
+                                font: { size: 10, style: 'italic' }, 
+                                padding: { bottom: 10 } 
+                            },
                             tooltip: { callbacks: tooltipPercentageCallback }
                         },
                         scales: {
@@ -1677,7 +1697,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .slice(0, 5);
 
                 const themesN1 = isCompare ? (resN1.charts.themes || {}) : null;
-                const themeLabels = sortedThemesN.map(d => splitLabel(d[0], 25));
+                const themeLabels = sortedThemesN.map(d => splitLabel(d[0], 40));
 
                 const deptColorsTh   = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
                 const deptColorsThN1 = ['#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5'];
@@ -1693,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             data: sortedThemesN.map(([theme]) => getDomainTotal(unitThemes[theme] || 0)),
                             backgroundColor: deptColorsTh[idx % deptColorsTh.length],
                             borderRadius: 4,
-                            barThickness: Math.max(6, 14 - resGeoUnits.length * 2)
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     });
                 } else if (isRegion) {
@@ -1711,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             borderWidth: 1,
                             stack: 'Stack N',
                             borderRadius: 4,
-                            barThickness: isCompare ? 16 : 24
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     });
                     if (isCompare && themesN1) {
@@ -1729,7 +1749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 borderWidth: 1,
                                 stack: 'Stack N-1',
                                 borderRadius: 4,
-                                barThickness: 16
+                                barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                             });
                         });
                     }
@@ -1739,7 +1759,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         data: sortedThemesN.map(d => getDomainTotal(d[1])),
                         backgroundColor: '#4296CE',
                         borderRadius: 4,
-                        barThickness: isCompare ? 8 : 12
+                        barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                     });
                     if (isCompare && themesN1) {
                         const alignedN1 = sortedThemesN.map(d => getDomainTotal(themesN1[d[0]] || 0));
@@ -1748,17 +1768,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             data: alignedN1,
                             backgroundColor: '#FCA5A5',
                             borderRadius: 4,
-                            barThickness: 8
+                            barPercentage: 0.85, categoryPercentage: 0.9, maxBarThickness: 40
                         });
                     }
                 }
 
                 const showThemesLegend = isCompare || isRegion || isSpatial;
                 const themeTotalLines = themeLabels.reduce((sum, lines) => sum + lines.length, 0);
-                const themeHeight = Math.max(100, 45 + (themeLabels.length * (showThemesLegend ? 36 : 24)) + (themeTotalLines - themeLabels.length) * 11);
+                // Augmentation de la hauteur de base et de l'espace par barre pour aérer l'affichage
+                const themeHeight = Math.max(150, 65 + (themeLabels.length * (showThemesLegend ? 38 : 28)) + (themeTotalLines - themeLabels.length) * 14);
                 const wrapperThemes = document.getElementById('wrapper-themes');
                 if (wrapperThemes) {
-                    wrapperThemes.style.height = `${themeHeight}px`;
+                    wrapperThemes.style.minHeight = `${themeHeight}px`;
+                    wrapperThemes.style.height = '100%';
                 }
 
                 const ctxThemes = document.getElementById('chart-themes').getContext('2d');
@@ -1785,7 +1807,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         },
                         plugins: {
-                            legend: { display: showThemesLegend, position: 'top', labels: { boxWidth: 10, font: { size: 9 } } },
+                            legend: { 
+                                display: showThemesLegend, 
+                                position: 'top', 
+                                labels: { 
+                                    boxWidth: 10, 
+                                    font: { size: 9 },
+                                    filter: function(item, chart) {
+                                        return !(isCompare && item.text && item.text.endsWith('N-1'));
+                                    }
+                                } 
+                            },
+                            subtitle: { 
+                                display: isCompare, 
+                                text: 'Les couleurs estompées désignent les données N-1', 
+                                font: { size: 10, style: 'italic' }, 
+                                padding: { bottom: 10 } 
+                            },
                             tooltip: { callbacks: tooltipPercentageCallback }
                         },
                         scales: {
@@ -2511,70 +2549,174 @@ document.addEventListener('DOMContentLoaded', () => {
                 titleEl.textContent = fullTitle;
             }
 
-            // ── Réorganisation DOM pour l'impression (une seule page) ──────────
-            const titleContainer = document.getElementById('print-title-container');
+            // Changer le titre du document pour nommer le PDF généré
+            const originalDocumentTitle = document.title;
+            // Remplacer les caractères problématiques pour un nom de fichier par des tirets
+            const safeTitle = fullTitle.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim();
+            document.title = `Bilan_OFB_${safeTitle}`;
+
+            // La largeur de l'A4 est désormais gérée proprement via @media print dans print.css
+            // (La modification de la largeur sur l'écran cassait le layout ChartJS)
             const explorerPanel  = document.querySelector('.explorer-panel');
-            const statsCard      = explorerPanel ? explorerPanel.querySelector('.card') : null;
             const splitGrid      = explorerPanel ? explorerPanel.querySelector('.dashboard-split-grid') : null;
+            const titleContainer = document.getElementById('print-title-container');
+            const statsCard      = explorerPanel ? explorerPanel.querySelector('.card') : null;
             const leftCol        = splitGrid     ? splitGrid.firstElementChild : null;
 
-            // Mémoriser les parents/voisins originaux pour restauration
-            const titleOriginalParent  = titleContainer ? titleContainer.parentNode : null;
-            const titleOriginalSibling = titleContainer ? titleContainer.nextSibling : null;
-            const statsOriginalParent  = statsCard      ? statsCard.parentNode      : null;
-            const statsOriginalSibling = statsCard      ? statsCard.nextSibling     : null;
+            // Le titre reste en pleine largeur. On ne déplace plus la carte des indicateurs (statsCard)
+            // dans la colonne gauche pour éviter de casser le rendu PDF.
 
-            if (leftCol && titleContainer) {
-                leftCol.insertBefore(titleContainer, leftCol.firstChild);
-            }
-            if (leftCol && statsCard) {
-                // Insérer après le titre (2e position)
-                const afterTitle = leftCol.children[1] || null;
-                leftCol.insertBefore(statsCard, afterTitle);
-            }
+
+
 
             // ── Restauration après impression ────────────────────────────────
             const restore = () => {
-                if (splitGrid) splitGrid.style.zoom = '';
-                if (titleOriginalParent && titleContainer) {
-                    titleOriginalParent.insertBefore(titleContainer, titleOriginalSibling);
+                // Délai pour s'assurer que la fenêtre d'impression a bien capté le titre
+                setTimeout(() => {
+                    document.title = originalDocumentTitle;
+                }, 2000);
+
+
+
+                // Supprimer l'image statique du Canvas Leaflet et restaurer le vecteur
+                document.querySelectorAll('.print-canvas-img').forEach(el => el.remove());
+                const overlayCanvas = document.querySelector('.leaflet-overlay-pane canvas');
+                if (overlayCanvas && overlayCanvas.dataset.origOpacity !== undefined) {
+                    overlayCanvas.style.opacity = overlayCanvas.dataset.origOpacity;
                 }
-                if (statsOriginalParent && statsCard) {
-                    statsOriginalParent.insertBefore(statsCard, statsOriginalSibling);
+
+                // Restaurer la hauteur des wrappers ChartJS
+                const wDom = document.getElementById('wrapper-domains');
+                const wThe = document.getElementById('wrapper-themes');
+                if (wDom) {
+                    if (wDom.dataset.tmpH !== undefined) wDom.style.height = wDom.dataset.tmpH;
+                    if (wDom.dataset.tmpMinH !== undefined) wDom.style.minHeight = wDom.dataset.tmpMinH;
                 }
+                if (wThe) {
+                    if (wThe.dataset.tmpH !== undefined) wThe.style.height = wThe.dataset.tmpH;
+                    if (wThe.dataset.tmpMinH !== undefined) wThe.style.minHeight = wThe.dataset.tmpMinH;
+                }
+                
+                // Recalculer la taille pour l'écran
+                if (typeof chartDomains !== 'undefined' && chartDomains) chartDomains.resize();
+                if (typeof chartThemes !== 'undefined' && chartThemes) chartThemes.resize();
+                
+                const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
+                const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
+                if (wRes) {
+                    if (wRes.dataset.tmpW !== undefined) wRes.style.width = wRes.dataset.tmpW;
+                    if (wRes.dataset.tmpH !== undefined) wRes.style.height = wRes.dataset.tmpH;
+                    wRes.style.margin = '';
+                }
+                if (wUsa) {
+                    if (wUsa.dataset.tmpW !== undefined) wUsa.style.width = wUsa.dataset.tmpW;
+                    if (wUsa.dataset.tmpH !== undefined) wUsa.style.height = wUsa.dataset.tmpH;
+                    wUsa.style.margin = '';
+                }
+                if (typeof chartResults !== 'undefined' && chartResults) chartResults.resize();
+                if (typeof chartUsagers !== 'undefined' && chartUsagers) chartUsagers.resize();
+
+                const mapContainer = document.getElementById('map');
+                if (mapContainer) {
+                    if (mapContainer.dataset.tmpW !== undefined) mapContainer.style.width = mapContainer.dataset.tmpW;
+                    if (mapContainer.dataset.tmpH !== undefined) mapContainer.style.height = mapContainer.dataset.tmpH;
+                }
+                if (typeof map !== 'undefined') map.invalidateSize();
+
                 window.removeEventListener('afterprint', restore);
             };
             window.addEventListener('afterprint', restore);
 
-            // ── Auto-zoom pour tenir sur une seule page A4 paysage ───────────
-            // Hauteur utile A4 paysage (210mm - 2×0.4cm marges) à 96dpi
-            const A4_LANDSCAPE_H_PX = 750;
-
             setTimeout(() => {
-                if (splitGrid) {
-                    splitGrid.style.zoom = '';
-                    const leftH  = leftCol ? leftCol.scrollHeight : 0;
-                    const rightH = splitGrid.lastElementChild
-                                 ? splitGrid.lastElementChild.scrollHeight : 0;
-                    const contentH = Math.max(leftH, rightH);
-                    if (contentH > A4_LANDSCAPE_H_PX) {
-                        splitGrid.style.zoom = (A4_LANDSCAPE_H_PX / contentH).toFixed(3);
-                    }
-                }
                 
-                // Recentrer la carte avec les limites correctes après un potentiel changement de zoom
-                if (typeof map !== 'undefined') {
-                    map.invalidateSize();
-                    if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
-                        try {
-                            map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
-                        } catch (e) {
-                            console.error("Erreur de centrage de la carte pour l'impression", e);
+                // Laisser le temps au DOM d'appliquer les styles avant de redessiner
+                setTimeout(() => {
+                    if (typeof map !== 'undefined') {
+                        const mapContainer = document.getElementById('map');
+                        if (mapContainer) {
+                            mapContainer.dataset.tmpW = mapContainer.style.width;
+                            mapContainer.dataset.tmpH = mapContainer.style.height;
+                            mapContainer.style.width = '660px';
+                            mapContainer.style.height = '400px';
+                        }
+                        map.invalidateSize();
+                        // Re-cadrer parfaitement sur les limites
+                        if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
+                            try { map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20], animate: false }); } catch (e) {}
                         }
                     }
-                }
+                    
+                    // Forcer une hauteur temporaire pour forcer ChartJS à réduire l'épaisseur de ses barres
+                    const wDom = document.getElementById('wrapper-domains');
+                    const wThe = document.getElementById('wrapper-themes');
+                    if (wDom) { 
+                        wDom.dataset.tmpH = wDom.style.height; wDom.style.height = '160px'; 
+                        wDom.dataset.tmpMinH = wDom.style.minHeight; wDom.style.minHeight = '160px';
+                    }
+                    if (wThe) { 
+                        wThe.dataset.tmpH = wThe.style.height; wThe.style.height = '160px'; 
+                        wThe.dataset.tmpMinH = wThe.style.minHeight; wThe.style.minHeight = '160px';
+                    }
 
-                setTimeout(() => window.print(), 150);
+                    // Redimensionner les Donuts pour ne pas chevaucher la légende HTML
+                    const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
+                    const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
+                    
+                    if (wRes) {
+                        wRes.dataset.tmpW = wRes.style.width;
+                        wRes.dataset.tmpH = wRes.style.height;
+                        wRes.style.width = '110px';
+                        wRes.style.height = '110px';
+                        wRes.style.margin = '0 auto';
+                        chartResults.resize();
+                    }
+                    if (wUsa) {
+                        wUsa.dataset.tmpW = wUsa.style.width;
+                        wUsa.dataset.tmpH = wUsa.style.height;
+                        wUsa.style.width = '110px';
+                        wUsa.style.height = '110px';
+                        wUsa.style.margin = '0 auto';
+                        chartUsagers.resize();
+                    }
+
+                    if (typeof chartDomains !== 'undefined' && chartDomains && wDom) {
+                        chartDomains.resize(wDom.clientWidth, 160);
+                    }
+                    if (typeof chartThemes !== 'undefined' && chartThemes && wThe) {
+                        chartThemes.resize(wThe.clientWidth, 160);
+                    }
+                    
+                    // Délai pour garantir que le Canvas et les tuiles Leaflet ont fini de se redessiner
+                    setTimeout(() => {
+                        // FIX: Contourner le bug des navigateurs qui n'impriment pas les <canvas> fraîchement modifiés
+                        // On convertit le canvas contenant les limites administratives en une <img> statique garantie d'imprimer !
+                        const canvas = document.querySelector('.leaflet-overlay-pane canvas');
+                        if (canvas) {
+                            try {
+                                const img = document.createElement('img');
+                                img.src = canvas.toDataURL('image/png');
+                                img.style.position = 'absolute';
+                                img.style.top = canvas.style.top;
+                                img.style.left = canvas.style.left;
+                                // CRUCIAL : Cloner le transform pour éviter le décalage !
+                                img.style.transform = canvas.style.transform;
+                                img.style.transformOrigin = canvas.style.transformOrigin;
+                                img.style.width = canvas.style.width;
+                                img.style.height = canvas.style.height;
+                                img.style.zIndex = '9999';
+                                img.className = 'print-canvas-img';
+                                canvas.parentElement.appendChild(img);
+                                canvas.dataset.origOpacity = canvas.style.opacity;
+                                canvas.style.opacity = '0'; // Cacher l'original
+                            } catch(e) {
+                                console.error('Erreur conversion canvas print:', e);
+                            }
+                        }
+
+                        // Impression immédiate après le délai de chargement des tuiles
+                        window.print();
+                    }, 2500);
+                }, 150);
             }, 350);
         });
     }

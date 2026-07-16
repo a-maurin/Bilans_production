@@ -4,6 +4,23 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 
 ---
 
+## [v1.0.4] - 2026-07-16 : Export PDF dynamique & Améliorations Explorer
+
+### Édition PDF et Rapports
+* **Export dynamique** : Nouveau moteur d'export PDF intégré directement à l'Explorer Web.
+* **Mise en page** : Correction des feuilles de style (`print.css`) pour supprimer les pages vides superflues en fin de document.
+
+### Explorer et Graphiques
+* **Analyse multi-échelles** : Support de l'analyse sur des codes géographiques multiples (échelle nationale).
+* **Cartographie** : Clustering des points respectant désormais strictement les limites administratives.
+* **Graphiques** : Masquage conditionnel des légendes N-1 et ajustement de l'espacement des barres.
+* **UI** : Restauration des boutons dynamiques de l'interface.
+
+### Serveur et Données
+* **Stabilité** : Correction d'incohérences entre la CLI et la GUI, optimisation de la gestion des données en arrière-plan.
+
+---
+
 ## [v1.0.3] - 2026-06-29 : Migration vers QGIS et architecture de plugin
 
 Cette version marque une transition majeure : le projet passe d'un outil autonome à un véritable plugin QGIS, exploitant l'environnement Python de QGIS.

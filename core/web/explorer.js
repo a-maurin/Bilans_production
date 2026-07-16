@@ -11,6 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let chartSeasonality = null;
     let boundaryLayer = null;
 
+    // Fix chart pixelation globally (supports Chart.js v2 and v3+)
+    if (typeof Chart !== 'undefined') {
+        Chart.defaults.devicePixelRatio = 4;
+        if (Chart.defaults.global) Chart.defaults.global.devicePixelRatio = 20;
+    }
+
     // État pour le tableau détaillé des contrôles
     let activePoints = [];
     let currentTablePage = 1;
@@ -662,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     selectEchelle.addEventListener('change', () => {
         const val = selectEchelle.value;
-        
+
         inputCode.disabled = false;
         if (btnToggleCodes) btnToggleCodes.disabled = false;
 
@@ -759,26 +765,26 @@ document.addEventListener('DOMContentLoaded', () => {
      * clustersByTerritory : Map JS { clé_territoire -> L.markerClusterGroup }
      * Idem pour PEJ, PA, PVe.
      */
-    const clusterParent    = L.featureGroup().addTo(map);
-    const pejParent        = L.featureGroup().addTo(map);
-    const paParent         = L.featureGroup().addTo(map);
-    const pveParent        = L.featureGroup().addTo(map);
+    const clusterParent = L.featureGroup().addTo(map);
+    const pejParent = L.featureGroup().addTo(map);
+    const paParent = L.featureGroup().addTo(map);
+    const pveParent = L.featureGroup().addTo(map);
 
     let clustersByTerritory = new Map();
-    let pejByTerritory      = new Map();
-    let paByTerritory       = new Map();
-    let pveByTerritory      = new Map();
+    let pejByTerritory = new Map();
+    let paByTerritory = new Map();
+    let pveByTerritory = new Map();
 
     // FeatureGroups et Maps pour la période N-1 (séparés pour ne jamais fusionner avec N)
     const clusterParentN1 = L.featureGroup().addTo(map);
-    const pejParentN1     = L.featureGroup().addTo(map);
-    const paParentN1      = L.featureGroup().addTo(map);
-    const pveParentN1     = L.featureGroup().addTo(map);
+    const pejParentN1 = L.featureGroup().addTo(map);
+    const paParentN1 = L.featureGroup().addTo(map);
+    const pveParentN1 = L.featureGroup().addTo(map);
 
     let clustersByTerritoryN1 = new Map();
-    let pejByTerritoryN1      = new Map();
-    let paByTerritoryN1       = new Map();
-    let pveByTerritoryN1      = new Map();
+    let pejByTerritoryN1 = new Map();
+    let paByTerritoryN1 = new Map();
+    let pveByTerritoryN1 = new Map();
 
     // Options réutilisées pour chaque sous-groupe de clusters
     const baseClusterOpts = {
@@ -952,7 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(async response => {
             if (!response.ok) {
                 let errMsg = 'Erreur API';
-                try { const d = await response.json(); if (d.error) errMsg += ' : ' + d.error; } catch (e) {}
+                try { const d = await response.json(); if (d.error) errMsg += ' : ' + d.error; } catch (e) { }
                 throw new Error(errMsg);
             }
             return response.json();
@@ -975,8 +981,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Normalisation : en mode spatial resGeoUnits = tableau des résultats par unité
                 // En mode normal/temporel : resN = results[0], resN1 = results[1]
                 const resGeoUnits = isSpatial ? results : null;
-                const resN  = isSpatial ? results[0] : results[0];
-                const resN1 = isSpatial ? null        : results[1];
+                const resN = isSpatial ? results[0] : results[0];
+                const resN1 = isSpatial ? null : results[1];
 
                 // Mémorisation de l'état (localStorage et URL)
                 saveStateToLocalStorage();
@@ -1026,14 +1032,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 markersGroup.clearLayers();
                 // Nettoyage des clusters cloisonnés N et N-1
-                clearTerritoryMap(clusterParent,   clustersByTerritory);
-                clearTerritoryMap(pejParent,        pejByTerritory);
-                clearTerritoryMap(paParent,         paByTerritory);
-                clearTerritoryMap(pveParent,        pveByTerritory);
-                clearTerritoryMap(clusterParentN1,  clustersByTerritoryN1);
-                clearTerritoryMap(pejParentN1,      pejByTerritoryN1);
-                clearTerritoryMap(paParentN1,       paByTerritoryN1);
-                clearTerritoryMap(pveParentN1,      pveByTerritoryN1);
+                clearTerritoryMap(clusterParent, clustersByTerritory);
+                clearTerritoryMap(pejParent, pejByTerritory);
+                clearTerritoryMap(paParent, paByTerritory);
+                clearTerritoryMap(pveParent, pveByTerritory);
+                clearTerritoryMap(clusterParentN1, clustersByTerritoryN1);
+                clearTerritoryMap(pejParentN1, pejByTerritoryN1);
+                clearTerritoryMap(paParentN1, paByTerritoryN1);
+                clearTerritoryMap(pveParentN1, pveByTerritoryN1);
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);
                     heatmapLayer = null;
@@ -1158,7 +1164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, makeProcClusterOpts('rgba(59,130,246,0.85)')).addLayers(markers));
-                    paByKey.forEach( (markers, tKey) => getOrCreateCluster(tKey, paParent,  paByTerritory,  makeProcClusterOpts('rgba(139,92,246,0.85)')).addLayers(markers));
+                    paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, makeProcClusterOpts('rgba(139,92,246,0.85)')).addLayers(markers));
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, makeProcClusterOpts('rgba(249,115,22,0.85)')).addLayers(markers));
                 }
 
@@ -1250,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, makeN1ClusterOpts('rgba(59,130,246,0.72)')).addLayers(markers));
-                    paByKeyN1.forEach( (markers, tKey) => getOrCreateCluster(tKey, paParentN1,  paByTerritoryN1,  makeN1ClusterOpts('rgba(139,92,246,0.72)')).addLayers(markers));
+                    paByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, paParentN1, paByTerritoryN1, makeN1ClusterOpts('rgba(139,92,246,0.72)')).addLayers(markers));
                     pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, makeN1ClusterOpts('rgba(249,115,22,0.72)')).addLayers(markers));
                 }
 
@@ -1550,7 +1556,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 // Palette : unités spatiales (D3 Category10), N-1 pastel
-                const deptColorsDom  = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+                const deptColorsDom = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
                 const deptColorsDomN1 = ['#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5'];
 
                 let domainsDatasets = [];
@@ -1658,22 +1664,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         },
                         plugins: {
-                            legend: { 
-                                display: showDomainsLegend, 
-                                position: 'top', 
-                                labels: { 
-                                    boxWidth: 10, 
+                            legend: {
+                                display: showDomainsLegend,
+                                position: 'top',
+                                labels: {
+                                    boxWidth: 10,
                                     font: { size: 9 },
-                                    filter: function(item, chart) {
+                                    filter: function (item, chart) {
                                         return !(isCompare && item.text && item.text.endsWith('N-1'));
                                     }
-                                } 
+                                }
                             },
-                            subtitle: { 
-                                display: isCompare, 
-                                text: 'Les couleurs estompées désignent les données N-1', 
-                                font: { size: 10, style: 'italic' }, 
-                                padding: { bottom: 10 } 
+                            subtitle: {
+                                display: isCompare,
+                                text: 'Les couleurs estompées désignent les données N-1',
+                                font: { size: 10, style: 'italic' },
+                                padding: { bottom: 10 }
                             },
                             tooltip: { callbacks: tooltipPercentageCallback }
                         },
@@ -1699,7 +1705,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const themesN1 = isCompare ? (resN1.charts.themes || {}) : null;
                 const themeLabels = sortedThemesN.map(d => splitLabel(d[0], 40));
 
-                const deptColorsTh   = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+                const deptColorsTh = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
                 const deptColorsThN1 = ['#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5'];
 
                 let themesDatasets = [];
@@ -1807,22 +1813,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         },
                         plugins: {
-                            legend: { 
-                                display: showThemesLegend, 
-                                position: 'top', 
-                                labels: { 
-                                    boxWidth: 10, 
+                            legend: {
+                                display: showThemesLegend,
+                                position: 'top',
+                                labels: {
+                                    boxWidth: 10,
                                     font: { size: 9 },
-                                    filter: function(item, chart) {
+                                    filter: function (item, chart) {
                                         return !(isCompare && item.text && item.text.endsWith('N-1'));
                                     }
-                                } 
+                                }
                             },
-                            subtitle: { 
-                                display: isCompare, 
-                                text: 'Les couleurs estompées désignent les données N-1', 
-                                font: { size: 10, style: 'italic' }, 
-                                padding: { bottom: 10 } 
+                            subtitle: {
+                                display: isCompare,
+                                text: 'Les couleurs estompées désignent les données N-1',
+                                font: { size: 10, style: 'italic' },
+                                padding: { bottom: 10 }
                             },
                             tooltip: { callbacks: tooltipPercentageCallback }
                         },
@@ -1846,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seasonalityN1 = isCompare ? (resN1.charts.seasonality || { controls: Array(12).fill(0), infractions: Array(12).fill(0) }) : null;
 
                 // Palettes pour les courbes spatiales (contrôles + infractions par unité)
-                const seasonalColorsBorder   = ['#003A76', '#1f77b4', '#2ca02c', '#9467bd', '#8c564b'];
+                const seasonalColorsBorder = ['#003A76', '#1f77b4', '#2ca02c', '#9467bd', '#8c564b'];
                 const seasonalColorsBorderInf = ['#EF4444', '#ff7f0e', '#d62728', '#e377c2', '#bcbd22'];
 
                 const seasonalityDatasets = [];
@@ -2175,7 +2181,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isHeatmapMode) {
                 allParents.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
-                try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch(e){}
+                try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch (e) { }
 
                 const heatData = activePoints
                     .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
@@ -2196,7 +2202,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     heatmapLayer = null;
                 }
                 allParents.forEach(p => { if (!map.hasLayer(p)) p.addTo(map); });
-                try { if (typeof markersClusterGroup !== 'undefined' && !map.hasLayer(markersClusterGroup)) markersClusterGroup.addTo(map); } catch(e){}
+                try { if (typeof markersClusterGroup !== 'undefined' && !map.hasLayer(markersClusterGroup)) markersClusterGroup.addTo(map); } catch (e) { }
             }
         });
     });
@@ -2503,7 +2509,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const scale = selectEchelle.options[selectEchelle.selectedIndex].text;
             const codes = getParsedCodes();
             let territoryStr = '';
-            
+
             if (selectEchelle.value === 'national') {
                 territoryStr = 'National';
             } else if (codes.length > 0) {
@@ -2531,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const vals = inputThemeSNC.getSelectedValues().filter(v => v);
                 if (vals.length > 0) filtres.push(...vals);
             }
-            
+
             let activiteStr = 'Activité globale';
             if (filtres.length > 0) {
                 activiteStr = 'Activité sur ' + filtres.join(', ');
@@ -2543,7 +2549,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const periodeStr = `période du ${dateDeb} au ${dateFin}`;
 
             const fullTitle = `${activiteStr} — ${scale} : ${territoryStr} — ${periodeStr}`;
-            
+
             const titleEl = document.getElementById('print-title');
             if (titleEl) {
                 titleEl.textContent = fullTitle;
@@ -2557,11 +2563,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // La largeur de l'A4 est désormais gérée proprement via @media print dans print.css
             // (La modification de la largeur sur l'écran cassait le layout ChartJS)
-            const explorerPanel  = document.querySelector('.explorer-panel');
-            const splitGrid      = explorerPanel ? explorerPanel.querySelector('.dashboard-split-grid') : null;
+            const explorerPanel = document.querySelector('.explorer-panel');
+            const splitGrid = explorerPanel ? explorerPanel.querySelector('.dashboard-split-grid') : null;
             const titleContainer = document.getElementById('print-title-container');
-            const statsCard      = explorerPanel ? explorerPanel.querySelector('.card') : null;
-            const leftCol        = splitGrid     ? splitGrid.firstElementChild : null;
+            const statsCard = explorerPanel ? explorerPanel.querySelector('.card') : null;
+            const leftCol = splitGrid ? splitGrid.firstElementChild : null;
 
             // Le titre reste en pleine largeur. On ne déplace plus la carte des indicateurs (statsCard)
             // dans la colonne gauche pour éviter de casser le rendu PDF.
@@ -2596,11 +2602,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (wThe.dataset.tmpH !== undefined) wThe.style.height = wThe.dataset.tmpH;
                     if (wThe.dataset.tmpMinH !== undefined) wThe.style.minHeight = wThe.dataset.tmpMinH;
                 }
-                
+
                 // Recalculer la taille pour l'écran
                 if (typeof chartDomains !== 'undefined' && chartDomains) chartDomains.resize();
                 if (typeof chartThemes !== 'undefined' && chartThemes) chartThemes.resize();
-                
+
                 const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
                 const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
                 if (wRes) {
@@ -2628,7 +2634,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.addEventListener('afterprint', restore);
 
             setTimeout(() => {
-                
+
                 // Laisser le temps au DOM d'appliquer les styles avant de redessiner
                 setTimeout(() => {
                     if (typeof map !== 'undefined') {
@@ -2636,32 +2642,32 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (mapContainer) {
                             mapContainer.dataset.tmpW = mapContainer.style.width;
                             mapContainer.dataset.tmpH = mapContainer.style.height;
-                            mapContainer.style.width = '660px';
-                            mapContainer.style.height = '400px';
+                            mapContainer.style.width = '610px';
+                            mapContainer.style.height = '350px';
                         }
                         map.invalidateSize();
                         // Re-cadrer parfaitement sur les limites
                         if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
-                            try { map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20], animate: false }); } catch (e) {}
+                            try { map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20], animate: false }); } catch (e) { }
                         }
                     }
-                    
+
                     // Forcer une hauteur temporaire pour forcer ChartJS à réduire l'épaisseur de ses barres
                     const wDom = document.getElementById('wrapper-domains');
                     const wThe = document.getElementById('wrapper-themes');
-                    if (wDom) { 
-                        wDom.dataset.tmpH = wDom.style.height; wDom.style.height = '160px'; 
+                    if (wDom) {
+                        wDom.dataset.tmpH = wDom.style.height; wDom.style.height = '160px';
                         wDom.dataset.tmpMinH = wDom.style.minHeight; wDom.style.minHeight = '160px';
                     }
-                    if (wThe) { 
-                        wThe.dataset.tmpH = wThe.style.height; wThe.style.height = '160px'; 
+                    if (wThe) {
+                        wThe.dataset.tmpH = wThe.style.height; wThe.style.height = '160px';
                         wThe.dataset.tmpMinH = wThe.style.minHeight; wThe.style.minHeight = '160px';
                     }
 
                     // Redimensionner les Donuts pour ne pas chevaucher la légende HTML
                     const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
                     const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
-                    
+
                     if (wRes) {
                         wRes.dataset.tmpW = wRes.style.width;
                         wRes.dataset.tmpH = wRes.style.height;
@@ -2685,7 +2691,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof chartThemes !== 'undefined' && chartThemes && wThe) {
                         chartThemes.resize(wThe.clientWidth, 160);
                     }
-                    
+
                     // Délai pour garantir que le Canvas et les tuiles Leaflet ont fini de se redessiner
                     setTimeout(() => {
                         // FIX: Contourner le bug des navigateurs qui n'impriment pas les <canvas> fraîchement modifiés
@@ -2708,7 +2714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 canvas.parentElement.appendChild(img);
                                 canvas.dataset.origOpacity = canvas.style.opacity;
                                 canvas.style.opacity = '0'; // Cacher l'original
-                            } catch(e) {
+                            } catch (e) {
                                 console.error('Erreur conversion canvas print:', e);
                             }
                         }

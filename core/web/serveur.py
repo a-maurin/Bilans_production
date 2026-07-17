@@ -808,20 +808,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 def get_dept_series(df):
                     if df.empty:
                         return pd.Series(dtype=str)
+                    
+                    dept_s = pd.Series(index=df.index, dtype=str)
+                    
+                    # 1) Fallback prioritaire : si num_depart est dispo
                     for c in ["num_depart", "dept", "code_dept", "DEPT", "departement", "DEP", "DPT", "CODE_DEP"]:
                         if c in df.columns:
-                            return df[c].astype(str).str.zfill(2).str[:2]
+                            s = df[c].astype(str).str.strip()
+                            s = s.where(s.notna() & (s.str.lower() != "nan") & (s != ""), None)
+                            s = s.apply(lambda x: str(x).split(".")[0] if pd.notna(x) else x)
+                            dept_s = dept_s.fillna(s.str.zfill(2).str[:2])
+                            break
+                            
                     for c in ["ENTITE_ORIGINE_PROCEDURE", "entite_origine_procedure"]:
                         if c in df.columns:
                             s = df[c].astype(str).str.extract(r'(\d+)')[0]
                             s = s.where(s.notna() & (s.str.lower() != "nan"), None)
-                            return s.str.zfill(2).str[:2]
+                            dept_s = dept_s.fillna(s.str.zfill(2).str[:2])
+                            break
+                            
+                    # 2) Priorité INSEE : écrase si présent (vrai lieu géographique)
                     for c in ["insee_comm", "insee_commun", "insee_com", "INF-INSEE"]:
                         if c in df.columns:
-                            s = df[c].astype(str)
-                            s = s.where(s.str.lower() != "nan", None)
-                            return s.str.zfill(5).str[:2]
-                    return pd.Series("N/A", index=df.index)
+                            s = df[c].astype(str).str.strip()
+                            s = s.where(s.notna() & (s.str.lower() != "nan") & (s != ""), None)
+                            s = s.apply(lambda x: str(x).split(".")[0] if pd.notna(x) else x)
+                            insee_dept = s.str.zfill(5).str[:2]
+                            # on remplace si l'INSEE donne une info
+                            dept_s = insee_dept.fillna(dept_s)
+                            break
+
+                    return dept_s.fillna("N/A")
 
                 domains_counts = {}
                 themes_counts = {}
@@ -915,7 +932,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # 6. Extraction des points valides pour la cartographie
                 points = []
                 if not df_pts.empty:
-                    df_pts_valid = df_pts.dropna(subset=["x", "y"])
+                    df_pts_valid = df_pts.dropna(subset=["x", "y"]).copy()
+                    df_pts_valid["_code_dept_calc"] = get_dept_series(df_pts_valid)
                     for _, row in df_pts_valid.iterrows():
                         res_val = row.get("resultat")
                         dom_val = row.get("domaine")
@@ -926,25 +944,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         date_val = row.get("date_ctrl")
                         action_val = row.get("type_action")
 
-                        dept_raw = row.get("num_depart")
-                        if pd.notna(dept_raw) and str(dept_raw).strip() not in ("", "nan", "None"):
-                            # Supprimer la partie décimale si float (ex: 25.0 -> "25")
-                            dept_str = str(dept_raw).strip()
-                            if "." in dept_str:
-                                dept_str = dept_str.split(".")[0]
-                            # Normaliser en 2 chars (ou 3 pour DOM/TOM)
-                            dept_str = dept_str.strip()
-                            if dept_str.isdigit() and len(dept_str) <= 2:
-                                code_dept_val = dept_str.zfill(2)
-                            elif dept_str.isdigit() and len(dept_str) == 3:
-                                code_dept_val = dept_str  # DOM/TOM ex: 971
-                            else:
-                                code_dept_val = dept_str.upper()  # 2A, 2B
-                        else:
-                            # Fallback : 2 premiers chars du code INSEE commune
-                            insee_raw = row.get("insee_comm", "")
-                            insee_str = str(insee_raw).strip() if pd.notna(insee_raw) else ""
-                            code_dept_val = insee_str[:2] if len(insee_str) >= 2 else ""
+                        dept_calc = str(row.get("_code_dept_calc", "")).strip()
+                        code_dept_val = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
 
                         points.append({
                             "dc_id": str(dc_val).strip() if pd.notna(dc_val) else "",
@@ -973,19 +974,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if df.empty or code_col not in df.columns or "x" not in df.columns or "y" not in df.columns:
                         return arr
                     mask = df[code_col].map(is_filled_procedure_code)
-                    df_valid = df.loc[mask].dropna(subset=["x", "y"])
+                    df_valid = df.loc[mask].dropna(subset=["x", "y"]).copy()
+                    df_valid["_code_dept_calc"] = get_dept_series(df_valid)
                     col_ta = "type_actio" if "type_actio" in df.columns else ("type_action" if "type_action" in df.columns else None)
                     for _, r in df_valid.iterrows():
-                        dept_raw = r.get("num_depart")
-                        if pd.notna(dept_raw) and str(dept_raw).strip() not in ("", "nan", "None"):
-                            dept_str = str(dept_raw).strip()
-                            if "." in dept_str:
-                                dept_str = dept_str.split(".")[0]
-                            code_dept_proc = dept_str.zfill(2) if dept_str.isdigit() and len(dept_str) <= 2 else dept_str
-                        else:
-                            insee_raw = r.get("insee_comm", "")
-                            insee_str = str(insee_raw).strip() if pd.notna(insee_raw) else ""
-                            code_dept_proc = insee_str[:2] if len(insee_str) >= 2 else ""
+                        dept_calc = str(r.get("_code_dept_calc", "")).strip()
+                        code_dept_proc = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
                         arr.append({
                             "type": label,
                             "dc_id": str(r.get("dc_id", "")).strip() if pd.notna(r.get("dc_id")) else "",
@@ -1024,16 +1018,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 df_pej_loc.loc[missing_mask, "y_faits"] = dc_clean.map(dict_y).fillna(df_pej_loc.loc[missing_mask, "y_faits"])
 
                         if not df_pej_loc.empty and "x_faits" in df_pej_loc.columns and "y_faits" in df_pej_loc.columns:
-                            df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"])
+                            df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"]).copy()
+                            df_pej_valid["_code_dept_calc"] = get_dept_series(df_pej_valid)
                             for _, r in df_pej_valid.iterrows():
-                                dept_raw_pej = r.get("num_depart") or r.get("NUM_DEPART")
-                                if pd.notna(dept_raw_pej) and str(dept_raw_pej).strip() not in ("", "nan", "None"):
-                                    dept_str_pej = str(dept_raw_pej).strip()
-                                    if "." in dept_str_pej:
-                                        dept_str_pej = dept_str_pej.split(".")[0]
-                                    code_dept_pej = dept_str_pej.zfill(2) if dept_str_pej.isdigit() and len(dept_str_pej) <= 2 else dept_str_pej
-                                else:
-                                    code_dept_pej = ""
+                                dept_calc = str(r.get("_code_dept_calc", "")).strip()
+                                code_dept_pej = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
                                 procedures.append({
                                     "type": "PEJ",
                                     "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
@@ -1091,13 +1080,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     x_col = "x" if "x" in df_pve.columns else None
                     y_col = "y" if "y" in df_pve.columns else None
                     if x_col and y_col:
-                        pve_valid = df_pve.dropna(subset=[x_col, y_col])
+                        pve_valid = df_pve.dropna(subset=[x_col, y_col]).copy()
+                        pve_valid["_code_dept_calc"] = get_dept_series(pve_valid)
                         date_col_pve = "INF-DATE-MIF" if "INF-DATE-MIF" in df_pve.columns else "INF-DATE-INTG"
                         col_ta_pve = "type_action" if "type_action" in df_pve.columns else ("THEME" if "THEME" in df_pve.columns else ("type_actio" if "type_actio" in df_pve.columns else None))
                         col_usager_pve = "type_usager" if "type_usager" in df_pve.columns else ("USAGER" if "USAGER" in df_pve.columns else None)
                         for _, r in pve_valid.iterrows():
-                            pve_insee_raw = str(r.get("INF-INSEE", "")).strip()
-                            code_dept_pve = pve_insee_raw[:2] if len(pve_insee_raw) >= 2 else ""
+                            dept_calc = str(r.get("_code_dept_calc", "")).strip()
+                            code_dept_pve = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
                             procedures.append({
                                 "type": "PVe",
                                 "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",

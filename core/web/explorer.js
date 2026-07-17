@@ -1106,11 +1106,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isHeatmapMode) {
                     clusterParent.eachLayer(l => map.removeLayer(l));
+                    
+                    let dynamicMax = 2.5;
+                    if (heatData.length > 0) {
+                        const grid = {};
+                        let maxCount = 1;
+                        heatData.forEach(pt => {
+                            const gx = Math.floor(pt[0] / 0.05);
+                            const gy = Math.floor(pt[1] / 0.05);
+                            const key = gx + ',' + gy;
+                            grid[key] = (grid[key] || 0) + 1;
+                            if (grid[key] > maxCount) maxCount = grid[key];
+                        });
+                        dynamicMax = Math.max(1, maxCount * 0.6);
+                    }
+
                     heatmapLayer = L.heatLayer(heatData, {
                         radius: 25,
                         blur: 18,
                         maxZoom: 12,
-                        max: 2.5
+                        max: dynamicMax
                     }).addTo(map);
                 } else {
                     if (heatmapLayer) {
@@ -2190,11 +2205,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);
                 }
+                
+                let dynamicMax = 2.5;
+                if (heatData.length > 0) {
+                    const grid = {};
+                    let maxCount = 1;
+                    heatData.forEach(pt => {
+                        const gx = Math.floor(pt[0] / 0.05);
+                        const gy = Math.floor(pt[1] / 0.05);
+                        const key = gx + ',' + gy;
+                        grid[key] = (grid[key] || 0) + 1;
+                        if (grid[key] > maxCount) maxCount = grid[key];
+                    });
+                    dynamicMax = Math.max(1, maxCount * 0.6);
+                }
+
                 heatmapLayer = L.heatLayer(heatData, {
                     radius: 25,
                     blur: 18,
                     maxZoom: 12,
-                    max: 2.5
+                    max: dynamicMax
                 }).addTo(map);
             } else {
                 if (heatmapLayer) {
@@ -2537,9 +2567,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const vals = inputThemeSNC.getSelectedValues().filter(v => v);
                 if (vals.length > 0) filtres.push(...vals);
             }
+            if (inputTypeAction && inputTypeAction.getSelectedValues) {
+                const vals = inputTypeAction.getSelectedValues().filter(v => v);
+                if (vals.length > 0) filtres.push(...vals);
+            }
 
-            let activiteStr = 'Activité globale';
-            if (filtres.length > 0) {
+            const profilSelect = document.getElementById('profil-select');
+            let activiteStr = 'Bilan global';
+            
+            if (profilSelect && profilSelect.selectedIndex >= 0 && profilSelect.value !== 'global') {
+                activiteStr = profilSelect.options[profilSelect.selectedIndex].text;
+                if (filtres.length > 0) {
+                    activiteStr += ' — ' + filtres.join(', ');
+                }
+            } else if (filtres.length > 0) {
                 activiteStr = 'Activité sur ' + filtres.join(', ');
             }
 

@@ -1371,7 +1371,7 @@ def _filter_pej(
 
     # Restriction au département par entité
     entity_sds = cfg.entity_sds
-    if "ENTITE_ORIGINE_PROCEDURE" in pej.columns:
+    if entity_sds and "ENTITE_ORIGINE_PROCEDURE" in pej.columns:
         pej = pej[pej["ENTITE_ORIGINE_PROCEDURE"].isin(entity_sds)].copy()
 
     # Déduplication par DC_ID
@@ -1384,7 +1384,7 @@ def _filter_pej(
             pej = pej.drop_duplicates(subset="DC_ID", keep="first")
 
     if natinf_pej:
-        pattern = "|".join(rf"(?:^|_){re.escape(c)}(?:_|$)" for c in natinf_pej)
+        pattern = "|".join(rf"\b{re.escape(str(c))}\b" for c in natinf_pej)
         natinf_col = "NATINF_PEJ" if "NATINF_PEJ" in pej.columns else "NATINF"
         if natinf_col in pej.columns:
             return pej[series_str_contains(pej[natinf_col], pattern, regex=True)].copy()
@@ -1417,7 +1417,7 @@ def _filter_pa(
     entity_sds = cfg.entity_sds
 
     # Restreindre systématiquement aux procédures de l'entité SD concernée
-    if "ENTITE_ORIGINE_PROCEDURE" in pa.columns:
+    if entity_sds and "ENTITE_ORIGINE_PROCEDURE" in pa.columns:
         pa = pa[pa["ENTITE_ORIGINE_PROCEDURE"].isin(entity_sds)].copy()
 
     dc_ids_dept: Set[str] = set()

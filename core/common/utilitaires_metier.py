@@ -106,7 +106,11 @@ def series_as_python_str(series: pd.Series) -> pd.Series:
     Sous le Python QGIS, ``astype(str)`` peut produire ``string[pyarrow]`` et faire
     échouer ``str.contains`` (RE2 / ``match_substring_regex`` absent).
     """
-    return series.fillna("").map(str).astype(object)
+    def _clean_str(v):
+        if pd.isna(v): return ""
+        if isinstance(v, float) and v.is_integer(): return str(int(v))
+        return str(v)
+    return series.map(_clean_str).astype(object)
 
 
 def series_str_contains(
@@ -1383,7 +1387,7 @@ def contient_natinf(s: str, natinf_list: List[str]) -> bool:
     """Vérifie si la chaîne contient l'un des codes NATINF (format X_Y ou isolé)."""
     s = str(s) if pd.notna(s) else ""
     for code in natinf_list:
-        pattern = rf"(^|_){code}(_|$)"
+        pattern = rf"\b{code}\b"
         if re.search(pattern, s):
             return True
     return False

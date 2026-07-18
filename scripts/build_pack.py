@@ -31,7 +31,7 @@ def create_pack() -> int:
     
     print(f"\nCréation de l'archive : {zip_path}")
     
-    targets = ["ref", "data/sources", "data/sources_archive"]
+    targets = ["ref"]
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Assurer la structure pour data/sources
@@ -51,6 +51,14 @@ def create_pack() -> int:
                     zipf.write(file_path, rel_path)
 
     print("\nArchive ZIP créée avec succès dans le dossier 'distribution'.")
+    
+    # 3. Copie du script d'installation
+    import shutil
+    installer_script = project_root / "scripts" / "installer_pack.bat"
+    if installer_script.exists():
+        shutil.copy2(installer_script, dist_dir / "installer_pack.bat")
+        print(f"Script d'installation copié : {dist_dir / 'installer_pack.bat'}")
+    
     return 0
 
 

@@ -55,7 +55,7 @@ def install_dependencies(iface):
                 QgsMessageLog.logMessage(f"Début de l'installation, log: {log_file_path}", "OFBilan", Qgis.Info)
                 with open(log_file_path, "w", encoding="utf-8") as log_file:
                     process = subprocess.Popen(
-                        [python_exe, "-m", "pip", "install"] + missing_packages,
+                        [python_exe, "-m", "pip", "install", "--user"] + missing_packages,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                         text=True,

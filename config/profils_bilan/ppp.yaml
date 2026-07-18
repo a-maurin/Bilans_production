@@ -18,7 +18,7 @@ natinf_pve: []
 analyse_PVe: false
 
 sources:
-  point_ctrl: false
+  point_ctrl: true
   pej: true
   pa: false
   pve: false

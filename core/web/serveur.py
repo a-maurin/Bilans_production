@@ -147,6 +147,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.flush()
             return
 
+        if parsed_path == "/api/check-sources":
+            sources_dir = SRC_DIR / "data" / "sources"
+            needs_update = True
+            if sources_dir.exists():
+                items = [p for p in sources_dir.iterdir() if p.name != ".gitkeep"]
+                if items:
+                    needs_update = False
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(json.dumps({"needs_update": needs_update}).encode('utf-8'))
+            return
+
         if parsed_path == "/api/check_update":
             import urllib.request
             import ssl

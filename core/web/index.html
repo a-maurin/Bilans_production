@@ -39,8 +39,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const btnUpdate = document.getElementById('btn-update-sources');
+            let isInitialDownload = false;
+            
             if(btnUpdate) {
-                btnUpdate.addEventListener('click', function() {
+                btnUpdate.addEventListener('click', function(e) {
                     const consoleContainer = document.getElementById('update-console-container');
                     const consoleOutput = document.getElementById('update-console-output');
                     
@@ -62,6 +64,10 @@
                             }, 2000);
                         } else if (event.data.startsWith("[ERREUR]")) {
                             evtSource.close();
+                            if (isInitialDownload) {
+                                alert("Échec du téléchargement initial des données.\n\nVeuillez vous assurer d'être connecté au réseau de l'OFB (ou VPN) et rechargez la page.");
+                                isInitialDownload = false;
+                            }
                             setTimeout(() => {
                                 consoleContainer.style.display = 'none';
                                 consoleContainer.classList.add('hidden');
@@ -72,12 +78,28 @@
                     evtSource.onerror = function() {
                         consoleOutput.innerHTML += "[ERREUR] Connexion SSE perdue.\n";
                         evtSource.close();
+                        if (isInitialDownload) {
+                            alert("Perte de connexion durant le téléchargement initial.\n\nVeuillez vous assurer d'être connecté au réseau de l'OFB (ou VPN) et rechargez la page.");
+                            isInitialDownload = false;
+                        }
                         setTimeout(() => {
                             consoleContainer.style.display = 'none';
                             consoleContainer.classList.add('hidden');
                         }, 3000);
                     };
                 });
+                
+                // Vérification automatique au démarrage
+                fetch('/api/check-sources')
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data.needs_update) {
+                            console.log("Sources manquantes, lancement automatique du premier téléchargement...");
+                            isInitialDownload = true;
+                            btnUpdate.click(); 
+                        }
+                    })
+                    .catch(e => console.error("Erreur check-sources:", e));
             }
         });
     </script>

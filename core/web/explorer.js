@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // État pour le tableau détaillé des contrôles
     let activePoints = [];
+    let activeProcedures = [];
     let currentTablePage = 1;
     const tableRowsPerPage = 25;
     let tableSortColumn = '';
@@ -707,6 +708,37 @@ document.addEventListener('DOMContentLoaded', () => {
         attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>'
     }).addTo(map);
 
+    // Helper to calculate dynamic heatmap Max based on current zoom pixel projection
+    function getDynamicMaxForZoom(mapInstance, heatPoints, radiusPx) {
+        if (!heatPoints || heatPoints.length === 0) return 1.0;
+        const currentZoom = mapInstance.getZoom();
+        const grid = {};
+        let maxCount = 1;
+        const cellSize = radiusPx / 2;
+        heatPoints.forEach(pt => {
+            const p = mapInstance.project([pt[0], pt[1]], currentZoom);
+            const gx = Math.floor(p.x / cellSize);
+            const gy = Math.floor(p.y / cellSize);
+            const key = gx + ',' + gy;
+            grid[key] = (grid[key] || 0) + 1;
+            if (grid[key] > maxCount) maxCount = grid[key];
+        });
+        return Math.max(1.0, maxCount * 0.99);
+    }
+
+    map.on('zoomend', function () {
+        if (typeof heatmapLayer !== 'undefined' && heatmapLayer && document.querySelector('input[name="map-mode"]:checked')?.value === 'heatmap') {
+            const hData = [...activePoints, ...activeProcedures]
+                .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
+                .filter(coords => !isNaN(coords[0]) && !isNaN(coords[1]) && coords[0] !== 0 && coords[1] !== 0);
+            const newMax = getDynamicMaxForZoom(map, hData, 25);
+            heatmapLayer.setOptions({
+                max: newMax,
+                maxZoom: map.getZoom() // Bypass default Leaflet.heat zoom scaling
+            });
+        }
+    });
+
     // Application des paramètres (Code Géo, Thème, Zoom...) après init de la map
     fetch('/api/settings').then(res => res.json()).then(settings => {
         if (settings.geo && settings.geo.code_geo_defaut) {
@@ -989,24 +1021,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateURLWithState();
 
                 // Rendu des valeurs d'indicateurs clés
-                function updateStatElement(elementId, valN, valN1) {
+                function updateStatElement(elementId, statKey) {
                     const el = document.getElementById(elementId);
                     if (!el) return;
-                    if (valN1 === undefined || valN1 === null) {
-                        el.innerHTML = valN;
+
+                    if (isSpatial) {
+                        let htmlLines = resGeoUnits.map((unit, idx) => {
+                            const val = (unit.stats && unit.stats[statKey] !== undefined) ? unit.stats[statKey] : 0;
+                            const label = parsedCodes[idx];
+                            return `<div style="display: flex; align-items: baseline; margin-bottom: 4px;">
+                                <span style="flex: 1; text-align: right; padding-right: 8px; font-size: 12px !important; color: var(--color-text-muted, #64748B) !important; font-weight: 600 !important; text-transform: uppercase;">${label}</span>
+                                <strong style="flex: 1; text-align: left; padding-left: 8px; font-size: 19px !important; color: var(--color-primary) !important; line-height: 1 !important;">${val}</strong>
+                            </div>`;
+                        });
+                        el.innerHTML = htmlLines.join('');
                     } else {
-                        const pct = valN1 > 0 ? ((valN - valN1) / valN1 * 100).toFixed(1) : 0;
-                        const arrow = valN > valN1 ? '▲' : (valN < valN1 ? '▼' : '■');
-                        const color = valN > valN1 ? '#10B981' : (valN < valN1 ? '#EF4444' : '#64748B');
-                        el.innerHTML = `<span style="font-size: 16px;">${valN}</span> <div style="font-size: 9px; font-weight: 600; color: ${color}; margin-top: 2px;">vs ${valN1} (${pct >= 0 ? '+' : ''}${pct}% ${arrow})</div>`;
+                        const valN = (resN.stats && resN.stats[statKey] !== undefined) ? resN.stats[statKey] : 0;
+                        const valN1 = isCompare && resN1 && resN1.stats ? resN1.stats[statKey] : null;
+
+                        if (valN1 === undefined || valN1 === null) {
+                            el.innerHTML = valN;
+                        } else {
+                            const pct = valN1 > 0 ? ((valN - valN1) / valN1 * 100).toFixed(1) : 0;
+                            const arrow = valN > valN1 ? '▲' : (valN < valN1 ? '▼' : '■');
+                            const color = valN > valN1 ? '#10B981' : (valN < valN1 ? '#EF4444' : '#64748B');
+                            el.innerHTML = `<span style="font-size: 16px;">${valN}</span> <div style="font-size: 9px; font-weight: 600; color: ${color}; margin-top: 2px;">vs ${valN1} (${pct >= 0 ? '+' : ''}${pct}% ${arrow})</div>`;
+                        }
                     }
                 }
 
-                updateStatElement('val-controles', resN.stats.total_controles, isCompare ? resN1.stats.total_controles : null);
-                updateStatElement('val-pej', resN.stats.total_pej, isCompare ? resN1.stats.total_pej : null);
-                updateStatElement('val-pa', resN.stats.total_pa, isCompare ? resN1.stats.total_pa : null);
-                updateStatElement('val-usagers-controles', resN.stats.total_usagers_controles, isCompare ? resN1.stats.total_usagers_controles : null);
-                updateStatElement('val-pve', resN.stats.total_pve, isCompare ? resN1.stats.total_pve : null);
+                updateStatElement('val-controles', 'total_controles');
+                updateStatElement('val-pej', 'total_pej');
+                updateStatElement('val-pa', 'total_pa');
+                updateStatElement('val-usagers-controles', 'total_usagers_controles');
+                updateStatElement('val-pve', 'total_pve');
 
                 const p1 = getParams();
                 const hidePve = p1.domaines.length > 0 || p1.themes.length > 0 || p1.types_action.length > 0;
@@ -1017,6 +1065,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Mise à jour des points actifs et du compteur (uniquement basés sur la période principale N)
                 activePoints = resN.points || [];
+                activeProcedures = resN.procedures || [];
                 currentTablePage = 1;
 
                 const resultsCountEl = document.getElementById('results-count');
@@ -1104,38 +1153,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                if (isHeatmapMode) {
-                    clusterParent.eachLayer(l => map.removeLayer(l));
-                    
-                    let dynamicMax = 2.5;
-                    if (heatData.length > 0) {
-                        const grid = {};
-                        let maxCount = 1;
-                        heatData.forEach(pt => {
-                            const gx = Math.floor(pt[0] / 0.05);
-                            const gy = Math.floor(pt[1] / 0.05);
-                            const key = gx + ',' + gy;
-                            grid[key] = (grid[key] || 0) + 1;
-                            if (grid[key] > maxCount) maxCount = grid[key];
-                        });
-                        dynamicMax = Math.max(1, maxCount * 0.6);
-                    }
-
-                    heatmapLayer = L.heatLayer(heatData, {
-                        radius: 25,
-                        blur: 18,
-                        maxZoom: 12,
-                        max: dynamicMax
-                    }).addTo(map);
-                } else {
-                    if (heatmapLayer) {
-                        map.removeLayer(heatmapLayer);
-                        heatmapLayer = null;
-                    }
-                    if (!map.hasLayer(clusterParent)) {
-                        clusterParent.addTo(map);
-                    }
-                }
                 // Render procedure markers (if any)
                 if (resN.procedures && resN.procedures.length > 0) {
                     const pejByKey = new Map(), paByKey = new Map(), pveByKey = new Map();
@@ -1144,6 +1161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let lat = parseFloat(p.y);
                         let lng = parseFloat(p.x);
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                            heatData.push([lat, lng, 1.0]);
                             let procColor = '#3B82F6';
                             const ptype = (p.type || '').toUpperCase();
                             let targetMap = pejByKey;
@@ -1181,6 +1199,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, makeProcClusterOpts('rgba(59,130,246,0.85)')).addLayers(markers));
                     paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, makeProcClusterOpts('rgba(139,92,246,0.85)')).addLayers(markers));
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, makeProcClusterOpts('rgba(249,115,22,0.85)')).addLayers(markers));
+                }
+
+                if (isHeatmapMode) {
+                    clusterParent.eachLayer(l => map.removeLayer(l));
+
+                    const dynamicMax = getDynamicMaxForZoom(map, heatData, 25);
+
+                    heatmapLayer = L.heatLayer(heatData, {
+                        radius: 25,
+                        blur: 18,
+                        maxZoom: map.getZoom(), // Dynamic zoom recalibration
+                        max: dynamicMax
+                    }).addTo(map);
+                } else {
+                    if (heatmapLayer) {
+                        map.removeLayer(heatmapLayer);
+                        heatmapLayer = null;
+                    }
+                    if (!map.hasLayer(clusterParent)) {
+                        clusterParent.addTo(map);
+                    }
                 }
 
                 // Render points N-1 (heatmap/cluster group global, style semi-transparent)
@@ -2198,32 +2237,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 allParents.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
                 try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch (e) { }
 
-                const heatData = activePoints
+                const heatData = [...activePoints, ...activeProcedures]
                     .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
                     .filter(coords => !isNaN(coords[0]) && !isNaN(coords[1]) && coords[0] !== 0 && coords[1] !== 0);
 
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);
                 }
-                
-                let dynamicMax = 2.5;
-                if (heatData.length > 0) {
-                    const grid = {};
-                    let maxCount = 1;
-                    heatData.forEach(pt => {
-                        const gx = Math.floor(pt[0] / 0.05);
-                        const gy = Math.floor(pt[1] / 0.05);
-                        const key = gx + ',' + gy;
-                        grid[key] = (grid[key] || 0) + 1;
-                        if (grid[key] > maxCount) maxCount = grid[key];
-                    });
-                    dynamicMax = Math.max(1, maxCount * 0.6);
-                }
+
+                const dynamicMax = getDynamicMaxForZoom(map, heatData, 25);
 
                 heatmapLayer = L.heatLayer(heatData, {
                     radius: 25,
                     blur: 18,
-                    maxZoom: 12,
+                    maxZoom: map.getZoom(), // Dynamic zoom recalibration
                     max: dynamicMax
                 }).addTo(map);
             } else {
@@ -2574,7 +2601,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const profilSelect = document.getElementById('profil-select');
             let activiteStr = 'Bilan global';
-            
+
             if (profilSelect && profilSelect.selectedIndex >= 0 && profilSelect.value !== 'global') {
                 activiteStr = profilSelect.options[profilSelect.selectedIndex].text;
                 if (filtres.length > 0) {

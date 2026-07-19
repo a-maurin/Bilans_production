@@ -31,7 +31,6 @@ def read_vector_attributes(path: Path) -> pd.DataFrame:
         return pd.DataFrame(gdf.drop(columns=["geometry"], errors="ignore"))
     except ImportError:
         from osgeo import ogr
-        import pandas as pd
         ds = ogr.Open(str(path))
         if not ds:
             raise RuntimeError(f"Impossible d'ouvrir {path} avec ogr")

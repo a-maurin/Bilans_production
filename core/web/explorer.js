@@ -1411,20 +1411,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     boundaryLayer = L.geoJSON(combinedGeojson, {
                         style: function(feature) {
                             let color = '#003A76';
+                            let fillColor = 'transparent';
                             let weight = 2.5;
+                            let fillOpacity = 0;
                             let dashArray = null;
 
                             if (feature.properties && feature.properties.zone_type) {
                                 if (feature.properties.zone_type === 'risque') {
-                                    color = '#F97316'; // Orange
-                                    weight = 3;
-                                } else if (feature.properties.zone_type === 'infectee') {
-                                    color = '#EF4444'; // Rouge
+                                    color = '#EAB308'; // Jaune
+                                    fillColor = '#EAB308';
                                     weight = 2;
+                                    fillOpacity = 0.2;
+                                } else if (feature.properties.zone_type === 'infectee') {
+                                    color = '#F97316'; // Orange
+                                    fillColor = '#F97316';
+                                    weight = 2;
+                                    fillOpacity = 0.3;
                                     dashArray = '5, 5';
                                 } else if (feature.properties.zone_type === 'interdiction') {
-                                    color = '#EAB308'; // Jaune
+                                    color = '#EF4444'; // Rouge
+                                    fillColor = '#EF4444';
                                     weight = 2;
+                                    fillOpacity = 0.4;
                                     dashArray = '10, 5';
                                 }
                             }
@@ -1432,8 +1440,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 color: color,
                                 weight: weight,
                                 opacity: 0.85,
-                                fillColor: 'transparent',
-                                fillOpacity: 0,
+                                fillColor: fillColor,
+                                fillOpacity: fillOpacity,
                                 dashArray: dashArray
                             };
                         }

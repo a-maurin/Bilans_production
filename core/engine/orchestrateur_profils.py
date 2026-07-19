@@ -1695,9 +1695,14 @@ def _apply_restrict_geo_tub(
     tub_codes, _ = load_tub_pnf_codes(root)
 
     def _has_coords(df):
+        m = pd.Series(False, index=df.index)
         if "x" in df.columns and "y" in df.columns:
-            return pd.to_numeric(df["x"], errors="coerce").notna() & pd.to_numeric(df["y"], errors="coerce").notna()
-        return pd.Series(False, index=df.index)
+            m = m | (pd.to_numeric(df["x"], errors="coerce").notna() & pd.to_numeric(df["y"], errors="coerce").notna())
+        if "inf_gps_long" in df.columns and "inf_gps_lat" in df.columns:
+            lng = pd.to_numeric(df["inf_gps_long"].astype(str).str.replace(",", "."), errors="coerce")
+            lat = pd.to_numeric(df["inf_gps_lat"].astype(str).str.replace(",", "."), errors="coerce")
+            m = m | (lng.notna() & lat.notna())
+        return m
 
     if not point_filtered.empty:
         point_filtered = ensure_insee_from_communes_shp(

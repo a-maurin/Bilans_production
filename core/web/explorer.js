@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectProfil.innerHTML = '';
                 window.profilsMetadata = {};
                 data.forEach(p => {
+                    if (p.value === 'types_usager_cible') return; // Désactivé dans l'explorer
                     window.profilsMetadata[p.value] = p;
                     const opt = document.createElement('option');
                     opt.value = p.value;
@@ -185,6 +186,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnToggleCodes) btnToggleCodes.disabled = true;
                 if (pnfDeptContainer) pnfDeptContainer.classList.remove('hidden');
                 warnings.push("Le périmètre géographique est verrouillé sur le Parc National de Forêts (Départements 21 et 52).");
+            } else if (val === 'tub') {
+                if (selectEchelle) {
+                    // Optionnel : on peut garder "departement" affiché ou ajouter une option "tub" invisible
+                    selectEchelle.value = 'departement'; // Laissons 'departement' en visuel, de toute façon c'est forcé côté serveur
+                    selectEchelle.disabled = true;
+                }
+                if (inputCode) {
+                    inputCode.value = '';
+                    inputCode.disabled = true;
+                    inputCode.placeholder = 'Zone TUB';
+                }
+                if (btnToggleCodes) btnToggleCodes.disabled = true;
+                if (pnfDeptContainer) pnfDeptContainer.classList.add('hidden');
+                warnings.push("Le périmètre géographique est verrouillé sur la zone TUB (Risque, Infectée, Interdiction).");
             } else {
                 if (selectEchelle) {
                     selectEchelle.disabled = false;
@@ -824,30 +839,42 @@ document.addEventListener('DOMContentLoaded', () => {
         disableClusteringAtZoom: 14,
         maxClusterRadius: function (zoom) { return (zoom < 8) ? 80 : (zoom < 11) ? 50 : 30; }
     };
-    const makeProcClusterOpts = (color) => ({
-        ...baseClusterOpts,
-        iconCreateFunction: function (cluster) {
-            const count = cluster.getChildCount();
-            return L.divIcon({
-                html: `<div style="background-color:${color};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
-                className: '',
-                iconSize: [30, 30]
-            });
-        }
-    });
 
-    // Options N-1 : même couleur mais plus pâle (opacité 0.45, bord en tirets)
-    const makeN1ClusterOpts = (color) => ({
-        ...baseClusterOpts,
-        iconCreateFunction: function (cluster) {
-            const count = cluster.getChildCount();
-            return L.divIcon({
-                html: `<div style="background-color:${color};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
-                className: '',
-                iconSize: [28, 28]
-            });
-        }
-    });
+    const clusterShades = {
+        '#10B981': ['#10B981', '#059669', '#047857'], // Green (Conforme)
+        '#EF4444': ['#EF4444', '#DC2626', '#B91C1C'], // Red (Infraction)
+        '#64748B': ['#64748B', '#475569', '#334155'], // Grey (Attente)
+        '#3B82F6': ['#3B82F6', '#2563EB', '#1D4ED8'], // Blue (PEJ)
+        '#8B5CF6': ['#8B5CF6', '#7C3AED', '#6D28D9'], // Purple (PA)
+        '#F97316': ['#F97316', '#EA580C', '#C2410C']  // Orange (PVe)
+    };
+
+    function getDynamicClusterOpts(baseHex, isN1) {
+        return {
+            ...baseClusterOpts,
+            iconCreateFunction: function (cluster) {
+                const count = cluster.getChildCount();
+                let shades = clusterShades[baseHex.toUpperCase()] || [baseHex, baseHex, baseHex];
+                let shade = shades[0];
+                if (count >= 50) shade = shades[2];
+                else if (count >= 10) shade = shades[1];
+
+                if (isN1) {
+                    return L.divIcon({
+                        html: `<div style="background-color:${shade};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
+                        className: '',
+                        iconSize: [28, 28]
+                    });
+                } else {
+                    return L.divIcon({
+                        html: `<div style="background-color:${shade};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
+                        className: '',
+                        iconSize: [30, 30]
+                    });
+                }
+            }
+        };
+    }
 
     /**
      * Normalise un code département brut en chaîne 2 chars (ou 3 pour DOM/TOM, 2A/2B).
@@ -913,6 +940,40 @@ document.addEventListener('DOMContentLoaded', () => {
         "PVe": pveParent
     };
     L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
+
+    // Légende de la carte
+    const mapLegend = L.control({ position: 'bottomright' });
+    mapLegend.onAdd = function (map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        div.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        div.style.padding = '10px 14px';
+        div.style.borderRadius = '6px';
+        div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
+        div.style.fontSize = '12px';
+        div.style.lineHeight = '1.6';
+        div.style.color = '#334155';
+
+        const renderItem = (color, label) => `
+            <div style="display:flex; align-items:center; margin-bottom:4px;">
+                <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${color}; margin-right:8px; border:1px solid rgba(0,0,0,0.1);"></span>
+                <span>${label}</span>
+            </div>
+        `;
+        
+        div.innerHTML = `
+            <div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Contrôles</div>
+            ${renderItem('#10B981', 'Conforme')}
+            ${renderItem('#EF4444', 'Infraction / Manquement')}
+            ${renderItem('#64748B', 'En attente / Autre')}
+            
+            <div style="font-weight:bold; margin-top:8px; margin-bottom:6px; color:#1e293b;">Procédures</div>
+            ${renderItem('#3B82F6', 'PEJ')}
+            ${renderItem('#8B5CF6', 'PA')}
+            ${renderItem('#F97316', 'PVe')}
+        `;
+        return div;
+    };
+    mapLegend.addTo(map);
 
     // Color definitions for status markers
     function getMarkerColor(resultat) {
@@ -1013,8 +1074,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Normalisation : en mode spatial resGeoUnits = tableau des résultats par unité
                 // En mode normal/temporel : resN = results[0], resN1 = results[1]
                 const resGeoUnits = isSpatial ? results : null;
-                const resN = isSpatial ? results[0] : results[0];
+                const resN = isSpatial ? Object.assign({}, results[0]) : results[0];
                 const resN1 = isSpatial ? null : results[1];
+
+                if (isSpatial) {
+                    resN.points = [];
+                    resN.procedures = [];
+                    resGeoUnits.forEach(res => {
+                        if (res.points) resN.points.push(...res.points);
+                        if (res.procedures) resN.procedures.push(...res.procedures);
+                    });
+                }
 
                 // Mémorisation de l'état (localStorage et URL)
                 saveStateToLocalStorage();
@@ -1094,6 +1164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     heatmapLayer = null;
                 }
                 if (boundaryLayer) {
+                    if (boundaryLayer.maskLayer) map.removeLayer(boundaryLayer.maskLayer);
                     map.removeLayer(boundaryLayer);
                     boundaryLayer = null;
                 }
@@ -1139,17 +1210,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
 
-                            // Cloisonnement : on groupe par clé territoire avant d'injecter
-                            const tKey = getTerritoryKey(pt.code_dept);
-                            if (!markersByKey.has(tKey)) markersByKey.set(tKey, []);
-                            markersByKey.get(tKey).push(marker);
+                            // Cloisonnement : on groupe par clé territoire ET COULEUR avant d'injecter
+                            const tKey = getTerritoryKey(pt.code_dept) + '_' + color;
+                            if (!markersByKey.has(tKey)) markersByKey.set(tKey, { markers: [], color: color });
+                            markersByKey.get(tKey).markers.push(marker);
                         }
                     });
 
                     // Injection en masse dans chaque sous-groupe cloisonné
-                    markersByKey.forEach((markers, tKey) => {
-                        const grp = getOrCreateCluster(tKey, clusterParent, clustersByTerritory);
-                        grp.addLayers(markers);
+                    markersByKey.forEach((data, tKey) => {
+                        const grp = getOrCreateCluster(tKey, clusterParent, clustersByTerritory, getDynamicClusterOpts(data.color, false));
+                        grp.addLayers(data.markers);
                     });
                 }
 
@@ -1196,9 +1267,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, makeProcClusterOpts('rgba(59,130,246,0.85)')).addLayers(markers));
-                    paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, makeProcClusterOpts('rgba(139,92,246,0.85)')).addLayers(markers));
-                    pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, makeProcClusterOpts('rgba(249,115,22,0.85)')).addLayers(markers));
+                    pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, getDynamicClusterOpts('#3B82F6', false)).addLayers(markers));
+                    paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, getDynamicClusterOpts('#8B5CF6', false)).addLayers(markers));
+                    pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false)).addLayers(markers));
                 }
 
                 if (isHeatmapMode) {
@@ -1253,16 +1324,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
 
-                            const tKey = getTerritoryKey(pt.code_dept);
-                            if (!markersByKeyN1.has(tKey)) markersByKeyN1.set(tKey, []);
-                            markersByKeyN1.get(tKey).push(marker);
+                            const tKey = getTerritoryKey(pt.code_dept) + '_' + color;
+                            if (!markersByKeyN1.has(tKey)) markersByKeyN1.set(tKey, { markers: [], color: color });
+                            markersByKeyN1.get(tKey).markers.push(marker);
                         }
                     });
 
                     // N-1 : sous-groupes séparés (jamais mélangés avec N)
-                    markersByKeyN1.forEach((markers, tKey) => {
-                        const grp = getOrCreateCluster(tKey, clusterParentN1, clustersByTerritoryN1, makeN1ClusterOpts('rgba(100,116,139,0.8)'));
-                        grp.addLayers(markers);
+                    markersByKeyN1.forEach((data, tKey) => {
+                        const grp = getOrCreateCluster(tKey, clusterParentN1, clustersByTerritoryN1, getDynamicClusterOpts(data.color, true));
+                        grp.addLayers(data.markers);
                     });
                 }
 
@@ -1309,23 +1380,98 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, makeN1ClusterOpts('rgba(59,130,246,0.72)')).addLayers(markers));
-                    paByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, paParentN1, paByTerritoryN1, makeN1ClusterOpts('rgba(139,92,246,0.72)')).addLayers(markers));
-                    pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, makeN1ClusterOpts('rgba(249,115,22,0.72)')).addLayers(markers));
+                    pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, getDynamicClusterOpts('#3B82F6', true)).addLayers(markers));
+                    paByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, paParentN1, paByTerritoryN1, getDynamicClusterOpts('#8B5CF6', true)).addLayers(markers));
+                    pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, getDynamicClusterOpts('#F97316', true)).addLayers(markers));
                 }
 
                 // Plus de addLayers global — déjà injecté dans les sous-groupes cloisonnés ci-dessus
 
                 // Render boundary if available
-                if (resN.geojson) {
-                    boundaryLayer = L.geoJSON(resN.geojson, {
-                        style: {
-                            color: '#003A76',
-                            weight: 2.5,
-                            opacity: 0.85,
-                            fillColor: '#003A76',
-                            fillOpacity: 0.05
+                let combinedGeojson = { type: "FeatureCollection", features: [] };
+                let hasGeojson = false;
+
+                if (isSpatial && resGeoUnits) {
+                    resGeoUnits.forEach(res => {
+                        if (res && res.geojson) {
+                            if (res.geojson.type === "FeatureCollection") {
+                                combinedGeojson.features.push(...res.geojson.features);
+                            } else {
+                                combinedGeojson.features.push(res.geojson);
+                            }
+                            hasGeojson = true;
                         }
+                    });
+                } else if (resN && resN.geojson) {
+                    combinedGeojson = resN.geojson;
+                    hasGeojson = true;
+                }
+
+                if (hasGeojson) {
+                    boundaryLayer = L.geoJSON(combinedGeojson, {
+                        style: function(feature) {
+                            let color = '#003A76';
+                            let weight = 2.5;
+                            let dashArray = null;
+
+                            if (feature.properties && feature.properties.zone_type) {
+                                if (feature.properties.zone_type === 'risque') {
+                                    color = '#F97316'; // Orange
+                                    weight = 3;
+                                } else if (feature.properties.zone_type === 'infectee') {
+                                    color = '#EF4444'; // Rouge
+                                    weight = 2;
+                                    dashArray = '5, 5';
+                                } else if (feature.properties.zone_type === 'interdiction') {
+                                    color = '#EAB308'; // Jaune
+                                    weight = 2;
+                                    dashArray = '10, 5';
+                                }
+                            }
+                            return {
+                                color: color,
+                                weight: weight,
+                                opacity: 0.85,
+                                fillColor: 'transparent',
+                                fillOpacity: 0,
+                                dashArray: dashArray
+                            };
+                        }
+                    }).addTo(map);
+
+                    // Création du masque inversé (estompage du reste de la carte)
+                    const worldCoords = [
+                        [85, -360], [85, 360], [-85, 360], [-85, -360]
+                    ];
+                    let maskRings = [worldCoords];
+
+                    boundaryLayer.eachLayer(layer => {
+                        if (layer instanceof L.Polygon) {
+                            let latlngs = layer.getLatLngs();
+                            if (!latlngs || latlngs.length === 0) return;
+
+                            // Analyse de la profondeur du tableau pour déterminer Polygon vs MultiPolygon
+                            if (Array.isArray(latlngs[0]) && latlngs[0].length > 0) {
+                                if (latlngs[0][0] instanceof L.LatLng) {
+                                    // C'est un Polygon simple : latlngs[0] est l'anneau extérieur
+                                    maskRings.push(latlngs[0]);
+                                } else if (Array.isArray(latlngs[0][0])) {
+                                    // C'est un MultiPolygon : latlngs contient plusieurs polygones
+                                    latlngs.forEach(poly => {
+                                        if (poly.length > 0) {
+                                            maskRings.push(poly[0]);
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    });
+
+                    boundaryLayer.maskLayer = L.polygon(maskRings, {
+                        color: 'transparent',
+                        fillColor: '#ffffff',
+                        fillOpacity: 0.65, // Transparence laiteuse
+                        interactive: false
                     }).addTo(map);
                 }
 

@@ -662,7 +662,7 @@ def apply_pochoir_inverted_symbology(layer) -> None:
 
     from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsInvertedPolygonRenderer
     fill_sym = QgsFillSymbol.createSimple(
-        {"color": "255,255,255,255", "outline_color": "35,35,35", "outline_width": "0.26"}
+        {"color": "255,255,255,166", "outline_color": "35,35,35", "outline_width": "0.26"}
     )
     inner = QgsSingleSymbolRenderer(fill_sym)
     layer.setRenderer(QgsInvertedPolygonRenderer(inner))

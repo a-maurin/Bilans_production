@@ -1,7 +1,7 @@
 # Profil bilan agrainage
 schema_version: 2
 id: agrainage
-label: "Bilan agrainage"
+label: "Contrôles agrainage"
 out_subdir: bilan_agrainage
 
 filter:

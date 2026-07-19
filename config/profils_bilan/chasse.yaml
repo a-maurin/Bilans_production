@@ -1,6 +1,6 @@
 schema_version: 2
 id: chasse
-label: Bilan chasse
+label: Contrôles sécurité à la chasse
 out_subdir: bilan_chasse
 filter:
   type: chasse

@@ -861,24 +861,85 @@ def load_tub(root: Path) -> pd.DataFrame:
 
 def load_zone_tub_gdf(root: Path) -> gpd.GeoDataFrame:
     """
-    Charge la couche polygonale de la zone TUB (ex: Zone a Risque).
-    Recherche dans ref/programme/sig/TUB/ le shapefile le plus récent.
+    Charge la couche polygonale de la zone TUB en combinant les sous-zones:
+    - Zone a Risque
+    - Zone Infectee
+    - COMMUNE_InterdAgrain
+    Recherche dans ref/programme/sig/TUB/ les shapefiles les plus récents.
     """
     import glob
     tub_dir = ref_programme(root) / "sig" / "TUB"
     if not tub_dir.exists():
-        return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry", crs=None)
+        return gpd.GeoDataFrame(columns=["geometry", "zone_type"], geometry="geometry", crs=None)
         
-    # Recherche d'un shapefile "Zone a Risque" dans les sous-dossiers
-    search_pattern = str(tub_dir / "**" / "Zone a Risque*.shp")
-    matches = glob.glob(search_pattern, recursive=True)
-    
-    if not matches:
-        return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry", crs=None)
+    gdfs = []
+
+    def _load_newest(pattern, z_type):
+        matches = glob.glob(str(tub_dir / "**" / pattern), recursive=True)
+        if matches:
+            matches.sort(reverse=True)
+            gdf = gpd.read_file(matches[0])
+            gdf["zone_type"] = z_type
+            return gdf
+        return None
+
+    gdf_risque = _load_newest("Zone a Risque*.shp", "risque")
+    if gdf_risque is not None: gdfs.append(gdf_risque)
         
-    # Prendre le plus récent par ordre alphabétique (qui inclut l'année)
-    matches.sort(reverse=True)
-    return gpd.read_file(matches[0])
+    gdf_infectee = _load_newest("Zone Infectee*.shp", "infectee")
+    if gdf_infectee is not None: gdfs.append(gdf_infectee)
+        
+    gdf_interd = _load_newest("COMMUNE_InterdAgrain*.shp", "interdiction")
+    if gdf_interd is not None: gdfs.append(gdf_interd)
+
+    if not gdfs:
+        return gpd.GeoDataFrame(columns=["geometry", "zone_type"], geometry="geometry", crs=None)
+        
+    # S'assurer qu'ils ont le même CRS avant concaténation
+    base_crs = gdfs[0].crs
+    for i in range(1, len(gdfs)):
+        if gdfs[i].crs != base_crs and base_crs is not None:
+            gdfs[i] = gdfs[i].to_crs(base_crs)
+            
+    return pd.concat(gdfs, ignore_index=True)
+
+
+def tub_sig_union_membership_mask(
+    df: pd.DataFrame,
+    root: Path,
+    *,
+    log: Optional[logging.Logger] = None,
+) -> pd.Series:
+    """
+    Pour chaque ligne avec coordonnées (x/y WGS84, inf_gps_*, ou geometry),
+    indique si le point intersecte l'une des zones TUB (Risque, Infectée, Interdiction).
+    Retourne une série booléenne alignée sur ``df.index``.
+    """
+    lg = log or logger
+    if df is None or df.empty:
+        return pd.Series(False, index=df.index if df is not None else pd.RangeIndex(0))
+
+    tub_gdf = load_zone_tub_gdf(root)
+    if tub_gdf.empty:
+        return pd.Series(False, index=df.index)
+
+    gdf_pts = _dataframe_with_xy_geometry(df)
+    if gdf_pts is None:
+        return pd.Series(False, index=df.index)
+
+    tub_u = _union_perimeter_geometry(tub_gdf)
+    if tub_u is None:
+        return pd.Series(False, index=df.index)
+
+    ref_crs = tub_gdf.crs
+
+    if gdf_pts.crs is None:
+        gdf_pts = gdf_pts.set_crs(4326)
+    if ref_crs is not None and gdf_pts.crs != ref_crs:
+        gdf_pts = gdf_pts.to_crs(ref_crs)
+
+    mask = gdf_pts.geometry.intersects(tub_u)
+    return mask
 
 
 def load_ref_themes_ctrl(root: Path) -> List[dict]:
@@ -1675,7 +1736,7 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
 
     # Fallback possible : shapefile / gpkg de communes avec géométrie, si disponible.
     # On extrait alors le centroïde de chaque polygone.
-    for base_name in ["communes-france-2025", "communes_france_2025"]:
+    for base_name in ["communes-france-2025", "communes_france_2025", "communes_21/communes"]:
         for ext in (".gpkg", ".shp"):
             vec_path = ref_dir / f"{base_name}{ext}"
             if vec_path.exists():

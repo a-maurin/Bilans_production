@@ -45,6 +45,7 @@ from core.common.chargeurs_donnees import (
     overlay_pnf_zone_from_communes_pnf_csv,
     load_pnf_commune_zone_maps,
     pnf_sig_union_membership_mask,
+    tub_sig_union_membership_mask,
 )
 from core.common.percent_format import (
     format_pct_int_from_rate,
@@ -1690,7 +1691,7 @@ def _apply_restrict_geo_tub(
     root: Path,
     log: logging.Logger,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Restreint les jeux de données au périmètre TUB via code INSEE."""
+    """Restreint les jeux de données au périmètre TUB (union INSEE et intersection spatiale SIG)."""
     tub_codes, _ = load_tub_pnf_codes(root)
 
     if not point_filtered.empty:
@@ -1698,7 +1699,10 @@ def _apply_restrict_geo_tub(
             point_filtered, root, context="restriction TUB — contrôles", log=log
         )
         s = coalesced_insee_series(point_filtered)
-        mask = s.notna() & s.astype(str).isin(tub_codes)
+        mask_insee = s.notna() & s.astype(str).isin(tub_codes)
+        mask_sig = tub_sig_union_membership_mask(point_filtered, root, log=log)
+        
+        mask = mask_insee | mask_sig
         point_filtered = point_filtered.loc[mask].copy()
 
     dc_ids: set[str] = set()
@@ -1723,7 +1727,9 @@ def _apply_restrict_geo_tub(
                     log=log,
                 )
                 m_insee = _mask_insee_in_pnf_codes(sub_insee, tub_codes)
-                mask_pej = mask_pej | m_insee.reindex(pej_filtered.index, fill_value=False)
+                m_sig = tub_sig_union_membership_mask(sub, root, log=log)
+                
+                mask_pej = mask_pej | m_insee.reindex(pej_filtered.index, fill_value=False) | m_sig.reindex(pej_filtered.index, fill_value=False)
         
         if not mask_pej.any():
             log.warning(
@@ -1743,8 +1749,10 @@ def _apply_restrict_geo_tub(
             pve_filtered, root, context="restriction TUB — PVe", log=log
         )
         s_pve = coalesced_insee_series(pve_filtered)
-        mask_pve = s_pve.notna() & s_pve.astype(str).isin(tub_codes)
-        pve_filtered = pve_filtered.loc[mask_pve].copy()
+        mask_pve_insee = s_pve.notna() & s_pve.astype(str).isin(tub_codes)
+        mask_pve_sig = tub_sig_union_membership_mask(pve_filtered, root, log=log)
+        
+        pve_filtered = pve_filtered.loc[mask_pve_insee | mask_pve_sig].copy()
 
     return point_filtered, pej_filtered, pa_filtered, pve_filtered
 

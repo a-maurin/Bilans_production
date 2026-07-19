@@ -1116,7 +1116,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 geojson_data = None
                 try:
                     import geopandas as gpd
-                    if echelle == "pnf":
+                    if profile_cfg.get("restrict_geo") == "tub":
+                        from core.common.chargeurs_donnees import load_zone_tub_gdf
+                        gdf_boundary = load_zone_tub_gdf(Path(project_root))
+                        if not gdf_boundary.empty and gdf_boundary.crs is None:
+                            gdf_boundary.crs = "EPSG:2154"
+                        for col in gdf_boundary.columns:
+                            if col != "geometry":
+                                gdf_boundary[col] = gdf_boundary[col].astype(str)
+                    elif echelle == "pnf":
                         shp_path = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
                         gdf_boundary = gpd.read_file(shp_path)
                         gdf_boundary.crs = "EPSG:2154"

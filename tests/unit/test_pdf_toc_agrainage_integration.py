@@ -89,7 +89,7 @@ def test_agrainage_pdf_section_headings_order(tmp_path: Path, monkeypatch) -> No
 
     profile = {
         "id": "agrainage",
-        "label": "Bilan agrainage",
+        "label": "Contrôles agrainage",
         "filter": {"type": "agrainage"},
         "analyses": {"type_usager": False},
         "sources": {"point_ctrl": True, "pej": True, "pa": True, "pve": True},
@@ -174,7 +174,7 @@ def test_chasse_pdf_section_headings_order(tmp_path: Path, monkeypatch) -> None:
 
     profile = {
         "id": "chasse",
-        "label": "Bilan chasse",
+        "label": "Contrôles sécurité à la chasse",
         "filter": {"type": "chasse"},
         "analyses": {"type_usager": False},
         "sources": {"point_ctrl": True, "pej": True, "pa": False, "pve": True},

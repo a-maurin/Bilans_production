@@ -1694,6 +1694,11 @@ def _apply_restrict_geo_tub(
     """Restreint les jeux de données au périmètre TUB (union INSEE et intersection spatiale SIG)."""
     tub_codes, _ = load_tub_pnf_codes(root)
 
+    def _has_coords(df):
+        if "x" in df.columns and "y" in df.columns:
+            return pd.to_numeric(df["x"], errors="coerce").notna() & pd.to_numeric(df["y"], errors="coerce").notna()
+        return pd.Series(False, index=df.index)
+
     if not point_filtered.empty:
         point_filtered = ensure_insee_from_communes_shp(
             point_filtered, root, context="restriction TUB — contrôles", log=log
@@ -1702,7 +1707,8 @@ def _apply_restrict_geo_tub(
         mask_insee = s.notna() & s.astype(str).isin(tub_codes)
         mask_sig = tub_sig_union_membership_mask(point_filtered, root, log=log)
         
-        mask = mask_insee | mask_sig
+        has_c = _has_coords(point_filtered)
+        mask = mask_sig | (mask_insee & ~has_c)
         point_filtered = point_filtered.loc[mask].copy()
 
     dc_ids: set[str] = set()
@@ -1728,8 +1734,10 @@ def _apply_restrict_geo_tub(
                 )
                 m_insee = _mask_insee_in_pnf_codes(sub_insee, tub_codes)
                 m_sig = tub_sig_union_membership_mask(sub, root, log=log)
+                has_c_pej = _has_coords(sub)
                 
-                mask_pej = mask_pej | m_insee.reindex(pej_filtered.index, fill_value=False) | m_sig.reindex(pej_filtered.index, fill_value=False)
+                m_final = m_sig | (m_insee & ~has_c_pej)
+                mask_pej = mask_pej | m_final.reindex(pej_filtered.index, fill_value=False)
         
         if not mask_pej.any():
             log.warning(
@@ -1752,7 +1760,8 @@ def _apply_restrict_geo_tub(
         mask_pve_insee = s_pve.notna() & s_pve.astype(str).isin(tub_codes)
         mask_pve_sig = tub_sig_union_membership_mask(pve_filtered, root, log=log)
         
-        pve_filtered = pve_filtered.loc[mask_pve_insee | mask_pve_sig].copy()
+        has_c_pve = _has_coords(pve_filtered)
+        pve_filtered = pve_filtered.loc[mask_pve_sig | (mask_pve_insee & ~has_c_pve)].copy()
 
     return point_filtered, pej_filtered, pa_filtered, pve_filtered
 

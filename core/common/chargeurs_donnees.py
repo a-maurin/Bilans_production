@@ -901,7 +901,10 @@ def load_zone_tub_gdf(root: Path) -> gpd.GeoDataFrame:
         if gdfs[i].crs != base_crs and base_crs is not None:
             gdfs[i] = gdfs[i].to_crs(base_crs)
             
-    return pd.concat(gdfs, ignore_index=True)
+    combined = pd.concat(gdfs, ignore_index=True)
+    # Dissolve pour ne garder que l'enveloppe extérieure de chaque zone
+    # et éviter que la carte Leaflet dessine toutes les limites internes
+    return combined.dissolve(by="zone_type", as_index=False)
 
 
 def tub_sig_union_membership_mask(

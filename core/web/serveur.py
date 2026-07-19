@@ -765,7 +765,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     logging.getLogger(__name__).error(f"Erreur chargement/filtrage PVe: {e}")
                     total_pve = 0
 
-                # 4.bis. Restriction spatiale si echelle == "pnf"
+                # 4.bis. Restriction spatiale globale PNF ou TUB
                 if echelle == "pnf":
                     import logging
                     from core.engine.orchestrateur_profils import _apply_restrict_geo_pnf, _coalesced_insee_for_pnf_mask
@@ -773,6 +773,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_pnf(
                         df_pts, df_pej, df_pa, df_pve, project_root, log
                     )
+                elif profile_cfg.get("restrict_geo") == "tub":
+                    import logging
+                    from core.engine.orchestrateur_profils import _apply_restrict_geo_tub
+                    log = logging.getLogger(__name__)
+                    df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_tub(
+                        df_pts, df_pej, df_pa, df_pve, project_root, log
+                    )
+
                     
                     # Filtre additionnel sur le département pour le PNF
                     pnf_dept = params.get("pnf_dept", "")

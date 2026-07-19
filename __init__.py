@@ -13,7 +13,8 @@ def install_dependencies(iface):
         'reportlab': 'reportlab',
         'fastapi': 'fastapi',
         'uvicorn': 'uvicorn',
-        'yaml': 'pyyaml'
+        'yaml': 'pyyaml',
+        'geopandas': 'geopandas'
     }
     missing_packages = []
     

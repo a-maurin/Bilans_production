@@ -12,7 +12,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-import geopandas as gpd
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None
 import pandas as pd
 
 from core.chemins_projet import PROJECT_ROOT, get_sig_dir
@@ -56,6 +59,8 @@ def _load_all_departements(shp_path: str) -> gpd.GeoDataFrame:
     path = Path(shp_path)
     if not path.exists():
         raise FileNotFoundError(f"Shapefile départements introuvable : {path}")
+    if gpd is None:
+        raise ImportError("geopandas est requis pour le traitement des pochoirs.")
     gdf = gpd.read_file(path)
     if gdf.empty:
         raise ValueError(f"Aucune entité dans {path}")
@@ -191,7 +196,7 @@ def load_pochoir_gdf(
         root = project_root or PROJECT_ROOT
         gdf = load_zone_tub_gdf(root)
         dep_gdf = load_department_gdf(dept_code, project_root=project_root)
-        if not gdf.empty and not dep_gdf.empty:
+        if gdf is not None and not gdf.empty and not dep_gdf.empty:
             gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
         return gdf
         

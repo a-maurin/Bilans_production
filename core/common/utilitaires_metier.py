@@ -6,7 +6,6 @@ import yaml
 from pathlib import Path
 from typing import Any, List
 
-import geopandas as gpd
 import pandas as pd
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -1845,7 +1844,7 @@ def get_dept_name(code: str) -> str:
     return f"Département {c}"
 
 
-def _detect_insee_column(communes: gpd.GeoDataFrame) -> str:
+def _detect_insee_column(communes: Any) -> str:
     """Détecte la colonne contenant le code INSEE dans une couche communes."""
     candidats = ["INSEE", "INSEE_COM", "CODE_INSEE", "INSEE_COMM", "INSEECO"]
     for col in candidats:

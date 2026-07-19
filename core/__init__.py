@@ -11,12 +11,18 @@ try:
     import pandas as pd
     
     # Pandas 2.0+
-    if hasattr(pd.options.mode, "string_storage"):
-        pd.options.mode.string_storage = "python"
+    try:
+        if hasattr(pd.options.mode, "string_storage"):
+            pd.options.mode.string_storage = "python"
+    except Exception:
+        pass
         
     # Option future pour Pandas 2.1+
-    if hasattr(pd.options.future, "infer_string"):
-        pd.options.future.infer_string = False
+    try:
+        if hasattr(pd.options.future, "infer_string"):
+            pd.options.future.infer_string = False
+    except Exception:
+        pass
 except ImportError:
     pass
 except Exception as e:

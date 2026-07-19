@@ -1313,7 +1313,9 @@ def preload_data_async():
             with _preload_lock:
                 _PRELOAD_STATUS = "ready"
         except Exception as e:
-            log_preload(f"  Erreur lors du pré-chargement : {e}")
+            import traceback
+            traceback_str = traceback.format_exc()
+            log_preload(f"  Erreur lors du pré-chargement : {e}\n{traceback_str}")
             with _preload_lock:
                 _PRELOAD_STATUS = "error"
 

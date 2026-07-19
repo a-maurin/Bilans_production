@@ -1,14 +1,20 @@
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
-import geopandas as gpd
+
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None
 
 logger = logging.getLogger(__name__)
 
 COLOR_PRIMARY = "#003A76"
 FONT_FAMILY = "sans-serif" # Fallback generique
 
-def charger_couche_pochoir(dept_code: str, project_root: Path) -> gpd.GeoDataFrame:
+def charger_couche_pochoir(dept_code: str, project_root: Path):
+    if gpd is None:
+        return None
     from core.cartographie.pochoir_helper import load_department_gdf
     try:
         return load_department_gdf(dept_code, project_root=project_root)
@@ -16,11 +22,17 @@ def charger_couche_pochoir(dept_code: str, project_root: Path) -> gpd.GeoDataFra
         logger.warning(f"Impossible de charger le pochoir departement {dept_code}: {e}")
         return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry")
 
-def tracer_carte(ax, pochoir_gdf: gpd.GeoDataFrame, layers_to_render: list):
+def tracer_carte(ax, pochoir_gdf, layers_to_render: list):
     """Dessine le fond et les donnees sur l'axe principal."""
     # Fond general clair
     ax.set_facecolor("#f0f4f8")
     
+    if pochoir_gdf is None or gpd is None:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Cartographie indisponible.\nVeuillez mettre à jour votre version de Qgis : https://qgis.org/download/ ,\nsélectionner  Get OSGeo4W Installer.", 
+                ha='center', va='center', fontsize=12, color="#333333", transform=ax.transAxes, wrap=True)
+        return
+
     # Dessin du pochoir (departement)
     if not pochoir_gdf.empty:
         pochoir_gdf.plot(ax=ax, color="white", edgecolor="#CCCCCC", linewidth=1.5)
@@ -30,8 +42,6 @@ def tracer_carte(ax, pochoir_gdf: gpd.GeoDataFrame, layers_to_render: list):
         ax.set_xlim(minx - pad_x, maxx + pad_x)
         ax.set_ylim(miny - pad_y, maxy + pad_y)
 
-    # Note: On tracerait ici les `layers_to_render` avec matplotlib (geopandas plot)
-    # Pour le lot 1 (Securiser le socle), on place l'infrastructure.
     ax.axis("off")
 
 def tracer_cartouche(ax, titre: str, dept_name: str, date_deb: str, date_fin: str):

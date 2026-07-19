@@ -1,10 +1,15 @@
 """Chargement des données OSCEAN (points de contrôle, PEJ, PA, PVe, PNF, TUB, infractions PJ)."""
+from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
-import geopandas as gpd
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None
+
 import pandas as pd
 import re
 
@@ -17,6 +22,27 @@ from core.common.utilitaires_metier import (
 )
 
 logger = logging.getLogger(__name__)
+
+def read_vector_attributes(path: Path) -> pd.DataFrame:
+    """Fallback OGR pour lire les attributs SIG sans geopandas."""
+    try:
+        import geopandas as gpd
+        gdf = gpd.read_file(path)
+        return pd.DataFrame(gdf.drop(columns=["geometry"], errors="ignore"))
+    except ImportError:
+        from osgeo import ogr
+        import pandas as pd
+        ds = ogr.Open(str(path))
+        if not ds:
+            raise RuntimeError(f"Impossible d'ouvrir {path} avec ogr")
+        layer = ds.GetLayer()
+        layer_def = layer.GetLayerDefn()
+        fields = [layer_def.GetFieldDefn(i).GetName() for i in range(layer_def.GetFieldCount())]
+        data = []
+        for feature in layer:
+            data.append([feature.GetField(f) for f in fields])
+        ds = None
+        return pd.DataFrame(data, columns=fields)
 
 # Ordre aligné sur bilan_thematique_engine._get_insee_col
 _INSEE_COL_PRIORITY: Tuple[str, ...] = (
@@ -156,16 +182,7 @@ def safe_to_datetime(series: pd.Series) -> pd.Series:
     return res
 
 
-def _gpkg_engine() -> str:
-    """Detect the best available GPKG engine once (pyogrio > fiona)."""
-    try:
-        import pyogrio  # noqa: F401
-        return "pyogrio"
-    except ImportError:
-        return "fiona"
 
-
-_GPKG_ENGINE: str = _gpkg_engine()
 
 
 def _find_latest_dated_file(directory: Path, prefix: str, exts: Tuple[str, ...]) -> Path:
@@ -364,12 +381,10 @@ def load_point_ctrl(
         if path in _POINT_CTRL_RAW_CACHE:
             df = _POINT_CTRL_RAW_CACHE[path].copy()
         else:
-            engine = _GPKG_ENGINE
             try:
-                gdf = gpd.read_file(path, engine=engine)
+                df = read_vector_attributes(path)
             except Exception as e:
-                raise RuntimeError(f"Erreur de lecture du fichier GPKG : {e}")
-            df = pd.DataFrame(gdf.drop(columns=["geometry"], errors="ignore"))
+                raise RuntimeError(f"Erreur de lecture du fichier SIG : {e}")
             df.columns = [str(c).split(",")[0].strip() for c in df.columns]
             
             # Validation des colonnes requises
@@ -739,7 +754,7 @@ def _load_pnf_from_shp(root: Path) -> Optional[pd.DataFrame]:
     if not shp.exists():
         return None
 
-    gdf = gpd.read_file(shp)
+    gdf = read_vector_attributes(shp)
     if gdf.empty:
         return pd.DataFrame(columns=["CODE_INSEE"])
 
@@ -859,7 +874,7 @@ def load_tub(root: Path) -> pd.DataFrame:
     )
 
 
-def load_zone_tub_gdf(root: Path) -> gpd.GeoDataFrame:
+def load_zone_tub_gdf(root: Path):
     """
     Charge la couche polygonale de la zone TUB en combinant les sous-zones:
     - Zone a Risque
@@ -867,6 +882,8 @@ def load_zone_tub_gdf(root: Path) -> gpd.GeoDataFrame:
     - COMMUNE_InterdAgrain
     Recherche dans ref/programme/sig/TUB/ les shapefiles les plus récents.
     """
+    if gpd is None:
+        return None
     import glob
     tub_dir = ref_programme(root) / "sig" / "TUB"
     if not tub_dir.exists():
@@ -923,7 +940,7 @@ def tub_sig_union_membership_mask(
         return pd.Series(False, index=df.index if df is not None else pd.RangeIndex(0))
 
     tub_gdf = load_zone_tub_gdf(root)
-    if tub_gdf.empty:
+    if tub_gdf is None or tub_gdf.empty:
         return pd.Series(False, index=df.index)
 
     gdf_pts = _dataframe_with_xy_geometry(df)
@@ -1041,20 +1058,20 @@ def _normalize_insee_code(raw: object) -> str | None:
     return code
 
 
-def _pick_gdf_column(gdf: gpd.GeoDataFrame, candidates: tuple[str, ...]) -> str | None:
-    lower_map = {str(c).lower(): c for c in gdf.columns}
+def _pick_gdf_column(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
+    lower_map = {str(c).lower(): c for c in df.columns}
     for cand in candidates:
         if cand.lower() in lower_map:
             return str(lower_map[cand.lower()])
     return None
 
 
-def _load_pnf_127_communes_gdf(root: Path) -> gpd.GeoDataFrame:
+def _load_pnf_127_communes_df(root: Path) -> pd.DataFrame:
     path = get_pnf_127_communes_aoa_shp_path(root)
     if not path.exists():
-        return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry", crs=None)
+        return pd.DataFrame()
     try:
-        return gpd.read_file(path)
+        return read_vector_attributes(path)
     except Exception as exc:
         raise RuntimeError(f"Lecture du shapefile PNF 127 communes impossible ({path}) : {exc}") from exc
 
@@ -1066,7 +1083,7 @@ def load_pnf_commune_zone_maps(root: Path) -> tuple[dict[str, str], dict[str, st
     Retourne (by_insee, by_commune_nom_lower). Repli sur communes_PNF.csv si le shapefile
     est absent.
     """
-    gdf = _load_pnf_127_communes_gdf(root)
+    gdf = _load_pnf_127_communes_df(root)
     if gdf.empty:
         by_insee = _load_pnf_commune_zone_by_insee_from_csv(root)
         by_nom = _load_pnf_commune_zone_by_nom_from_csv(root)
@@ -1104,16 +1121,20 @@ def load_pnf_commune_zone_maps(root: Path) -> tuple[dict[str, str], dict[str, st
     return by_insee, by_nom
 
 
-def load_pnf_coeur_gdf(root: Path) -> gpd.GeoDataFrame:
-    """Charge la couche polygonale du cœur de parc. GeoDataFrame vide si fichier absent."""
+def load_pnf_coeur_gdf(root: Path):
+    """Charge la couche polygonale du cœur de parc. None si geopandas absent ou GeoDataFrame vide si fichier absent."""
+    if gpd is None:
+        return None
     path = get_pnf_coeur_shp_path(root)
     if not path.exists():
         return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry", crs=None)
     return gpd.read_file(path)
 
 
-def load_pnf_aoa_gdf(root: Path) -> gpd.GeoDataFrame:
-    """Charge la couche polygonale de l'aire d'adhésion. GeoDataFrame vide si fichier absent."""
+def load_pnf_aoa_gdf(root: Path):
+    """Charge la couche polygonale de l'aire d'adhésion. None si geopandas absent ou GeoDataFrame vide si fichier absent."""
+    if gpd is None:
+        return None
     path = get_pnf_aoa_shp_path(root)
     if not path.exists():
         return gpd.GeoDataFrame(columns=["geometry"], geometry="geometry", crs=None)
@@ -1140,7 +1161,7 @@ def pnf_sig_union_membership_mask(
 
     coeur = load_pnf_coeur_gdf(root)
     aoa = load_pnf_aoa_gdf(root)
-    if coeur.empty and aoa.empty:
+    if (coeur is None or coeur.empty) and (aoa is None or aoa.empty):
         return pd.Series(False, index=df.index)
 
     gdf_pts = _dataframe_with_xy_geometry(df)
@@ -1224,7 +1245,7 @@ def enrich_with_pnforet_sig_zones(
 
     coeur = load_pnf_coeur_gdf(root)
     aoa = load_pnf_aoa_gdf(root)
-    if coeur.empty and aoa.empty:
+    if (coeur is None or coeur.empty) and (aoa is None or aoa.empty):
         return df
 
     gdf_pts = _dataframe_with_xy_geometry(df)
@@ -1743,33 +1764,46 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
         for ext in (".gpkg", ".shp"):
             vec_path = ref_dir / f"{base_name}{ext}"
             if vec_path.exists():
-                gdf = gpd.read_file(vec_path)
-                insee_col = None
-                for cand in ["code_insee", "CODE_INSEE", "insee", "INSEE_COM"]:
-                    if cand in gdf.columns:
-                        insee_col = cand
-                        break
-                if insee_col is None:
-                    raise KeyError(
-                        f"Aucune colonne de code INSEE trouvée dans {vec_path} "
-                        "(attendu: code_insee / CODE_INSEE / insee / INSEE_COM)"
-                    )
-                # S'assurer que la géométrie est présente
-                if "geometry" not in gdf.columns:
-                    raise KeyError(f"Aucune colonne 'geometry' dans {vec_path}")
+                try:
+                    import geopandas as gpd
+                    if gpd is not None:
+                        gdf = gpd.read_file(vec_path)
+                        insee_col = next((c for c in ["code_insee", "CODE_INSEE", "insee", "INSEE_COM"] if c in gdf.columns), None)
+                        if insee_col is None:
+                            raise KeyError(f"Aucune colonne de code INSEE trouvée dans {vec_path}")
+                        if "geometry" not in gdf.columns:
+                            raise KeyError(f"Aucune colonne 'geometry' dans {vec_path}")
+                        gdf = gdf.set_geometry("geometry")
+                        centroids = gdf.geometry.centroid
+                        out = pd.DataFrame({"code_insee": gdf[insee_col].astype(str).str.zfill(5), "lat": centroids.y, "lon": centroids.x})
+                        return out.dropna(subset=["lat", "lon"])
+                except Exception:
+                    pass
 
-                # Centroïdes géométriques
-                gdf = gdf.set_geometry("geometry")
-                centroids = gdf.geometry.centroid
-                out = pd.DataFrame(
-                    {
-                        "code_insee": gdf[insee_col].astype(str).str.zfill(5),
-                        "lat": centroids.y,
-                        "lon": centroids.x,
-                    }
-                )
-                out = out.dropna(subset=["lat", "lon"])
-                return out
+                # Fallback OGR
+                from osgeo import ogr
+                ds = ogr.Open(str(vec_path))
+                if ds:
+                    layer = ds.GetLayer()
+                    layer_def = layer.GetLayerDefn()
+                    insee_field_idx = -1
+                    for cand in ["code_insee", "CODE_INSEE", "insee", "INSEE_COM"]:
+                        idx = layer_def.GetFieldIndex(cand)
+                        if idx != -1:
+                            insee_field_idx = idx
+                            break
+                    if insee_field_idx != -1:
+                        data = []
+                        for feature in layer:
+                            geom = feature.GetGeometryRef()
+                            if geom:
+                                centroid = geom.Centroid()
+                                if centroid:
+                                    code_insee = feature.GetFieldAsString(insee_field_idx)
+                                    data.append({"code_insee": str(code_insee).zfill(5), "lat": centroid.GetY(), "lon": centroid.GetX()})
+                        if data:
+                            out = pd.DataFrame(data)
+                            return out.dropna(subset=["lat", "lon"])
 
     raise FileNotFoundError(
         "Impossible de trouver une table de centroïdes communes : "
@@ -2200,7 +2234,7 @@ def merge_pej_faits_locations(
         return pej.copy()
 
     try:
-        gdf = gpd.read_file(path)
+        gdf = read_vector_attributes(path)
     except Exception as e:
         lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
         return pej.copy()
@@ -2365,8 +2399,10 @@ def enrich_pej_commune_from_faits_coordinates(
 
 def load_points_infrac_pj(
     root: Path, natinf_list: List[str], echelle: str, code: str
-) -> gpd.GeoDataFrame:
+):
     """Charge le shapefile/gpkg des points d'infractions PJ, filtre SD + NATINF."""
+    import geopandas as gpd
+    import pandas as pd
     path = get_points_infrac_pj_path(root)
     if not path.exists():
         raise FileNotFoundError(path)
@@ -2385,7 +2421,7 @@ def load_points_infrac_pj(
         else:
             entite_clause = "1=1"
         where_clause = f"{entite_clause} AND natinf IN ({','.join(map(str, natinf_vals))})"
-        gdf = gpd.read_file(path, engine=_GPKG_ENGINE, where=where_clause)
+        gdf = gpd.read_file(path, engine="pyogrio", where=where_clause)
     except Exception:
         gdf = gpd.read_file(path)
         gdf["natinf"] = pd.to_numeric(gdf["natinf"], errors="coerce")
@@ -2429,7 +2465,7 @@ def load_pj_with_geometry(
     date_deb: Optional[Union[str, pd.Timestamp]] = None,
     date_fin: Optional[Union[str, pd.Timestamp]] = None,
     pej_df: Optional[pd.DataFrame] = None,
-) -> gpd.GeoDataFrame:
+):
     """
     Charge les procédures judiciaires (ODS) et les associe à la géométrie des faits
     (GPKG points PJ). Ne conserve que les dossiers présents dans le GPKG (SD + NATINF).

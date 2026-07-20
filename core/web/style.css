@@ -817,25 +817,88 @@ body.theme-sombre .leaflet-control-layers-list {
 
 /* --- Décalage Dynamique des Clusters (Zoom out) --- */
 /* Animation fluide pour tous les clusters concernés */
-.marker-cluster.cluster-ctrl,
-.marker-cluster.cluster-ctrl-n1,
-.marker-cluster.cluster-pej, 
-.marker-cluster.cluster-pej-n1,
-.marker-cluster.cluster-pa, 
-.marker-cluster.cluster-pa-n1,
-.marker-cluster.cluster-pve,
-.marker-cluster.cluster-pve-n1 {
+.cluster-ctrl,
+.cluster-ctrl-n1,
+.cluster-pej, 
+.cluster-pej-n1,
+.cluster-pa, 
+.cluster-pa-n1,
+.cluster-pve,
+.cluster-pve-n1 {
     transition: transform 0.3s ease-in-out !important;
+    position: relative;
 }
 
-/* Application du décalage uniquement si le parent a la classe */
-.cluster-offset-active .marker-cluster.cluster-ctrl-n1 { transform: translate(0, -35px) !important; }
+/* Ligne d'attache vers le centre géographique (pseudo-élément) */
+.cluster-ctrl-n1::after,
+.cluster-pej::after,
+.cluster-pej-n1::after,
+.cluster-pa::after,
+.cluster-pa-n1::after,
+.cluster-pve::after,
+.cluster-pve-n1::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform-origin: 0 0;
+    border-top: 1px solid #333;
+    z-index: -1;
+    width: 0;
+    opacity: 0;
+    transition: width 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
 
-.cluster-offset-active .marker-cluster.cluster-pej { transform: translate(22px, -22px) !important; }
-.cluster-offset-active .marker-cluster.cluster-pej-n1 { transform: translate(40px, -40px) !important; }
+/* ==============================================================
+   MACHINE A ETATS CSS (COMBINAISONS DE COUCHES)
+   ============================================================== */
 
-.cluster-offset-active .marker-cluster.cluster-pa { transform: translate(22px, 22px) !important; }
-.cluster-offset-active .marker-cluster.cluster-pa-n1 { transform: translate(40px, 40px) !important; }
+/* Par défaut (4 couches actives ou fallback) */
+.cluster-offset-active {
+    --c-x: 0px; --c-y: 0px; --c-x-n1: 0px; --c-y-n1: -35px; --c-w-n1: 35px; --c-r-n1: 90deg;
+    --v-x: -34px; --v-y: 0px; --v-w: 34px; --v-r: 0deg; --v-x-n1: -55px; --v-y-n1: 0px; --v-w-n1: 55px; --v-r-n1: 0deg;
+    --e-x: 26px; --e-y: -26px; --e-w: 37px; --e-r: 135deg; --e-x-n1: 45px; --e-y-n1: -45px; --e-w-n1: 64px; --e-r-n1: 135deg;
+    --a-x: 26px; --a-y: 26px; --a-w: 37px; --a-r: -135deg; --a-x-n1: 45px; --a-y-n1: 45px; --a-w-n1: 64px; --a-r-n1: -135deg;
+}
 
-.cluster-offset-active .marker-cluster.cluster-pve { transform: translate(-22px, 0) !important; }
-.cluster-offset-active .marker-cluster.cluster-pve-n1 { transform: translate(-40px, 0) !important; }
+/* --- 1 COUCHE ACTIVE (Centre) --- */
+.has-pve:not(.has-ctrl):not(.has-pej):not(.has-pa).cluster-offset-active { --v-x: 0px; --v-y: 0px; --v-w: 0px; --v-r: 0deg; --v-x-n1: 0px; --v-y-n1: -35px; --v-w-n1: 35px; --v-r-n1: 90deg; }
+.has-pej:not(.has-ctrl):not(.has-pve):not(.has-pa).cluster-offset-active { --e-x: 0px; --e-y: 0px; --e-w: 0px; --e-r: 0deg; --e-x-n1: 0px; --e-y-n1: -35px; --e-w-n1: 35px; --e-r-n1: 90deg; }
+.has-pa:not(.has-ctrl):not(.has-pve):not(.has-pej).cluster-offset-active { --a-x: 0px; --a-y: 0px; --a-w: 0px; --a-r: 0deg; --a-x-n1: 0px; --a-y-n1: -35px; --a-w-n1: 35px; --a-r-n1: 90deg; }
+
+/* --- 2 COUCHES ACTIVES (Gauche / Droite) --- */
+/* SL: -22, 0 | SR: 22, 0 */
+.has-ctrl.has-pve:not(.has-pej):not(.has-pa).cluster-offset-active { --c-x: -22px; --c-y: 0px; --c-x-n1: -45px; --c-y-n1: 0px; --c-w-n1: 45px; --c-r-n1: 0deg; --v-x: 22px; --v-y: 0px; --v-w: 22px; --v-r: 180deg; --v-x-n1: 45px; --v-y-n1: 0px; --v-w-n1: 45px; --v-r-n1: 180deg; }
+.has-ctrl.has-pej:not(.has-pve):not(.has-pa).cluster-offset-active { --c-x: -22px; --c-y: 0px; --c-x-n1: -45px; --c-y-n1: 0px; --c-w-n1: 45px; --c-r-n1: 0deg; --e-x: 22px; --e-y: 0px; --e-w: 22px; --e-r: 180deg; --e-x-n1: 45px; --e-y-n1: 0px; --e-w-n1: 45px; --e-r-n1: 180deg; }
+.has-ctrl.has-pa:not(.has-pve):not(.has-pej).cluster-offset-active { --c-x: -22px; --c-y: 0px; --c-x-n1: -45px; --c-y-n1: 0px; --c-w-n1: 45px; --c-r-n1: 0deg; --a-x: 22px; --a-y: 0px; --a-w: 22px; --a-r: 180deg; --a-x-n1: 45px; --a-y-n1: 0px; --a-w-n1: 45px; --a-r-n1: 180deg; }
+.has-pve.has-pej:not(.has-ctrl):not(.has-pa).cluster-offset-active { --v-x: -22px; --v-y: 0px; --v-w: 22px; --v-r: 0deg; --v-x-n1: -45px; --v-y-n1: 0px; --v-w-n1: 45px; --v-r-n1: 0deg; --e-x: 22px; --e-y: 0px; --e-w: 22px; --e-r: 180deg; --e-x-n1: 45px; --e-y-n1: 0px; --e-w-n1: 45px; --e-r-n1: 180deg; }
+.has-pve.has-pa:not(.has-ctrl):not(.has-pej).cluster-offset-active { --v-x: -22px; --v-y: 0px; --v-w: 22px; --v-r: 0deg; --v-x-n1: -45px; --v-y-n1: 0px; --v-w-n1: 45px; --v-r-n1: 0deg; --a-x: 22px; --a-y: 0px; --a-w: 22px; --a-r: 180deg; --a-x-n1: 45px; --a-y-n1: 0px; --a-w-n1: 45px; --a-r-n1: 180deg; }
+.has-pej.has-pa:not(.has-ctrl):not(.has-pve).cluster-offset-active { --e-x: -22px; --e-y: 0px; --e-w: 22px; --e-r: 0deg; --e-x-n1: -45px; --e-y-n1: 0px; --e-w-n1: 45px; --e-r-n1: 0deg; --a-x: 22px; --a-y: 0px; --a-w: 22px; --a-r: 180deg; --a-x-n1: 45px; --a-y-n1: 0px; --a-w-n1: 45px; --a-r-n1: 180deg; }
+
+/* --- 3 COUCHES ACTIVES (Triangle: Haut, Bas-Gauche, Bas-Droite) --- */
+/* ST: 0, -24 | SBL: -22, 22 | SBR: 22, 22 */
+.has-ctrl.has-pve.has-pej:not(.has-pa).cluster-offset-active { --c-x: 0px; --c-y: -24px; --c-x-n1: 0px; --c-y-n1: -45px; --c-w-n1: 45px; --c-r-n1: 90deg; --v-x: -22px; --v-y: 22px; --v-w: 31px; --v-r: -45deg; --v-x-n1: -40px; --v-y-n1: 40px; --v-w-n1: 56px; --v-r-n1: -45deg; --e-x: 22px; --e-y: 22px; --e-w: 31px; --e-r: -135deg; --e-x-n1: 40px; --e-y-n1: 40px; --e-w-n1: 56px; --e-r-n1: -135deg; }
+.has-ctrl.has-pve.has-pa:not(.has-pej).cluster-offset-active { --c-x: 0px; --c-y: -24px; --c-x-n1: 0px; --c-y-n1: -45px; --c-w-n1: 45px; --c-r-n1: 90deg; --v-x: -22px; --v-y: 22px; --v-w: 31px; --v-r: -45deg; --v-x-n1: -40px; --v-y-n1: 40px; --v-w-n1: 56px; --v-r-n1: -45deg; --a-x: 22px; --a-y: 22px; --a-w: 31px; --a-r: -135deg; --a-x-n1: 40px; --a-y-n1: 40px; --a-w-n1: 56px; --a-r-n1: -135deg; }
+.has-ctrl.has-pej.has-pa:not(.has-pve).cluster-offset-active { --c-x: 0px; --c-y: -24px; --c-x-n1: 0px; --c-y-n1: -45px; --c-w-n1: 45px; --c-r-n1: 90deg; --e-x: -22px; --e-y: 22px; --e-w: 31px; --e-r: -45deg; --e-x-n1: -40px; --e-y-n1: 40px; --e-w-n1: 56px; --e-r-n1: -45deg; --a-x: 22px; --a-y: 22px; --a-w: 31px; --a-r: -135deg; --a-x-n1: 40px; --a-y-n1: 40px; --a-w-n1: 56px; --a-r-n1: -135deg; }
+.has-pve.has-pej.has-pa:not(.has-ctrl).cluster-offset-active { --v-x: 0px; --v-y: -24px; --v-w: 24px; --v-r: 90deg; --v-x-n1: 0px; --v-y-n1: -45px; --v-w-n1: 45px; --v-r-n1: 90deg; --e-x: -22px; --e-y: 22px; --e-w: 31px; --e-r: -45deg; --e-x-n1: -40px; --e-y-n1: 40px; --e-w-n1: 56px; --e-r-n1: -45deg; --a-x: 22px; --a-y: 22px; --a-w: 31px; --a-r: -135deg; --a-x-n1: 40px; --a-y-n1: 40px; --a-w-n1: 56px; --a-r-n1: -135deg; }
+
+/* ==============================================================
+   APPLICATION DES VARIABLES SUR LES ELEMENTS
+   ============================================================== */
+.cluster-offset-active .cluster-ctrl { transform: translate(var(--c-x), var(--c-y)) !important; }
+.cluster-offset-active .cluster-ctrl-n1 { transform: translate(var(--c-x-n1), var(--c-y-n1)) !important; }
+.cluster-offset-active .cluster-ctrl-n1::after { opacity: 1; width: var(--c-w-n1); transform: rotate(var(--c-r-n1)); }
+
+.cluster-offset-active .cluster-pve { transform: translate(var(--v-x), var(--v-y)) !important; }
+.cluster-offset-active .cluster-pve::after { opacity: 1; width: var(--v-w); transform: rotate(var(--v-r)); }
+.cluster-offset-active .cluster-pve-n1 { transform: translate(var(--v-x-n1), var(--v-y-n1)) !important; }
+.cluster-offset-active .cluster-pve-n1::after { opacity: 1; width: var(--v-w-n1); transform: rotate(var(--v-r-n1)); }
+
+.cluster-offset-active .cluster-pej { transform: translate(var(--e-x), var(--e-y)) !important; }
+.cluster-offset-active .cluster-pej::after { opacity: 1; width: var(--e-w); transform: rotate(var(--e-r)); }
+.cluster-offset-active .cluster-pej-n1 { transform: translate(var(--e-x-n1), var(--e-y-n1)) !important; }
+.cluster-offset-active .cluster-pej-n1::after { opacity: 1; width: var(--e-w-n1); transform: rotate(var(--e-r-n1)); }
+
+.cluster-offset-active .cluster-pa { transform: translate(var(--a-x), var(--a-y)) !important; }
+.cluster-offset-active .cluster-pa::after { opacity: 1; width: var(--a-w); transform: rotate(var(--a-r)); }
+.cluster-offset-active .cluster-pa-n1 { transform: translate(var(--a-x-n1), var(--a-y-n1)) !important; }
+.cluster-offset-active .cluster-pa-n1::after { opacity: 1; width: var(--a-w-n1); transform: rotate(var(--a-r-n1)); }

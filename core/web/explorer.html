@@ -1020,7 +1020,7 @@
                             <input type="checkbox" id="set-ui-cluster-offset" checked style="margin:0;">
                             <label for="set-ui-cluster-offset" style="margin:0; cursor:pointer;">Écarter les clusters superposés</label>
                         </div>
-                        <div class="form-group"><label>Désactiver l'écartement au-delà du zoom :</label><input type="number"
+                        <div class="form-group"><label>Niveau de zoom minimal pour l'écartement :</label><input type="number"
                                 id="set-ui-cluster-zoom" value="10"></div>
                     </div>
                     <div class="card" style="margin: 0;">
@@ -1175,8 +1175,12 @@
 
             localStorage.setItem('ui_cluster_offset', document.getElementById('set-ui-cluster-offset').checked);
             localStorage.setItem('ui_cluster_zoom', document.getElementById('set-ui-cluster-zoom').value);
-            if (typeof window.updateClusterOffset === 'function' && typeof map !== 'undefined') {
-                window.updateClusterOffset(map.getZoom());
+            try {
+                if (typeof window.updateClusterOffset === 'function') {
+                    window.updateClusterOffset();
+                }
+            } catch (e) {
+                console.error("Erreur updateClusterOffset:", e);
             }
 
             try {

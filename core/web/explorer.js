@@ -828,10 +828,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.updateClusterOffset = function(zoom) {
+        if (typeof zoom === 'undefined') {
+            zoom = map.getZoom();
+        }
         const useOffset = localStorage.getItem('ui_cluster_offset') !== 'false';
         const zoomThreshold = parseInt(localStorage.getItem('ui_cluster_zoom')) || 10;
         const container = map.getContainer();
-        if (useOffset && zoom <= zoomThreshold) {
+        if (useOffset && zoom >= zoomThreshold) {
             container.classList.add('cluster-offset-active');
         } else {
             container.classList.remove('cluster-offset-active');
@@ -901,6 +904,10 @@ document.addEventListener('DOMContentLoaded', () => {
             applyFiltersState(stateFromLS);
         }
 
+        if (typeof window.updateClusterOffset === 'function') {
+            window.updateClusterOffset(map.getZoom());
+        }
+
         loadData();
     });
 
@@ -961,14 +968,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isN1) {
                     return L.divIcon({
-                        html: `<div style="background-color:${shade};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
-                        className: customClass,
+                        html: `<div class="${customClass}" style="background-color:${shade};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
+                        className: '',
                         iconSize: [28, 28]
                     });
                 } else {
                     return L.divIcon({
-                        html: `<div style="background-color:${shade};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
-                        className: customClass,
+                        html: `<div class="${customClass}" style="background-color:${shade};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
+                        className: '',
                         iconSize: [30, 30]
                     });
                 }
@@ -1106,8 +1113,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     mapLegend.addTo(map);
 
-    // Mettre à jour la légende quand l'utilisateur coche/décoche une couche
-    map.on('overlayadd overlayremove', updateLegend);
+    function updateMapLayerClasses() {
+        const container = map.getContainer();
+        const hasCtrl = map.hasLayer(clusterParent);
+        const hasPej = map.hasLayer(pejParent);
+        const hasPa = map.hasLayer(paParent);
+        const hasPve = map.hasLayer(pveParent);
+
+        container.classList.toggle('has-ctrl', hasCtrl);
+        container.classList.toggle('has-pej', hasPej);
+        container.classList.toggle('has-pa', hasPa);
+        container.classList.toggle('has-pve', hasPve);
+    }
+
+    // Mettre à jour la légende, les classes et synchroniser les calques N-1
+    map.on('overlayadd', function(e) {
+        if (e.layer === clusterParent && typeof clusterParentN1 !== 'undefined') map.addLayer(clusterParentN1);
+        if (e.layer === pejParent && typeof pejParentN1 !== 'undefined') map.addLayer(pejParentN1);
+        if (e.layer === paParent && typeof paParentN1 !== 'undefined') map.addLayer(paParentN1);
+        if (e.layer === pveParent && typeof pveParentN1 !== 'undefined') map.addLayer(pveParentN1);
+        updateLegend();
+        updateMapLayerClasses();
+    });
+
+    map.on('overlayremove', function(e) {
+        if (e.layer === clusterParent && typeof clusterParentN1 !== 'undefined') map.removeLayer(clusterParentN1);
+        if (e.layer === pejParent && typeof pejParentN1 !== 'undefined') map.removeLayer(pejParentN1);
+        if (e.layer === paParent && typeof paParentN1 !== 'undefined') map.removeLayer(paParentN1);
+        if (e.layer === pveParent && typeof pveParentN1 !== 'undefined') map.removeLayer(pveParentN1);
+        updateLegend();
+        updateMapLayerClasses();
+    });
 
     // Color definitions for status markers
     function getMarkerColor(resultat) {
@@ -1404,6 +1440,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, getDynamicClusterOpts('#8B5CF6', false, 'cluster-pa')).addLayers(markers));
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false, 'cluster-pve')).addLayers(markers));
                 }
+
+                updateLegend();
+                updateMapLayerClasses();
 
                 if (isHeatmapMode) {
                     clusterParent.eachLayer(l => map.removeLayer(l));

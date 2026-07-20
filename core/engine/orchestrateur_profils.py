@@ -500,7 +500,7 @@ def _run_global_profile_via_yaml(
         # Fusion des faits/localisations pour pej pour disposer des colonnes DOMAINE et THEME avant filtrage
         if not pej.empty:
             from core.common.chargeurs_donnees import merge_pej_faits_locations
-            pej = merge_pej_faits_locations(pej, root, echelle_norm, code_norm, log=logging.getLogger("ofbilan.spatial"))
+            pej = merge_pej_faits_locations(pej, root, echelle_norm, code_norm, natinf_list=profile.get("natinf_pej", []), log=logging.getLogger("ofbilan.spatial"))
 
         # Filtrage par domaine et thème SNC (Options utilisateur / GUI)
         target_domains = resolved_opts.get("domaines")
@@ -1385,7 +1385,8 @@ def _filter_pej(
             pej = pej.drop_duplicates(subset="DC_ID", keep="first")
 
     if natinf_pej:
-        pattern = "|".join(rf"\b{re.escape(str(c))}\b" for c in natinf_pej)
+        # On utilise une expression régulière qui gère correctement les séparateurs comme '_' ou '-'
+        pattern = "|".join(rf"(?:^|[^a-zA-Z0-9]){re.escape(str(c))}(?:[^a-zA-Z0-9]|$)" for c in natinf_pej)
         natinf_col = "NATINF_PEJ" if "NATINF_PEJ" in pej.columns else "NATINF"
         if natinf_col in pej.columns:
             return pej[series_str_contains(pej[natinf_col], pattern, regex=True)].copy()
@@ -2851,7 +2852,7 @@ def _run_aggregations(
                 row_m["nb_localisations_non_conformes"] = 0
 
             if not pej_filtered.empty and "DATE_REF" in pej_filtered.columns:
-                dt = pej_filtered["DATE_REF"]
+                dt = pd.to_datetime(pej_filtered["DATE_REF"], errors="coerce")
                 mask = (dt.dt.year == year) & (dt.dt.month == month)
                 row_m["nb_pej"] = int(mask.sum())
             else:
@@ -5387,10 +5388,8 @@ def _generate_pdf(
             if carto_files:
                 base_map_name = carto_files[0]
             else:
-                from core.common.cartographie_config import has_cartography_catalog
                 if has_cartography_catalog(profile):
                     selected = profile.get("_cartes_selection") or options.get("cartes_profil") or []
-                    from core.common.cartographie_config import expected_map_filenames_for_selection
                     expected = expected_map_filenames_for_selection(profile, selected)
                     if expected:
                         base_map_name = expected[0]
@@ -5458,7 +5457,6 @@ def _generate_pdf(
                 if map_paths and is_block_enabled(presentation_cfg, "sec5.show_map", True):
                     builder.add_maps(map_paths, layout=map_layout)
                 elif show_placeholder and is_block_enabled(presentation_cfg, "sec5.show_map_fallback_message", True):
-                    from core.common.cartographie_config import expected_map_filenames_for_selection
                     expected = expected_map_filenames_for_selection(profile, selected)
                     files_hint = ", ".join(f"<b>{name}</b>" for name in expected)
                     if not files_hint:
@@ -5753,7 +5751,7 @@ def _run_engine_thematic_pipeline(
         pej_filtered = _filter_pej(pej, profile, cfg, point_filtered) if not pej.empty else pej
         if not pej_filtered.empty and sources.get("pej", True):
             pej_filtered = merge_pej_faits_locations(
-                pej_filtered, root, echelle, code, log=logging.getLogger("ofbilan.spatial")
+                pej_filtered, root, echelle, code, natinf_list=profile.get("natinf_pej", []), log=logging.getLogger("ofbilan.spatial")
             )
         pa_filtered = _filter_pa(pa, profile, cfg, point_filtered) if not pa.empty else pa
         pve_filtered = _filter_pve(pve, profile) if not pve.empty else pve

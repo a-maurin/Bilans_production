@@ -547,6 +547,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 # 1. Charger la configuration du profil
                 profile_cfg = load_profile_config(project_root, profil)
+                
+                # Forcer l'échelle nationale pour charger toutes les données avant restriction SIG pour TUB
+                if profile_cfg.get("restrict_geo") == "tub":
+                    echelle = "national"
+                    code = "FR"
+                
                 sources_cfg = profile_cfg.get("sources", {})
                 load_pts_flag = sources_cfg.get("point_ctrl", True)
                 load_pej_flag = sources_cfg.get("pej", True)
@@ -773,14 +779,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_pnf(
                         df_pts, df_pej, df_pa, df_pve, project_root, log
                     )
-                elif profile_cfg.get("restrict_geo") == "tub":
-                    import logging
-                    from core.engine.orchestrateur_profils import _apply_restrict_geo_tub
-                    log = logging.getLogger(__name__)
-                    df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_tub(
-                        df_pts, df_pej, df_pa, df_pve, project_root, log
-                    )
-
                     
                     # Filtre additionnel sur le département pour le PNF
                     pnf_dept = params.get("pnf_dept", "")
@@ -796,10 +794,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         df_pa = _filter_by_dept(df_pa)
                         df_pve = _filter_by_dept(df_pve)
 
-                    total_controles = len(df_pts)
-                    total_pej = len(df_pej)
-                    total_pa = count_pa_induites_par_controles(df_pts)
-                    total_pve = len(df_pve)
+                elif profile_cfg.get("restrict_geo") == "tub":
+                    import logging
+                    from core.engine.orchestrateur_profils import _apply_restrict_geo_tub
+                    log = logging.getLogger(__name__)
+                    df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_tub(
+                        df_pts, df_pej, df_pa, df_pve, project_root, log
+                    )
+
+                total_controles = len(df_pts)
+                total_pej = len(df_pej)
+                total_pa = count_pa_induites_par_controles(df_pts)
+                total_pve = len(df_pve)
 
                 # 5. Calcul des répartitions statistiques (Combiné sur toutes les sources activées)
                 results_counts = {"Conforme": 0, "Non-conforme": 0, "En attente": 0}
@@ -1086,10 +1092,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             cen_com = load_communes_centroides(project_root)
                             if not cen_com.empty:
                                 insee_col = "code_insee" if "code_insee" in cen_com.columns else ("CODE_INSEE" if "CODE_INSEE" in cen_com.columns else "insee")
-                                lat_col = "latitude_centre" if "latitude_centre" in cen_com.columns else ("LATITUDE_CENTRE" if "LATITUDE_CENTRE" in cen_com.columns else "lat_centre")
-                                lon_col = "longitude_centre" if "longitude_centre" in cen_com.columns else ("LONGITUDE_CENTRE" if "LONGITUDE_CENTRE" in cen_com.columns else "lon_centre")
+                                lat_col = "lat" if "lat" in cen_com.columns else "latitude_centre"
+                                lon_col = "lon" if "lon" in cen_com.columns else "longitude_centre"
                                 
-                                if insee_col and lat_col and lon_col:
+                                if insee_col and lat_col in cen_com.columns and lon_col in cen_com.columns:
                                     dict_lat = pd.to_numeric(cen_com.set_index(insee_col)[lat_col], errors="coerce").to_dict()
                                     dict_lon = pd.to_numeric(cen_com.set_index(insee_col)[lon_col], errors="coerce").to_dict()
                                     

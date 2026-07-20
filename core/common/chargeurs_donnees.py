@@ -24,7 +24,7 @@ from core.common.utilitaires_metier import (
 logger = logging.getLogger(__name__)
 
 def read_vector_attributes(path: Path) -> pd.DataFrame:
-    """Fallback OGR pour lire les attributs SIG sans geopandas."""
+    """Lit les attributs d'une couche vecteur (sans géométrie). Fallback OGR si geopandas absent."""
     try:
         import geopandas as gpd
         gdf = gpd.read_file(path)
@@ -715,7 +715,7 @@ def _load_pnf_from_127_communes_shp(root: Path) -> Optional[pd.DataFrame]:
     Liste INSEE (+ nom) des communes PNF depuis
     ``127_communes_AOA_et_statuts_adhesion.shp``.
     """
-    gdf = _load_pnf_127_communes_gdf(root)
+    gdf = _load_pnf_127_communes_df(root)
     if gdf.empty:
         return None
 
@@ -1773,6 +1773,10 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
                         if "geometry" not in gdf.columns:
                             raise KeyError(f"Aucune colonne 'geometry' dans {vec_path}")
                         gdf = gdf.set_geometry("geometry")
+                        if gdf.crs is None:
+                            gdf.crs = "EPSG:2154"
+                        if gdf.crs.to_epsg() != 4326:
+                            gdf = gdf.to_crs("EPSG:4326")
                         centroids = gdf.geometry.centroid
                         out = pd.DataFrame({"code_insee": gdf[insee_col].astype(str).str.zfill(5), "lat": centroids.y, "lon": centroids.x})
                         return out.dropna(subset=["lat", "lon"])
@@ -1780,10 +1784,18 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
                     pass
 
                 # Fallback OGR
-                from osgeo import ogr
+                from osgeo import ogr, osr
                 ds = ogr.Open(str(vec_path))
                 if ds:
                     layer = ds.GetLayer()
+                    spatial_ref = layer.GetSpatialRef()
+                    target_srs = osr.SpatialReference()
+                    target_srs.ImportFromEPSG(4326)
+                    target_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    transform = None
+                    if spatial_ref and not spatial_ref.IsSame(target_srs):
+                        transform = osr.CoordinateTransformation(spatial_ref, target_srs)
+                        
                     layer_def = layer.GetLayerDefn()
                     insee_field_idx = -1
                     for cand in ["code_insee", "CODE_INSEE", "insee", "INSEE_COM"]:
@@ -1798,6 +1810,8 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
                             if geom:
                                 centroid = geom.Centroid()
                                 if centroid:
+                                    if transform:
+                                        centroid.Transform(transform)
                                     code_insee = feature.GetFieldAsString(insee_field_idx)
                                     data.append({"code_insee": str(code_insee).zfill(5), "lat": centroid.GetY(), "lon": centroid.GetX()})
                         if data:
@@ -2211,14 +2225,16 @@ def merge_pej_faits_locations(
     echelle: str,
     code: str,
     *,
+    natinf_list: list = [],
     log: Optional[logging.Logger] = None,
 ) -> pd.DataFrame:
     """
     Enrichit le tableau PEJ (ODS) avec les coordonnées WGS84 issues de la couche
     ``localisation_infrac_FAITS_*`` (jointure ``DC_ID`` = ``dossier``).
 
-    L'ODS ne contient pas de géométrie : cette étape est nécessaire pour les
-    analyses spatiales (ex. restriction PNF sur les faits localisés).
+    Utilise ``gpd.read_file()`` directement pour lire les colonnes natives du GPKG
+    (``x_infrac`` / ``y_infrac`` / ``dossier``). Si ``natinf_list`` est fourni, seules
+    les lignes GPKG dont le NATINF correspond sont conservées avant jointure.
     """
     lg = log or logger
     if pej is None or pej.empty or "DC_ID" not in pej.columns:
@@ -2233,6 +2249,14 @@ def merge_pej_faits_locations(
         return pej.copy()
 
     try:
+        import geopandas as _gpd
+        gdf_raw = _gpd.read_file(path)
+        # Extraire x/y depuis la géométrie si les colonnes attributaires sont absentes
+        if "x_infrac" not in gdf_raw.columns and "geometry" in gdf_raw.columns:
+            gdf_raw["x_infrac"] = gdf_raw.geometry.x
+            gdf_raw["y_infrac"] = gdf_raw.geometry.y
+        gdf = pd.DataFrame(gdf_raw.drop(columns=["geometry"], errors="ignore"))
+    except ImportError:
         gdf = read_vector_attributes(path)
     except Exception as e:
         lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
@@ -2241,6 +2265,7 @@ def merge_pej_faits_locations(
     if gdf.empty:
         return pej.copy()
 
+    # Filtre entité SD
     ent_col = next((c for c in ("entite", "ENTITE", "Entite") if c in gdf.columns), None)
     if ent_col is None:
         lg.warning("Couche FAITS : pas de colonne entite — jointure PEJ ignorée.")
@@ -2258,11 +2283,19 @@ def merge_pej_faits_locations(
             lg.info("Couche FAITS : aucune entité pour ce périmètre — pas de localisations jointes.")
             return pej.copy()
 
+    # Filtre NATINF optionnel
+    if natinf_list:
+        natinf_col = next((c for c in ("natinf", "NATINF") if c in gdf.columns), None)
+        if natinf_col:
+            natinf_vals = {str(n) for n in natinf_list}
+            gdf = gdf[gdf[natinf_col].astype(str).isin(natinf_vals)].copy()
+
     doss_col = next((c for c in ("dossier", "DOSSIER") if c in gdf.columns), None)
     if doss_col is None:
         lg.warning("Couche FAITS : colonne dossier introuvable.")
         return pej.copy()
 
+    # Priorité aux colonnes attributaires natives du GPKG
     xcol = "x_infrac" if "x_infrac" in gdf.columns else ("x" if "x" in gdf.columns else None)
     ycol = "y_infrac" if "y_infrac" in gdf.columns else ("y" if "y" in gdf.columns else None)
     if xcol is None or ycol is None:
@@ -2340,6 +2373,10 @@ def merge_pej_faits_locations(
         except Exception as e:
             lg.warning("Impossible de charger les points OSCEAN pour la récupération des communes PEJ manquantes : %s", e)
     # === FIN FALLBACK ===
+
+    # Garantir que DATE_REF reste datetime après le merge (le join Pandas peut en faire un object)
+    if "DATE_REF" in out.columns:
+        out["DATE_REF"] = pd.to_datetime(out["DATE_REF"], errors="coerce")
 
     n = int(out["x_faits"].notna().sum())
     if n:

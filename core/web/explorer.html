@@ -229,6 +229,28 @@
             border: 1px dashed #10b981;
             border-radius: 4px;
         }
+
+        .btn-quick-year {
+            background-color: #f1f5f9;
+            color: #475569;
+            border-radius: 12px;
+            padding: 2px 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+        }
+        
+        .btn-quick-year:hover {
+            background-color: #e2e8f0;
+        }
+
+        .btn-quick-year.active {
+            background-color: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
     </style>
 </head>
 
@@ -595,6 +617,8 @@
                                     <input type="radio" name="map-mode" value="heatmap" style="margin: 0;"> Chaleur
                                 </label>
                                 <span style="color: var(--color-border);">|</span>
+                                <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;"></div>
+                                <span style="color: var(--color-border);">|</span>
                                 <button type="button" id="btn-fullscreen-map"
                                     style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 2px; font-weight: 600; color: var(--color-primary);"
                                     title="Plein écran">⛶ Plein écran</button>
@@ -763,7 +787,7 @@
     <!-- Driver.js pour la visite guidée -->
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <!-- Frontend controller script -->
-    <script src="explorer.js?v=1.2.0"></script>
+    <script src="explorer.js?v=1.2.1"></script>
     <!-- Modal Aide / Guide Complet -->
     <div id="help-modal" class="hidden"
         style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999999; display: flex; justify-content: center; align-items: center;">
@@ -992,6 +1016,12 @@
                         </div>
                         <div class="form-group"><label>Zoom carte par défaut</label><input type="number"
                                 id="set-ui-zoom" value="8"></div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                            <input type="checkbox" id="set-ui-cluster-offset" checked style="margin:0;">
+                            <label for="set-ui-cluster-offset" style="margin:0; cursor:pointer;">Écarter les clusters superposés</label>
+                        </div>
+                        <div class="form-group"><label>Désactiver l'écartement au-delà du zoom :</label><input type="number"
+                                id="set-ui-cluster-zoom" value="10"></div>
                     </div>
                     <div class="card" style="margin: 0;">
                         <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Paramètres avancés</h3>
@@ -1099,6 +1129,10 @@
                 const tech = data.tech || {};
                 document.getElementById('set-tech-port').value = tech.port_serveur || 5000;
                 document.getElementById('set-tech-debug').checked = !!tech.mode_debug;
+
+                const useOffset = localStorage.getItem('ui_cluster_offset') !== 'false';
+                document.getElementById('set-ui-cluster-offset').checked = useOffset;
+                document.getElementById('set-ui-cluster-zoom').value = localStorage.getItem('ui_cluster_zoom') || 10;
             } catch (err) {
                 console.error("Erreur chargement paramètres:", err);
             }
@@ -1138,6 +1172,12 @@
                     mode_debug: document.getElementById('set-tech-debug').checked
                 }
             };
+
+            localStorage.setItem('ui_cluster_offset', document.getElementById('set-ui-cluster-offset').checked);
+            localStorage.setItem('ui_cluster_zoom', document.getElementById('set-ui-cluster-zoom').value);
+            if (typeof window.updateClusterOffset === 'function' && typeof map !== 'undefined') {
+                window.updateClusterOffset(map.getZoom());
+            }
 
             try {
                 await fetch('/api/settings', {

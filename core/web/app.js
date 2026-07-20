@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const btnGenerate = document.getElementById('btn-generate');
     const btnClear = document.getElementById('btn-clear');
+    const btnCopy = document.getElementById('btn-copy');
     const progressBar = document.getElementById('progress-bar');
     const percentText = document.getElementById('percent-text');
     const statusText = document.getElementById('status-text');
@@ -674,6 +675,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnClear.addEventListener('click', () => {
         consoleOutput.textContent = '> Console effacée.\n';
+    });
+
+    btnCopy.addEventListener('click', () => {
+        const textToCopy = consoleOutput.textContent;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalText = btnCopy.textContent;
+            btnCopy.textContent = 'Copié !';
+            setTimeout(() => {
+                btnCopy.textContent = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('Erreur lors de la copie : ', err);
+        });
     });
 
     // --- Accordéon : Filtres optionnels ---

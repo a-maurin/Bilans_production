@@ -64,11 +64,97 @@ document.addEventListener('DOMContentLoaded', () => {
         compareActiveCheck.addEventListener('change', () => {
             if (compareActiveCheck.checked) {
                 compareDatesContainer.classList.remove('hidden');
+                
+                // Synchronisation dynamique avec la période principale sélectionnée
+                if (dateDebEl && dateFinEl && compareDateDebEl && compareDateFinEl) {
+                    const debVal = dateDebEl.value;
+                    const finVal = dateFinEl.value;
+                    if (debVal && debVal.includes('-')) {
+                        const [y, m, d] = debVal.split('-');
+                        compareDateDebEl.value = `${parseInt(y) - 1}-${m}-${d}`;
+                    }
+                    if (finVal && finVal.includes('-')) {
+                        const [y, m, d] = finVal.split('-');
+                        compareDateFinEl.value = `${parseInt(y) - 1}-${m}-${d}`;
+                    }
+                }
             } else {
                 compareDatesContainer.classList.add('hidden');
             }
         });
     }
+
+    // --- Génération des pastilles "Années Rapides" (Quick Years) ---
+    const quickYearContainer = document.getElementById('quick-year-container');
+    if (quickYearContainer) {
+        // Générer pour l'année en cours + 3 années précédentes
+        for (let i = 0; i < 4; i++) {
+            const y = currentYear - i;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-quick-year';
+            btn.textContent = y;
+            if (i === 0) {
+                btn.classList.add('active'); // Présélection de l'année en cours
+            }
+            
+            btn.addEventListener('click', () => {
+                // Gestion des états visuels
+                document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Mise à jour des dates
+                if (dateDebEl) dateDebEl.value = `${y}-01-01`;
+                if (dateFinEl) {
+                    if (y === currentYear) {
+                        const m = String(now.getMonth() + 1).padStart(2, '0');
+                        const d = String(now.getDate()).padStart(2, '0');
+                        dateFinEl.value = `${y}-${m}-${d}`;
+                    } else {
+                        dateFinEl.value = `${y}-12-31`;
+                    }
+                }
+
+                // Mise à jour du mode Comparaison N-1 (Année précédente complète)
+                if (compareActiveCheck && compareActiveCheck.checked && compareDateDebEl && compareDateFinEl) {
+                    const prevYear = y - 1;
+                    compareDateDebEl.value = `${prevYear}-01-01`;
+                    compareDateFinEl.value = `${prevYear}-12-31`;
+                }
+
+                // Empêcher le recentrage de la carte
+                window.preventMapFitBounds = true;
+
+                // Lancer le chargement
+                if (btnUpdate) btnUpdate.click();
+            });
+
+            // Insérer à la bonne place : plus petit (plus vieux) à gauche, plus grand (plus récent) à droite
+            quickYearContainer.insertBefore(btn, quickYearContainer.firstChild);
+        }
+    }
+
+    // Gestion de la saisie manuelle pour retirer l'état actif des pastilles
+    const removeActiveChips = () => {
+        document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
+    };
+    if (dateDebEl) dateDebEl.addEventListener('change', removeActiveChips);
+    if (dateFinEl) dateFinEl.addEventListener('change', removeActiveChips);
+
+    // Comportement du bouton Effacer (Reset) pour la réinitialisation
+    const btnResetQuickYears = document.getElementById('btn-reset');
+    if (btnResetQuickYears) {
+        btnResetQuickYears.addEventListener('click', () => {
+            // Un peu de délai pour laisser le reset du form se faire si c'est un <button type="reset">
+            setTimeout(() => {
+                document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
+                const currentBtn = Array.from(document.querySelectorAll('.btn-quick-year')).find(b => b.textContent == currentYear);
+                if (currentBtn) currentBtn.classList.add('active');
+            }, 50);
+        });
+    }
+    // --- Fin de la logique Quick Years ---
+
 
     fetch('/api/profils')
         .then(res => res.json())
@@ -741,7 +827,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.max(1.0, maxCount * 0.99);
     }
 
+    window.updateClusterOffset = function(zoom) {
+        const useOffset = localStorage.getItem('ui_cluster_offset') !== 'false';
+        const zoomThreshold = parseInt(localStorage.getItem('ui_cluster_zoom')) || 10;
+        const container = map.getContainer();
+        if (useOffset && zoom <= zoomThreshold) {
+            container.classList.add('cluster-offset-active');
+        } else {
+            container.classList.remove('cluster-offset-active');
+        }
+    };
+
     map.on('zoomend', function () {
+        const currentZoom = map.getZoom();
+        window.updateClusterOffset(currentZoom);
+
         if (typeof heatmapLayer !== 'undefined' && heatmapLayer && document.querySelector('input[name="map-mode"]:checked')?.value === 'heatmap') {
             const hData = [...activePoints, ...activeProcedures]
                 .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
@@ -749,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const newMax = getDynamicMaxForZoom(map, hData, 25);
             heatmapLayer.setOptions({
                 max: newMax,
-                maxZoom: map.getZoom() // Bypass default Leaflet.heat zoom scaling
+                maxZoom: currentZoom // Bypass default Leaflet.heat zoom scaling
             });
         }
     });
@@ -849,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '#F97316': ['#F97316', '#EA580C', '#C2410C']  // Orange (PVe)
     };
 
-    function getDynamicClusterOpts(baseHex, isN1) {
+    function getDynamicClusterOpts(baseHex, isN1, customClass = '') {
         return {
             ...baseClusterOpts,
             iconCreateFunction: function (cluster) {
@@ -862,13 +962,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isN1) {
                     return L.divIcon({
                         html: `<div style="background-color:${shade};opacity:0.75;border:2px dashed rgba(255,255,255,0.8);border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:28px;height:28px;box-shadow:none;">${count}</div>`,
-                        className: '',
+                        className: customClass,
                         iconSize: [28, 28]
                     });
                 } else {
                     return L.divIcon({
                         html: `<div style="background-color:${shade};border:2px solid white;border-radius:50%;text-align:center;color:white;font-weight:bold;line-height:26px;width:30px;height:30px;box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${count}</div>`,
-                        className: '',
+                        className: customClass,
                         iconSize: [30, 30]
                     });
                 }
@@ -941,17 +1041,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
 
-    // Légende de la carte
+    // Légende de la carte (Dynamique)
     const mapLegend = L.control({ position: 'bottomright' });
-    mapLegend.onAdd = function (map) {
-        const div = L.DomUtil.create('div', 'info legend');
-        div.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-        div.style.padding = '10px 14px';
-        div.style.borderRadius = '6px';
-        div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
-        div.style.fontSize = '12px';
-        div.style.lineHeight = '1.6';
-        div.style.color = '#334155';
+    let mapLegendDiv = null;
+
+    function updateLegend() {
+        if (!mapLegendDiv) return;
 
         const renderItem = (color, label) => `
             <div style="display:flex; align-items:center; margin-bottom:4px;">
@@ -959,21 +1054,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span>${label}</span>
             </div>
         `;
+
+        // Vérifier quelles couches sont activées sur la carte ET contiennent des données
+        const hasControles = (map.hasLayer(clusterParent) && clusterParent.getLayers().length > 0) || 
+                             (typeof clusterParentN1 !== 'undefined' && map.hasLayer(clusterParentN1) && clusterParentN1.getLayers().length > 0);
+                             
+        const hasPej = (map.hasLayer(pejParent) && pejParent.getLayers().length > 0) || 
+                       (typeof pejParentN1 !== 'undefined' && map.hasLayer(pejParentN1) && pejParentN1.getLayers().length > 0);
+                       
+        const hasPa = (map.hasLayer(paParent) && paParent.getLayers().length > 0) || 
+                      (typeof paParentN1 !== 'undefined' && map.hasLayer(paParentN1) && paParentN1.getLayers().length > 0);
+                      
+        const hasPve = (map.hasLayer(pveParent) && pveParent.getLayers().length > 0) || 
+                       (typeof pveParentN1 !== 'undefined' && map.hasLayer(pveParentN1) && pveParentN1.getLayers().length > 0);
+
+        let html = '';
+
+        if (hasControles) {
+            html += `
+                <div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Contrôles</div>
+                ${renderItem('#10B981', 'Conforme')}
+                ${renderItem('#EF4444', 'Infraction / <br> Manquement')}
+                ${renderItem('#64748B', 'En attente / <br> Autre')}
+            `;
+        }
+
+        if (hasPej || hasPa || hasPve) {
+            if (html.length > 0) html += `<div style="margin-top:8px;"></div>`;
+            html += `<div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Procédures</div>`;
+            if (hasPej) html += renderItem('#3B82F6', 'PEJ');
+            if (hasPa) html += renderItem('#8B5CF6', 'PA');
+            if (hasPve) html += renderItem('#F97316', 'PVe');
+        }
+
+        mapLegendDiv.innerHTML = html;
+        mapLegendDiv.style.display = html.length > 0 ? 'block' : 'none';
+    }
+
+    mapLegend.onAdd = function (map) {
+        mapLegendDiv = L.DomUtil.create('div', 'info legend');
+        mapLegendDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        mapLegendDiv.style.padding = '10px 14px';
+        mapLegendDiv.style.borderRadius = '6px';
+        mapLegendDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
+        mapLegendDiv.style.fontSize = '12px';
+        mapLegendDiv.style.lineHeight = '1.6';
+        mapLegendDiv.style.color = '#334155';
+        mapLegendDiv.style.display = 'none';
         
-        div.innerHTML = `
-            <div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Contrôles</div>
-            ${renderItem('#10B981', 'Conforme')}
-            ${renderItem('#EF4444', 'Infraction / Manquement')}
-            ${renderItem('#64748B', 'En attente / Autre')}
-            
-            <div style="font-weight:bold; margin-top:8px; margin-bottom:6px; color:#1e293b;">Procédures</div>
-            ${renderItem('#3B82F6', 'PEJ')}
-            ${renderItem('#8B5CF6', 'PA')}
-            ${renderItem('#F97316', 'PVe')}
-        `;
-        return div;
+        return mapLegendDiv;
     };
     mapLegend.addTo(map);
+
+    // Mettre à jour la légende quand l'utilisateur coche/décoche une couche
+    map.on('overlayadd overlayremove', updateLegend);
 
     // Color definitions for status markers
     function getMarkerColor(resultat) {
@@ -1217,9 +1351,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    // Injection en masse dans chaque sous-groupe cloisonné
                     markersByKey.forEach((data, tKey) => {
-                        const grp = getOrCreateCluster(tKey, clusterParent, clustersByTerritory, getDynamicClusterOpts(data.color, false));
+                        const grp = getOrCreateCluster(tKey, clusterParent, clustersByTerritory, getDynamicClusterOpts(data.color, false, 'cluster-ctrl'));
                         grp.addLayers(data.markers);
                     });
                 }
@@ -1267,9 +1400,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, getDynamicClusterOpts('#3B82F6', false)).addLayers(markers));
-                    paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, getDynamicClusterOpts('#8B5CF6', false)).addLayers(markers));
-                    pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false)).addLayers(markers));
+                    pejByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParent, pejByTerritory, getDynamicClusterOpts('#3B82F6', false, 'cluster-pej')).addLayers(markers));
+                    paByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, paParent, paByTerritory, getDynamicClusterOpts('#8B5CF6', false, 'cluster-pa')).addLayers(markers));
+                    pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false, 'cluster-pve')).addLayers(markers));
                 }
 
                 if (isHeatmapMode) {
@@ -1332,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // N-1 : sous-groupes séparés (jamais mélangés avec N)
                     markersByKeyN1.forEach((data, tKey) => {
-                        const grp = getOrCreateCluster(tKey, clusterParentN1, clustersByTerritoryN1, getDynamicClusterOpts(data.color, true));
+                        const grp = getOrCreateCluster(tKey, clusterParentN1, clustersByTerritoryN1, getDynamicClusterOpts(data.color, true, 'cluster-ctrl-n1'));
                         grp.addLayers(data.markers);
                     });
                 }
@@ -1380,9 +1513,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, getDynamicClusterOpts('#3B82F6', true)).addLayers(markers));
-                    paByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, paParentN1, paByTerritoryN1, getDynamicClusterOpts('#8B5CF6', true)).addLayers(markers));
-                    pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, getDynamicClusterOpts('#F97316', true)).addLayers(markers));
+                    pejByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pejParentN1, pejByTerritoryN1, getDynamicClusterOpts('#3B82F6', true, 'cluster-pej-n1')).addLayers(markers));
+                    paByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, paParentN1, paByTerritoryN1, getDynamicClusterOpts('#8B5CF6', true, 'cluster-pa-n1')).addLayers(markers));
+                    pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, getDynamicClusterOpts('#F97316', true, 'cluster-pve-n1')).addLayers(markers));
                 }
 
                 // Plus de addLayers global — déjà injecté dans les sous-groupes cloisonnés ci-dessus
@@ -1484,16 +1617,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Center/zoom map
-                if (selectEchelle.value === 'national') {
-                    map.setView([46.2276, 2.2137], 6);
-                } else if (boundaryLayer) {
-                    map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
-                } else if (coordinates.length > 0) {
-                    const bounds = L.latLngBounds(coordinates);
-                    map.fitBounds(bounds, { padding: [30, 30] });
+                if (window.preventMapFitBounds) {
+                    // Conserver la vue actuelle (zoom et pan) pour permettre la comparaison interannuelle
+                    // Réinitialisation du drapeau pour les futurs chargements
+                    window.preventMapFitBounds = false;
                 } else {
-                    // If no points, reset view to France
-                    map.setView([46.2276, 2.2137], 6);
+                    if (selectEchelle.value === 'national') {
+                        map.setView([46.2276, 2.2137], 6);
+                    } else if (boundaryLayer) {
+                        map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
+                    } else if (coordinates.length > 0) {
+                        const bounds = L.latLngBounds(coordinates);
+                        map.fitBounds(bounds, { padding: [30, 30] });
+                    } else {
+                        // If no points, reset view to France
+                        map.setView([46.2276, 2.2137], 6);
+                    }
                 }
 
                 // --- CHARTS GENERATION ---
@@ -2165,6 +2304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .finally(() => {
+                updateLegend();
                 btnUpdate.disabled = false;
                 btnUpdate.innerHTML = 'Charger les données';
             });

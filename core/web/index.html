@@ -315,7 +315,10 @@
                 <div class="console-wrapper">
                     <div class="console-header">
                         <span>Terminal d'exécution</span>
-                        <button id="btn-clear" class="btn-clear-console">Effacer</button>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="btn-copy" class="btn-clear-console" title="Copier le contenu du terminal">Copier</button>
+                            <button id="btn-clear" class="btn-clear-console">Effacer</button>
+                        </div>
                     </div>
                     <pre id="console-output"
                         class="console-output">> Prêt à générer. Sélectionnez vos paramètres à gauche et cliquez sur "Générer le Bilan".</pre>

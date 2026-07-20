@@ -814,3 +814,28 @@ body.theme-sombre .leaflet-bar a {
 body.theme-sombre .leaflet-control-layers-list {
     color: var(--color-text-dark);
 }
+
+/* --- Décalage Dynamique des Clusters (Zoom out) --- */
+/* Animation fluide pour tous les clusters concernés */
+.marker-cluster.cluster-ctrl,
+.marker-cluster.cluster-ctrl-n1,
+.marker-cluster.cluster-pej, 
+.marker-cluster.cluster-pej-n1,
+.marker-cluster.cluster-pa, 
+.marker-cluster.cluster-pa-n1,
+.marker-cluster.cluster-pve,
+.marker-cluster.cluster-pve-n1 {
+    transition: transform 0.3s ease-in-out !important;
+}
+
+/* Application du décalage uniquement si le parent a la classe */
+.cluster-offset-active .marker-cluster.cluster-ctrl-n1 { transform: translate(0, -35px) !important; }
+
+.cluster-offset-active .marker-cluster.cluster-pej { transform: translate(22px, -22px) !important; }
+.cluster-offset-active .marker-cluster.cluster-pej-n1 { transform: translate(40px, -40px) !important; }
+
+.cluster-offset-active .marker-cluster.cluster-pa { transform: translate(22px, 22px) !important; }
+.cluster-offset-active .marker-cluster.cluster-pa-n1 { transform: translate(40px, 40px) !important; }
+
+.cluster-offset-active .marker-cluster.cluster-pve { transform: translate(-22px, 0) !important; }
+.cluster-offset-active .marker-cluster.cluster-pve-n1 { transform: translate(-40px, 0) !important; }

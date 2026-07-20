@@ -181,8 +181,19 @@
         margin-bottom: 0px !important;
     }
 
-    .leaflet-control-container {
+    .leaflet-control-zoom, .leaflet-control-layers, .leaflet-control-attribution {
         display: none !important;
+    }
+    
+    .leaflet-control-container {
+        display: block !important;
+    }
+    
+    .info.legend {
+        box-shadow: none !important;
+        border: 1px solid #002F4B !important;
+        transform: scale(0.9);
+        transform-origin: bottom right;
     }
 
     div:has(> #chart-seasonality) {

@@ -134,4 +134,4 @@ Pour les automatisations ou les tâches de traitement par lots, vous pouvez exé
 
 ## Contribution
 
-Les contributions sont les bienvenues. Veuillez respecter la licence Apache 2.0 et conserver les mentions de copyright lors de toute modification.
+Les contributions sont les bienvenues. Veuillez respecter la licence GNU GPL v3 (ou supérieure) et conserver les mentions de copyright lors de toute modification.

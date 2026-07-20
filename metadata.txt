@@ -11,3 +11,4 @@ tracker=https://github.com/a-maurin/OFBilan/issues
 repository=https://github.com/a-maurin/OFBilan
 category=Plugins
 tags=ofb, bilan, pdf, cartographie, oscean
+license=GPL version 3 or any later version

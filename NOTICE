@@ -6,11 +6,11 @@ Ce projet est développé par :
   Aguirre MAURIN  
   Courriel : aguirre.maurin@ofb.gouv.fr
 
-Le code de ce dépôt est distribué sous licence Apache License, Version 2.0.
+Le code de ce dépôt est distribué sous licence GNU General Public License, Version 3.0 (ou supérieure).
 Une copie de la licence est fournie dans le fichier LICENSE à la racine du projet
 et est également disponible à l'adresse suivante :
 
-  http://www.apache.org/licenses/LICENSE-2.0
+  https://www.gnu.org/licenses/gpl-3.0.html
 
 Sauf mention contraire, tous les fichiers source et la documentation
 sont soumis à cette licence.
@@ -18,7 +18,7 @@ sont soumis à cette licence.
 Composants tiers
 ----------------
 
-Ce projet peut s'appuyer sur des bibliothèques et outils tiers (par exemple :
+Ce projet s'appuie sur des bibliothèques et outils tiers (par exemple :
 Python, pandas, geopandas, QGIS, etc.), distribués sous leurs propres licences.
 Merci de vous référer à la documentation de ces projets pour les conditions
 complètes de licence.
@@ -31,4 +31,3 @@ référentiels géographiques, etc.) restent soumis à leurs propres licences de
 diffusion et d'utilisation. Leur réutilisation doit respecter les conditions
 publiées par les producteurs de données (par exemple sur data.gouv.fr ou
 les plateformes des organismes concernés).
-

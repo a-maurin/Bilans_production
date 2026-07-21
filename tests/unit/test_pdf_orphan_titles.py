@@ -1,19 +1,21 @@
-#
 # Copyright (C) 2026 Aguirre MAURIN
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier
+# selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
+# la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
+# sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
+# Voir la Licence Publique Générale GNU pour plus de détails.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
+# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
+# clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
+# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
+# de l'auteur original (Aguirre MAURIN).
 
+#
 import pytest
 from reportlab.platypus import Paragraph, Spacer, Image as RLImage, KeepTogether
 from core.common.pdf_report_builder import PDFReportBuilder

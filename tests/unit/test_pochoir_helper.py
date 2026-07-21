@@ -84,12 +84,12 @@ def test_adapt_text_for_department():
 
 def test_resolve_pochoir_prefers_dept_25():
     layers = [
-        "pochoir_sd21",
+        "emprise_dep",
         "pochoir_sd25",
         "point_ctrl_20260505_wgs84",
     ]
     name, source = resolve_layer_name(
-        configured_name="pochoir_sd21",
+        configured_name="emprise_dep",
         layer_role="pochoir",
         available_names=layers,
         dept_code="25",
@@ -99,9 +99,9 @@ def test_resolve_pochoir_prefers_dept_25():
 
 
 def test_resolve_pochoir_no_wrong_dept_fallback():
-    layers = ["pochoir_sd21", "point_ctrl_20260505_wgs84"]
+    layers = ["emprise_dep", "point_ctrl_20260505_wgs84"]
     name, source = resolve_layer_name(
-        configured_name="pochoir_sd21",
+        configured_name="emprise_dep",
         layer_role="pochoir",
         available_names=layers,
         dept_code="25",

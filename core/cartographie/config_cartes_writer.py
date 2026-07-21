@@ -63,6 +63,7 @@ def _profile_repr(p: ProfileConfig) -> str:
         f"        layers={layers_repr},\n"
         f"        title_main={repr(getattr(p, 'title_main', '') )},\n"
         f"        subtitle={repr(getattr(p, 'subtitle', '') )},\n"
+        f"        sources={repr(getattr(p, 'sources', {}))},\n"
         f"        layout_title_item_id={repr(getattr(p, 'layout_title_item_id', 'titre_principal'))},\n"
         f"        layout_subtitle_item_id={repr(getattr(p, 'layout_subtitle_item_id', 'sous_titre'))},\n"
         "    )"

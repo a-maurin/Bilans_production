@@ -40,9 +40,9 @@ agrainage:
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
-      legend_label: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
+      legend_label: "emprise_dep"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
@@ -88,9 +88,9 @@ chasse:
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
-      legend_label: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
+      legend_label: "emprise_dep"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
@@ -130,8 +130,8 @@ piegeage:
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -167,8 +167,8 @@ global:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -213,8 +213,8 @@ global_procedures:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -267,8 +267,8 @@ global_usagers:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -311,8 +311,8 @@ ppp:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -348,8 +348,8 @@ ppp_procedures:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -385,8 +385,8 @@ procedures_pve:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -436,8 +436,8 @@ global_usagers_agriculteurs:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -475,9 +475,9 @@ global_resultats:
       geometry_mode: "polygon_fill"
       renderer_type: "single"
 
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
-      legend_label: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
+      legend_label: "emprise_dep"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
       palette: "Blues"
@@ -519,8 +519,8 @@ global_domaines:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"
@@ -563,8 +563,8 @@ toutes:
       symbology_source: "qgis"
       geometry_mode: "polygon_fill"
       renderer_type: "single"
-    pochoir_sd21:
-      layer_name: "pochoir_sd21"
+    emprise_dep:
+      layer_name: "emprise_dep"
       legend_label: "Périmètre SD21"
       geometry_mode: "polygon_fill"
       renderer_type: "graduated"

@@ -102,9 +102,9 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         symbol_size_mm=2.0,
         symbol_shape='circle'
     ),
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
-        legend_label='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
+        legend_label='emprise_dep',
         filter_type='',
         geometry_mode='polygon_fill',
         renderer_type='graduated',
@@ -181,9 +181,9 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         symbol_size_mm=2.0,
         symbol_shape='circle'
     ),
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
-        legend_label='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
+        legend_label='emprise_dep',
         filter_type='',
         geometry_mode='polygon_fill',
         renderer_type='graduated',
@@ -247,8 +247,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         symbol_size_mm=2.0,
         symbol_shape='circle'
     ),
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -366,8 +366,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -419,8 +419,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-                layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+                layer_name='emprise_dep',
                 legend_label='Périmètre SD21',
                 filter_type='',
                 geometry_mode='polygon_fill',
@@ -460,8 +460,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -500,8 +500,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -568,8 +568,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -622,9 +622,9 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         symbol_size_mm=2.0,
         symbol_shape='circle'
     ),
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
-        legend_label='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
+        legend_label='emprise_dep',
         filter_type='',
         geometry_mode='polygon_fill',
         renderer_type='graduated',
@@ -664,8 +664,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',
@@ -704,8 +704,8 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         date_deb='2025-01-01',
         date_fin='2026-02-05',
         layers={
-            'pochoir_sd21': LayerSymbologyConfig(
-        layer_name='pochoir_sd21',
+            'emprise_dep': LayerSymbologyConfig(
+        layer_name='emprise_dep',
         legend_label='Périmètre SD21',
         filter_type='',
         geometry_mode='polygon_fill',

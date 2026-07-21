@@ -31,8 +31,8 @@ PROJECT_LAYERS = [
     "point_ctrl_20260505_wgs84 copie",
     "localisation_infrac_FAITS_20260306",
     "localisation_infrac_FAITS_20260505",
-    "pochoir_sd21",
-    "pochoir_sd21 copie",
+    "emprise_dep",
+    "emprise_dep copie",
     "Zone d'interdiction d'agrainage 2026",
     "Zone infectée",
     "Zone Infectee 2026",
@@ -61,12 +61,12 @@ def test_resolve_pej_latest_snapshot():
 
 def test_resolve_exact_name_preferred():
     name, source = resolve_layer_name(
-        configured_name="pochoir_sd21",
+        configured_name="emprise_dep",
         layer_role="pochoir",
         available_names=PROJECT_LAYERS,
         dept_code="21",
     )
-    assert name == "pochoir_sd21"
+    assert name == "emprise_dep"
     assert source == "dept"
 
 

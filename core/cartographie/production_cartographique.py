@@ -362,6 +362,7 @@ def _load_profiles_from_param() -> Optional[tuple[Dict[str, "ProfileConfig"], st
             pochoir=pochoir,
             emprise=emprise,
             couches_vecteurs_extra=couches_extra,
+            sources=pdata.get("sources", {}),
             natinf_pve=n_pve,
             natinf_pj=n_pj,
         )
@@ -405,6 +406,7 @@ def _load_profiles_from_param() -> Optional[tuple[Dict[str, "ProfileConfig"], st
             emprise=str(yaml_pdata.get("emprise", yaml_pdata.get("pochoir", "departement"))),
             couches_vecteurs_extra=yaml_pdata.get("couches_vecteurs_extra", []),
             symbology_source=yaml_sym_src,
+            sources=yaml_pdata.get("sources", {}),
             natinf_pve=n_pve,
             natinf_pj=n_pj,
         )
@@ -661,10 +663,10 @@ def resolve_layers_for_config(
 
 
 def _clone_pochoir_renderer_from_template():
-    """Reprend le renderer invertedPolygon du pochoir_sd21 du projet si présent."""
-    template = get_layer_by_name("pochoir_sd21")
+    """Reprend le renderer invertedPolygon du emprise_dep du projet si présent."""
+    template = get_layer_by_name("emprise_dep")
     if template is None:
-        template = get_layer_by_name("pochoir_sd21 copie")
+        template = get_layer_by_name("emprise_dep copie")
     if template is None or not template.renderer():
         return None
     return template.renderer().clone()
@@ -674,13 +676,27 @@ def apply_pochoir_inverted_symbology(layer) -> None:
     """Symbologie masque blanc hors département (polygone inversé)."""
     renderer = _clone_pochoir_renderer_from_template()
     if renderer is not None:
+        # Forcer l'opacité à 100% sur le renderer cloné (évite les damiers/transparence du PNG)
+        try:
+            from qgis.core import QgsInvertedPolygonRenderer, QgsSingleSymbolRenderer
+            if isinstance(renderer, QgsInvertedPolygonRenderer):
+                inner = renderer.embeddedRenderer()
+                if isinstance(inner, QgsSingleSymbolRenderer):
+                    sym = inner.symbol()
+                    if sym:
+                        color = sym.color()
+                        color.setAlpha(255)
+                        sym.setColor(color)
+        except Exception:
+            pass
+            
         layer.setRenderer(renderer)
         layer.triggerRepaint()
         return
 
     from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsInvertedPolygonRenderer
     fill_sym = QgsFillSymbol.createSimple(
-        {"color": "255,255,255,166", "outline_color": "35,35,35", "outline_width": "0.26"}
+        {"color": "255,255,255,255", "outline_color": "35,35,35", "outline_width": "0.26"}
     )
     inner = QgsSingleSymbolRenderer(fill_sym)
     layer.setRenderer(QgsInvertedPolygonRenderer(inner))
@@ -1901,18 +1917,17 @@ def export_layout(
                 item.setKeepLayerSet(False)
         elif isinstance(item, QgsLayoutItemLabel):
             try:
-                item_id = item.id()
+                item_id = item.id() if hasattr(item, "id") else ""
+                current_text = item.text() if hasattr(item, "text") else ""
             except AttributeError:
                 item_id = ""
+                current_text = ""
                 
-            # Titres natifs (ou heuristique par contenu si ID absent/différent)
-            current_text = item.text() if hasattr(item, "text") else ""
-            
             known_titles = ["Localisation et", "Localisation et résultats des contrôles PA"]
             if hasattr(prof, 'cartes_definitions'):
                 known_titles.extend([m.title_main for m in prof.cartes_definitions.values() if m.title_main])
                 
-            is_title = item_id == title_id or any(k in current_text for k in known_titles) or "titre" in item_id.lower()
+            is_title = (item_id == title_id or any(k in current_text for k in known_titles) or "titre" in item_id.lower())
             
             if is_title or (subtitle_id and item_id == subtitle_id):
                 if is_title:
@@ -1921,7 +1936,6 @@ def export_layout(
                     item.setText(subtitle_text)
                 try:
                     from qgis.PyQt.QtGui import QFont, QColor
-                    # Application de la charte OFB
                     font_size = 16 if is_title else 12
                     font = QFont("Marianne", font_size, QFont.Bold if is_title else QFont.Normal)
                     if hasattr(item, "setFont"):
@@ -1931,8 +1945,7 @@ def export_layout(
                 except Exception:
                     pass
                 
-            # Textes additionnels dynamiques (Hybride Avancé)
-            if item_id and hasattr(prof, "extra_texts") and item_id in prof.extra_texts:
+            elif item_id and hasattr(prof, "extra_texts") and item_id in prof.extra_texts:
                 template_str = prof.extra_texts[item_id]
                 
                 periode_formatee = ""
@@ -1952,8 +1965,9 @@ def export_layout(
                     )
                     item.setText(formatted_text)
                 except Exception as e:
-                    logger.warning("Erreur formatage texte dynamique pour '%s': %s", item_id, e)
+                    logger.warning(f"Erreur de formatage du texte extra_texts '{item_id}': {e}")
                     item.setText(template_str)
+                    
         elif isinstance(item, QgsLayoutItemScaleBar):
             item.setUnits(QgsUnitTypes.DistanceKilometers)
             item.setNumberOfSegmentsLeft(0)
@@ -1963,6 +1977,88 @@ def export_layout(
         elif isinstance(item, QgsLayoutItemLegend):
             # Supprimer la légende native QGIS car nous la générons avec Pillow post-export
             layout.removeLayoutItem(item)
+
+    # HORIZON: Traitement de l'élément sources direct HORS DE LA BOUCLE
+    sources_item = layout.itemById("sources")
+    if sources_item:
+        logger.info(f"==> ITEM SOURCES TROUVE ! Type: {type(sources_item)}")
+        
+        # Génération dynamique des sources
+        srcs = getattr(prof, "sources", {})
+        noms_sources = []
+        if srcs.get("point_ctrl") or srcs.get("pa") or srcs.get("pej"):
+            noms_sources.append(r"OFB \ Oscean")
+        if srcs.get("pve"):
+            noms_sources.append(r"MININT \ PVe")
+        noms_sources.append(r"IGN \ BD TOPO — IGN \ Scan25")
+        
+        # Paramètres de style par défaut
+        style_cfg = {}
+        try:
+            import yaml
+            import os
+            yaml_path = os.path.join(os.path.dirname(__file__), "param", "sources.yaml")
+            if os.path.exists(yaml_path):
+                with open(yaml_path, 'r', encoding='utf-8') as f:
+                    dynamic_sources_cfg = yaml.safe_load(f)
+                    if dynamic_sources_cfg:
+                        style_cfg = dynamic_sources_cfg.get("style", {})
+                        if "sources_mapping" in dynamic_sources_cfg:
+                            mapping = dynamic_sources_cfg["sources_mapping"]
+                            active_layers = [lyr.name() for lyr in proj.mapLayers().values()]
+                            for keyword, source_label in mapping.items():
+                                if source_label not in noms_sources:
+                                    if any(keyword.lower() in lyr_name.lower() for lyr_name in active_layers):
+                                        noms_sources.append(source_label)
+        except Exception as e:
+            logger.warning(f"Erreur sources dynamiques: {e}")
+            
+        liste_sources = " — ".join(noms_sources)
+        
+        try:
+            from core.parametres_utilisateur import lire_parametres
+            params = lire_parametres()
+            profil_params = params.get("profil", {})
+            prenom = profil_params.get("prenom", "").strip()
+            nom = profil_params.get("nom", "").strip()
+            service = profil_params.get("service", "").strip()
+            if prenom or nom or service:
+                auteur = f"{prenom} {nom} - OFB - {service}".strip(" -")
+            else:
+                auteur = "Aguirre MAURIN - OFB - Service départemental de la Côte d'Or"
+        except Exception:
+            auteur = "Aguirre MAURIN - OFB - Service départemental de la Côte d'Or"
+            
+        texte_sources = f"Sources : {liste_sources}<br>Auteur : {auteur} &mdash; Date de r&eacute;alisation : [% format_date(now(), 'dd/MM/yyyy') %]"
+        
+        taille_police = style_cfg.get("taille_police", 9.5)
+        couleur_texte = style_cfg.get("couleur_texte", "white")
+        famille_police = style_cfg.get("famille_police", "sans-serif")
+        
+        try:
+            import qgis.core as qgc
+            if isinstance(sources_item, qgc.QgsLayoutItemLabel):
+                sources_item.setMode(1)
+                html_text = f"<div style='color: {couleur_texte}; font-family: {famille_police}; font-size: {taille_police}pt;'>{texte_sources}</div>"
+                sources_item.setText(html_text)
+            elif isinstance(sources_item, qgc.QgsLayoutItemHtml):
+                sources_item.setContentMode(1)
+                html_text = f"<div style='color: {couleur_texte}; font-family: {famille_police}; font-size: {taille_police}pt;'>{texte_sources}</div>"
+                sources_item.setHtml(html_text)
+                sources_item.loadHtml()
+            else:
+                # Fallback générique
+                if hasattr(sources_item, "setText"):
+                    sources_item.setText(texte_sources.replace("<br>", "\n").replace("&mdash;", "—").replace("&eacute;", "é"))
+        except Exception as e:
+            logger.warning(f"Erreur MAJ item sources: {e}")
+            
+        try:
+            sources_item.update()
+        except:
+            pass
+    else:
+        logger.warning("==> ITEM SOURCES INTROUVABLE DANS LE LAYOUT !")
 
     _apply_legend_labels(layout, prof, legend_labels_map=legend_labels_map)
     # Bandeau logos République française + OFB en haut de la carte
@@ -1985,6 +2081,21 @@ def export_layout(
 
     settings = QgsLayoutExporter.ImageExportSettings()
     settings.dpi = dpi
+    
+    # Force un fond blanc pour le rendu (évite les damiers/transparence du PNG)
+    from qgis.core import QgsLayoutRenderContext
+    # S'assurer que le flag antialiasing est présent mais PAS de flag transparent
+    settings.flags = QgsLayoutRenderContext.FlagAntialiasing
+    
+    try:
+        from qgis.PyQt.QtGui import QColor
+        import qgis.core as qgc
+        for item in layout.items():
+            if isinstance(item, qgc.QgsLayoutItemMap) or isinstance(item, qgc.QgsLayoutItemPage):
+                item.setBackgroundEnabled(True)
+                item.setBackgroundColor(QColor(255, 255, 255, 255))
+    except Exception:
+        pass
 
     ext = fmt.lower()
     if ext in ("jpg", "jpeg"):

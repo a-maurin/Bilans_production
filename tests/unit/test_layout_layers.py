@@ -54,8 +54,8 @@ def test_is_basemap():
 
 
 def test_filter_operational_excludes_basemaps():
-    names = ["ESRI Topo", "point_ctrl_20260505_wgs84", "pochoir_sd21"]
-    assert filter_operational_layer_names(names) == ["point_ctrl_20260505_wgs84", "pochoir_sd21"]
+    names = ["ESRI Topo", "point_ctrl_20260505_wgs84", "emprise_dep"]
+    assert filter_operational_layer_names(names) == ["point_ctrl_20260505_wgs84", "emprise_dep"]
 
 
 def test_infer_filter_type_agrainage():
@@ -102,7 +102,7 @@ def test_build_layer_configs_from_discovered_names():
         },
     )
     configs = build_layer_configs_from_names(
-        ["point_ctrl_20260505_wgs84", "pochoir_sd21", "ESRI Topo"],
+        ["point_ctrl_20260505_wgs84", "emprise_dep", "ESRI Topo"],
         prof,
         prof.layers,
     )

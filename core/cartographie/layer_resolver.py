@@ -60,7 +60,7 @@ LAYER_ROLE_SPECS: tuple[LayerRoleSpec, ...] = (
     ),
     LayerRoleSpec(
         role="pochoir",
-        patterns=("pochoir_sd*", "pochoir_*", "pochoir"),
+        patterns=("pochoir_sd*", "pochoir_*", "pochoir", "emprise_dep*"),
         prefer_latest_dated=False,
     ),
     LayerRoleSpec(
@@ -171,7 +171,7 @@ def infer_layer_role(layer_key: str, layer_name_hint: str = "") -> Optional[Laye
         return "point_controles"
     if "localisation_infrac" in hints or "faits" in hints:
         return "pej"
-    if "pochoir" in hints:
+    if "pochoir" in hints or "emprise_dep" in hints:
         return "pochoir"
     if "interdiction" in hints and "agrainage" in hints:
         return "zone_interdiction_agrainage"
@@ -207,7 +207,7 @@ def resolve_layer_names(
     role = layer_role or infer_layer_role(layer_key, configured_name)
     if role == "pochoir" and dept_code:
         # Si un pochoir spécifique est configuré (ex: pochoir_aoa) et existe, on ne force pas le département
-        is_generic = not configured_name or configured_name == "pochoir_departement" or configured_name.startswith("pochoir_sd")
+        is_generic = not configured_name or configured_name in ("pochoir_departement", "emprise_dep") or configured_name.startswith("pochoir_sd")
         if not is_generic:
             if configured_name in names:
                 return [(configured_name, "exact")]

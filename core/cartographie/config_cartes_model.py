@@ -130,6 +130,7 @@ class ProfileConfig:
     pochoir: str = "departement"
     emprise: str = "departement"
     couches_vecteurs_extra: List[str] = field(default_factory=list)
+    sources: Dict[str, bool] = field(default_factory=dict)
 
     # Identifiants des éléments texte dans le layout QGIS
     layout_title_item_id: str = "titre_principal"

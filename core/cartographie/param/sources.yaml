@@ -1,0 +1,15 @@
+# Configuration des sources dynamiques selon les couches affichées
+sources_mapping:
+  "PNForet": "MNHN \\ INPN"
+  "Coeur": "MNHN \\ INPN"
+  "AOA": "MNHN \\ INPN"
+  "Natura": "MNHN \\ INPN"
+  "eau": "SANDRE \\ BDCarthage"
+  "hydro": "SANDRE \\ BDCarthage"
+  "bassin": "SANDRE \\ BDCarthage"
+
+# Configuration du style graphique du bandeau de sources
+style:
+  taille_police: 9.5  # Taille de la police en pt (ex: 9, 10, 11)
+  couleur_texte: "white"  # Couleur CSS ou hex (ex: white, #FFFFFF)
+  famille_police: "Marianne"

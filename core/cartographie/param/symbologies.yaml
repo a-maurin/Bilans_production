@@ -101,8 +101,16 @@ points_global_domaines:
   filter_type: point_ctrl_global
   renderer_type: categorized
   field: coalesce("domaine", 'Hors domaine')
-  # Palette multi-couleurs distinctives, assignées cycliquement par domaine rencontré
-  palette: "#003A76,#E74C3C,#F1C40F,#27AE60,#8E44AD,#E67E22,#16A085,#2C3E50,#C0392B,#1ABC9C"
+  # Bleu pour l'eau, Vert pour espèces/espaces, Gris pour transverses
+  categories:
+    "Gestion qualitative de la ressource en eau": "#3498DB"
+    "Gestion quantitative de l'eau": "#2980B9"
+    "Préservation des milieux aquatiques": "#154360"
+    "Assurer la protection des espèces animales et végétales": "#2ECC71"
+    "Espaces protégés et protection des milieux et du cadre de vie": "#16A085"
+    "Sujets transversaux": "#95A5A6"
+    "Sécurité publique et Prévention des inondations": "#34495E"
+    "Hors domaine": "#7F8C8D"
   symbol_size_mm: 2.4
   symbol_shape: circle
   visible: true

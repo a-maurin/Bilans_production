@@ -97,3 +97,38 @@ def test_global_pdf_section_headings_order(tmp_path: Path, monkeypatch) -> None:
             "4. Procédures",
         ],
     )
+
+
+def test_region_pdf_section_headings_order(tmp_path: Path, monkeypatch) -> None:
+    import core.engine.generation_pdf_synthese as synthese_pdf
+
+    out_dir = tmp_path / "out_region"
+    _seed_global_out_dir(out_dir)
+
+    patch_pdf_charts(monkeypatch, synthese_pdf)
+
+    synthese_pdf.generate_synthese_pdf_report(
+        out_dir,
+        profile={"id": "global", "presentation_scope": "global"},
+        date_deb=pd.Timestamp("2025-01-01"),
+        date_fin=pd.Timestamp("2025-12-31"),
+        echelle="region",
+        code="27",
+        ventilation_mode="globale",
+        diffusion="interne",
+        cartes=False,
+        output_filename="bilan_global_region_test.pdf",
+    )
+
+    pdf_path = apply_diffusion_pdf_suffix(out_dir / "bilan_global_region_test.pdf", "interne")
+    assert pdf_path.is_file(), f"PDF absent : {list(out_dir.glob('*.pdf'))}"
+
+    headings = extract_pdf_section_headings(pdf_path)
+    assert_section_headings_order(
+        headings,
+        [
+            "4. Procédures",
+            "5. Détail par département",
+            "6. Annexes",
+        ],
+    )

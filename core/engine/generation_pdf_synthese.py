@@ -441,6 +441,35 @@ def _generate_synthese_pdf(
     ]
     from core.common.pdf_presentation_config import resolve_sections_for_toc
     sections_toc = resolve_sections_for_toc(presentation_cfg, section_defs)
+    section_title = {sid: title for sid, title in sections_toc}
+
+    if cfg.echelle == "region":
+        import re
+        insert_idx = len(sections_toc)
+        for i, (sid, _) in enumerate(sections_toc):
+            if sid in ("sec5map", "sec5", "sec6"):
+                insert_idx = i
+                break
+        
+        num_chap = 5
+        if insert_idx > 0:
+            prev_title = sections_toc[insert_idx - 1][1]
+            m_prev = re.match(r"^(\d+)\.", prev_title)
+            if m_prev:
+                num_chap = int(m_prev.group(1)) + 1
+
+        secregion_title = f"{num_chap}. Détail par département"
+        sections_toc.insert(insert_idx, ("secregion", secregion_title))
+        section_title["secregion"] = secregion_title
+
+        for idx in range(insert_idx + 1, len(sections_toc)):
+            sid, title = sections_toc[idx]
+            m_next = re.match(r"^(\d+)\.(.*)$", title)
+            if m_next:
+                num = int(m_next.group(1))
+                new_title = f"{num + 1}.{m_next.group(2)}"
+                sections_toc[idx] = (sid, new_title)
+                section_title[sid] = new_title
     cover_title_lines, header_title_lines = build_title_lines_from_cfg(
         presentation_cfg,
         profile_label="",
@@ -541,7 +570,7 @@ def _generate_synthese_pdf(
         ref_pie_legend_fs=ref_pie_legend_fs,
         split_by_row=bool(tables_layout.get("split_by_row")),
         tables_layout=tables_layout,
-        section_title={},
+        section_title=section_title,
         nb_localisations=nb_localisations,
         nb_ops=nb_ops,
         nb_effectifs=nb_effectifs,
@@ -576,15 +605,6 @@ def _generate_synthese_pdf(
     
     from core.engine.sections_region import render_sec_region_detail
     registry.register("secregion", render_sec_region_detail)
-    if cfg.echelle == "region":
-        # Inject just before sec5map (cartographie) or sec6
-        insert_idx = len(sections_toc)
-        for i, (sid, _) in enumerate(sections_toc):
-            if sid in ("sec5map", "sec6"):
-                insert_idx = i
-                break
-        sections_toc.insert(insert_idx, ("secregion", "Détail par département"))
-        ctx.section_title["secregion"] = "Détail par département"
 
     # Pilotage dynamique : on itère sur les sections résolues depuis le YAML
     for sec_id, _ in sections_toc:

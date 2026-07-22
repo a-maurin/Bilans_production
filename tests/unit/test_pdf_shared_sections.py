@@ -78,6 +78,26 @@ def test_build_sec6_methodology_html_skips_empty_when() -> None:
     assert "Phrase toujours" in html
 
 
+def test_build_sec6_methodology_perimetre_formatting() -> None:
+    ctx = build_sec6_methodology_context(
+        period_str="du 01/01/2025 au 31/12/2025",
+        perimetre_name="Côte-d'Or",
+        perimetre_code="21",
+    )
+    assert ctx["perimetre_name"] == "Côte-d'Or"
+    assert ctx["perimetre_code"] == "21"
+
+    html = build_sec6_methodology_html(
+        effective_cfg={},
+        context=ctx,
+    )
+    assert "<b>Périmètre :</b> Côte-d'Or (21)." in html
+    assert "{perimetre_name}" not in html
+    assert "{perimetre_code}" not in html
+    assert "{dept_name}" not in html
+    assert "{dept_code}" not in html
+
+
 def test_build_filtered_glossary_rows_filters_expected_ids() -> None:
     gloss_cfg = {
         "header": {"abbr_label": "Abréviation", "definition_label": "Signification"},

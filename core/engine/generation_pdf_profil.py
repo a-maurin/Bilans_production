@@ -389,6 +389,34 @@ def _generate_pdf_content(
     sections = resolve_sections_for_toc(presentation_cfg, resolved_section_defs)
     section_title = {sid: title for sid, title in resolved_section_defs}
 
+    if echelle == "region":
+        import re
+        insert_idx = len(sections)
+        for i, (sid, _) in enumerate(sections):
+            if sid in ("sec5map", "sec5", "sec6"):
+                insert_idx = i
+                break
+        
+        num_chap = 5
+        if insert_idx > 0:
+            prev_title = sections[insert_idx - 1][1]
+            m_prev = re.match(r"^(\d+)\.", prev_title)
+            if m_prev:
+                num_chap = int(m_prev.group(1)) + 1
+
+        secregion_title = f"{num_chap}. Détail par département"
+        sections.insert(insert_idx, ("secregion", secregion_title))
+        section_title["secregion"] = secregion_title
+
+        for idx in range(insert_idx + 1, len(sections)):
+            sid, title = sections[idx]
+            m_next = re.match(r"^(\d+)\.(.*)$", title)
+            if m_next:
+                num = int(m_next.group(1))
+                new_title = f"{num + 1}.{m_next.group(2)}"
+                sections[idx] = (sid, new_title)
+                section_title[sid] = new_title
+
     tables_layout = resolve_tables_layout(presentation_cfg)
     charte_cfg = resolve_charte_config(presentation_cfg)
     title_page_cfg = resolve_title_page_config(_ROOT, scope=scope, profile_id=profile_id)
@@ -510,35 +538,6 @@ def _generate_pdf_content(
     
     from core.engine.sections_region import render_sec_region_detail
     registry.register("secregion", render_sec_region_detail)
-    if echelle == "region":
-        # Inject just before sec5map or sec6
-        insert_idx = len(sections)
-        for i, (sid, _) in enumerate(sections):
-            if sid in ("sec5map", "sec6"):
-                insert_idx = i
-                break
-        
-        # Déterminer le numéro du chapitre à insérer
-        num_chap = 5
-        if insert_idx > 0:
-            prev_title = sections[insert_idx - 1][1]
-            import re
-            m_prev = re.match(r"^(\d+)\.", prev_title)
-            if m_prev:
-                num_chap = int(m_prev.group(1)) + 1
-
-        secregion_title = f"{num_chap}. Détail par département"
-        sections.insert(insert_idx, ("secregion", secregion_title))
-        section_title["secregion"] = secregion_title
-
-        # Renuméroter les chapitres suivants
-        for idx in range(insert_idx + 1, len(sections)):
-            sid, title = sections[idx]
-            m_next = re.match(r"^(\d+)\.(.*)$", title)
-            if m_next:
-                num = int(m_next.group(1))
-                new_title = f"{num + 1}.{m_next.group(2)}"
-                sections[idx] = (sid, new_title)
 
 
     # Pilotage dynamique : on itère sur les sections résolues depuis le YAML

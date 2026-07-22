@@ -196,6 +196,8 @@ def build_sec6_methodology_context(
         "period_str": period_str,
         "dept_name": perimetre_name,
         "dept_code": str(perimetre_code),
+        "perimetre_name": perimetre_name,
+        "perimetre_code": str(perimetre_code),
         "profile_label": str(profile_label or "").strip(),
         "profile_id": str(profile_id or "").strip(),
         "sources_phrase": _sources_phrase_for_methodology(

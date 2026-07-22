@@ -8,7 +8,7 @@ Conçu pour allier la puissance d'analyse spatiale de QGIS à la flexibilité d'
 
 ---
 
-## ✨ Fonctionnalités Principales
+## Fonctionnalités Principales
 
 Le programme s'articule autour de deux modules majeurs :
 
@@ -28,7 +28,7 @@ Un puissant moteur de rendu pour automatiser vos rapports d'activité :
 
 ---
 
-## 🚀 Avantages de l'intégration QGIS
+## Avantages de l'intégration QGIS
 
 *   **Portabilité totale** : Aucun environnement Python complexe à configurer. L'outil exploite directement l'interpréteur et les bibliothèques embarqués de QGIS.
 *   **Déploiement simplifié** : Installation rapide depuis le gestionnaire d'extensions QGIS.

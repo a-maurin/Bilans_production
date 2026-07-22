@@ -222,6 +222,8 @@ def resolve_layer_names(
         pochoir_candidates = candidates_for_pochoir(names, dept_code)
         if pochoir_candidates:
             return [(pochoir_candidates[0], "dept")]
+        if configured_name and configured_name in names:
+            return [(configured_name, "dept")]
         return []
 
     if configured_name and configured_name in names:

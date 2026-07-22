@@ -223,7 +223,11 @@ def resolve_layer_names(
         if pochoir_candidates:
             return [(pochoir_candidates[0], "dept")]
         if configured_name and configured_name in names:
-            return [(configured_name, "dept")]
+            if configured_name in ("pochoir_departement", "emprise_dep"):
+                if normalize_dept_code(dept_code) == "21":
+                    return [(configured_name, "dept")]
+            elif not configured_name.startswith("pochoir_sd"):
+                return [(configured_name, "dept")]
         return []
 
     if configured_name and configured_name in names:

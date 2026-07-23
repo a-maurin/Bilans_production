@@ -498,7 +498,7 @@ def test_feature_registry_allows_scope_rules() -> None:
     assert feature_registry_allows_scope("thematique", "thematique") is True
 
 
-def test_hoist_legacy_scope_titles_into_sections_titles(tmp_path: Path) -> None:
+def test_scope_titles_resolution(tmp_path: Path) -> None:
     _write_yaml(
         tmp_path,
         """
@@ -510,9 +510,9 @@ scopes:
   thematique:
     sections:
       order: [sec4, sec3]
-    titles:
-      sec4: "3. Usagers"
-      sec3: "4. Procédures"
+      titles:
+        sec4: "3. Usagers"
+        sec3: "4. Procédures"
 """.strip(),
     )
     resolved = resolve_pdf_presentation_config(

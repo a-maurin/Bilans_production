@@ -1103,8 +1103,7 @@ def load_pnf_commune_zone_maps(root: Path) -> tuple[dict[str, str], dict[str, st
     gdf = _load_pnf_127_communes_df(root)
     if gdf.empty:
         by_insee = _load_pnf_commune_zone_by_insee_from_csv(root)
-        by_nom = _load_pnf_commune_zone_by_nom_from_csv(root)
-        return by_insee, by_nom
+        return by_insee, {}
 
     insee_col = _pick_gdf_column(
         gdf,

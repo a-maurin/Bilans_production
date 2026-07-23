@@ -110,11 +110,11 @@ def test_resolve_pochoir_no_wrong_dept_fallback():
     assert source == "missing"
 
 
-def test_legacy_map_without_marker_valid_for_dept_21_only(tmp_path, monkeypatch):
+def test_map_without_marker_invalid_for_all(tmp_path, monkeypatch):
     monkeypatch.setattr("core.chemins_projet.get_cartes_dir", lambda: tmp_path)
     png = tmp_path / "carte_global.png"
     png.write_bytes(b"x")
-    assert is_map_valid_for_dept(png, "21")
+    assert not is_map_valid_for_dept(png, "21")
     assert not is_map_valid_for_dept(png, "25")
 
 

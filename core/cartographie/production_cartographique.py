@@ -67,16 +67,9 @@ _DEFAULT_QGIS_PROJECT = get_qgis_project_path()
 
 
 def _load_ref_themes_ctrl_safe(root: Path) -> list:
-    """Charge ref_themes_ctrl (bilans ou contexte QGIS legacy)."""
+    """Charge ref_themes_ctrl depuis core.common.chargeurs_donnees."""
     try:
         from core.common.chargeurs_donnees import load_ref_themes_ctrl
-
-        return load_ref_themes_ctrl(root)
-    except Exception as exc:
-        logger.debug("Chargeur bilans ref_themes_ctrl : %s", exc)
-    try:
-        from common.loaders import load_ref_themes_ctrl
-
         return load_ref_themes_ctrl(root)
     except Exception as exc:
         logger.warning("ref_themes_ctrl indisponible : %s", exc)

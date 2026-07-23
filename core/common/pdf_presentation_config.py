@@ -345,25 +345,6 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return out
 
 
-def _hoist_legacy_section_titles(node: dict[str, Any]) -> None:
-    """
-    Compatibilité : ``titles`` au même niveau que ``sections`` (ancien YAML)
-    → fusion dans ``sections.titles``.
-    """
-    legacy = node.get("titles")
-    if not isinstance(legacy, dict):
-        return
-    sections = node.get("sections")
-    if not isinstance(sections, dict):
-        return
-    nested = sections.get("titles")
-    if isinstance(nested, dict):
-        sections["titles"] = _deep_merge(legacy, nested)
-    else:
-        sections["titles"] = deepcopy(legacy)
-    del node["titles"]
-
-
 def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     """Normalisation minimale des clés attendues."""
     out = deepcopy(data)
@@ -375,12 +356,6 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("scopes", {})
     out.setdefault("profiles", {})
     out.setdefault("feature_registry", {})
-    for scope_cfg in out.get("scopes", {}).values():
-        if isinstance(scope_cfg, dict):
-            _hoist_legacy_section_titles(scope_cfg)
-    for profile_cfg in out.get("profiles", {}).values():
-        if isinstance(profile_cfg, dict):
-            _hoist_legacy_section_titles(profile_cfg)
     return out
 
 

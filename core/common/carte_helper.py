@@ -409,7 +409,7 @@ def generate_maps(
         m = resolve_map_png_path(pid, bilan_profiles=bilan_profiles, target_dir=target_dir)
         if m and is_map_valid_for_dept(m, carto_dept):
             generated.append(m)
-            marker = read_map_dept_marker(m) or "(legacy 21)"
+            marker = read_map_dept_marker(m) or "n/a"
             logger.info(
                 "Carte OK pour le département %s : %s (marqueur=%s, profil=%s)",
                 carto_dept,

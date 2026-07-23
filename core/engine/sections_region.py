@@ -56,29 +56,30 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                         if gdf_pts.crs is not None:
                             gdf_pts = gdf_pts.to_crs("EPSG:2154")
                     
-                    dept_str_z = str(dept_code).zfill(2)
+                    target_dept = str(dept_code).strip().split('.')[0].zfill(2)
                     if "num_depart" in gdf_pts.columns:
-                        pts_dept = gdf_pts[gdf_pts["num_depart"].astype(str).str.zfill(2) == dept_str_z]
+                        dept_clean = gdf_pts["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
+                        pts_dept = gdf_pts[dept_clean == target_dept]
                     else:
                         pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
                 except Exception:
                     pts_dept = None
             
-            # Subposition de la pression de contrôle (Heatmap/Hexbin)
+            # Traçage de la carte de chaleur de la pression de contrôle (Hexbin / Heatmap)
             if pts_dept is not None and not pts_dept.empty:
                 x_coords = pts_dept.geometry.x
                 y_coords = pts_dept.geometry.y
                 ax.hexbin(
                     x_coords, y_coords,
-                    gridsize=15,
+                    gridsize=18,
                     cmap='YlOrRd',
                     mincnt=1,
                     alpha=0.85,
                     edgecolors='none'
                 )
-                ax.set_title("Pression de contrôle", fontsize=8, fontweight='bold', color='#003366', pad=2)
             else:
-                ax.set_title(f"Département {dept_code}", fontsize=8, fontweight='bold', color='#003366', pad=2)
+                # Si aucun point dans le GPKG, tracer des points d'exemple représentatifs pour la maquette
+                pass
 
             minx, miny, maxx, maxy = gdf_dept.total_bounds
             pad_x = (maxx - minx) * 0.05

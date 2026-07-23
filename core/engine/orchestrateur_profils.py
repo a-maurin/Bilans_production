@@ -188,72 +188,14 @@ from core.engine.registre_sections_pdf import SectionRegistry
 
 _log = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════
-# 1. Chargement du profil YAML
+# 1. Chargement du profil YAML (délégué à core.engine.orchestration)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def load_profile_config(root: Path, profil_id: str) -> dict:
-    """Charge et normalise un profil depuis config/profils_bilan/<id>.yaml."""
-    try:
-        import yaml
-    except ImportError:
-        yaml = None
-
-    profiles_dir = root / "config" / "profils_bilan"
-    defaults_path = profiles_dir / "_defaults.yaml"
-    path = profiles_dir / f"{profil_id}.yaml"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Profil introuvable: {profil_id} (attendu: {path})"
-        )
-
-    if yaml is not None:
-        # Enregistrement d'un constructeur personnalisé pour charger dynamiquement des inclusions
-        def yaml_include_constructor(loader, node):
-            value = loader.construct_scalar(node)
-            include_path = Path(loader.stream.name).parent / value
-            if not include_path.exists():
-                # Repli relatif par rapport au root du projet
-                include_path = root / value
-            with open(include_path, "r", encoding="utf-8") as f_inc:
-                return yaml.safe_load(f_inc)
-
-        # Ajout du constructeur à SafeLoader
-        yaml.add_constructor("!include", yaml_include_constructor, Loader=yaml.SafeLoader)
-
-        defaults_data: dict[str, Any] = {}
-        if defaults_path.exists():
-            with open(defaults_path, "r", encoding="utf-8") as f:
-                loaded_defaults = yaml.safe_load(f) or {}
-                if isinstance(loaded_defaults, dict):
-                    defaults_data = loaded_defaults
-        with open(path, "r", encoding="utf-8") as f:
-            loaded_profile = yaml.safe_load(f) or {}
-        data = _deep_merge_dicts(defaults_data, loaded_profile if isinstance(loaded_profile, dict) else {})
-    else:
-        # Sans PyYAML, l'ancien parseur minimal écrase des clés (ex. plusieurs « label »
-        # dans le fichier) et ignore les blocs imbriqués (restrict_geo, filter…).
-        raise ImportError(
-            "PyYAML est requis pour lire les profils bilan (config/profils_bilan/*.yaml). "
-            "Installez les dépendances du projet, par exemple : "
-            "pip install -r tools/requirements.txt"
-        ) from None
-
-    return _normalize_profile(data, profil_id)
-
-
-def _deep_merge_dicts(base: dict, override: dict) -> dict:
-    """Fusion récursive de dictionnaires (override prioritaire)."""
-    merged: dict[str, Any] = dict(base)
-    for key, value in override.items():
-        if (
-            key in merged
-            and isinstance(merged[key], dict)
-            and isinstance(value, dict)
-        ):
-            merged[key] = _deep_merge_dicts(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+from core.engine.orchestration.loader import (
+    load_profile_config,
+    _deep_merge_dicts,
+    _normalize_profile,
+)
 
 
 def _normalize_profile(data: dict, profil_id: str) -> dict:
@@ -5141,76 +5083,9 @@ def _generate_pdf(
             sec3_registry.register("sec33", lambda _ctx: _render_sec33())
             sec3_registry.render_many(sec3_order, {})
 
-        # Profils à zones hors agrainage (PNF, etc.) : blocs zone / synthèse hors registry YAML.
+        # Profils à zones hors agrainage (PNF, etc.) : bloc zone unique.
         if profil_id != "agrainage":
             _render_zone_tub_block()
-            zone_ctrl_legacy = curr_results.get("zone_ctrl")
-            if zone_ctrl_legacy is not None and options.get("tub", False):
-                builder.add_section("sec_ctrl_zone", "Analyse par zone", level=2)
-                tbl = [
-                    [
-                        "Zone",
-                        "Nb total",
-                        "Nb conforme",
-                        "Contrôles non-conformes",
-                        "Taux de non-conformité",
-                    ]
-                ]
-                for _, row in zone_ctrl_legacy.iterrows():
-                    t = format_pct_int_from_rate(row.get("taux_non_conformite"))
-                    tbl.append(
-                        [
-                            zone_table_display_label(str(row["zone"])),
-                            str(int(row["nb_total"])),
-                            str(int(row["nb_conforme"])),
-                            str(int(row["nb_non_conforme"])),
-                            t,
-                        ]
-                    )
-                builder.add_table(
-                    tbl,
-                    caption=pdf_metric_caption(
-                        "Contrôles par zone (Département hors zone TUB/PNF, TUB, PNF)", "ctrl"
-                    ),
-                    col_widths=[
-                        avail_w * 0.25,
-                        avail_w * 0.18,
-                        avail_w * 0.19,
-                        avail_w * 0.19,
-                        avail_w * 0.19,
-                    ],
-                    col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"],
-                )
-            synth_legacy = curr_results.get("synthese_zone")
-            if synth_legacy is not None:
-                builder.add_section("sec_ctrl_synthese", "Synthèse croisée par zone", level=2)
-                col_labels = []
-                for c in synth_legacy.columns:
-                    if c == "ctrl_total":
-                        col_labels.append(PDF_LABEL_CTRL_LOCATIONS)
-                    elif c == "ctrl_infraction":
-                        col_labels.append("Contrôles non-conformes")
-                    elif c == "pve_nb":
-                        col_labels.append("Nombre d'infractions relevées par PVe")
-                    elif c == "pej_nb":
-                        col_labels.append(PDF_LABEL_PEJ_COUNT)
-                    else:
-                        col_labels.append(str(c))
-                tbl = [col_labels]
-                for _, row in synth_legacy.iterrows():
-                    tbl.append(
-                        [
-                            str(int(v)) if isinstance(v, (int, float)) and pd.notna(v) else str(v)
-                            for v in row.values
-                        ]
-                    )
-                builder.add_table(
-                    tbl,
-                    caption=(
-                        "Synthèse croisée par zone : contrôles non-conformes, "
-                        "PEJ et infractions relevées par PVe."
-                    ),
-                )
 
         # ── ACTIVITÉ PAR TYPES D'USAGERS (hors profil dédié « analyses.type_usager ») ──
         def _render_sec4() -> None:

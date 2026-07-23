@@ -1327,7 +1327,7 @@ def _coalesced_insee_for_pnf_overlay(df: pd.DataFrame) -> pd.Series:
 
 
 def _load_pnf_commune_zone_by_insee_from_csv(root: Path) -> dict[str, str]:
-    """Repli tabulaire : communes_PNF.csv (legacy)."""
+    """Source PNF basée sur le référentiel officiel."""
     path = ref_programme(root) / "tables_reference" / "communes_PNF.csv"
     if not path.exists():
         return {}
@@ -1347,30 +1347,6 @@ def _load_pnf_commune_zone_by_insee_from_csv(root: Path) -> dict[str, str]:
         in_perimetre = str(r.get("perimetre_parc", "")).strip().lower() == "oui"
         if in_perimetre:
             out[code] = "Aire_adhesion_PNF"
-    return out
-
-
-def _load_pnf_commune_zone_by_nom_from_csv(root: Path) -> dict[str, str]:
-    """Repli tabulaire : communes_PNF.csv indexé par nom de commune (minuscules)."""
-    path = ref_programme(root) / "tables_reference" / "communes_PNF.csv"
-    if not path.exists():
-        return {}
-    df = pd.read_csv(path, dtype=str, index_col=False).fillna("")
-    if "NOM" not in df.columns:
-        return {}
-    out: dict[str, str] = {}
-    for _, r in df.iterrows():
-        nom = str(r.get("NOM", "")).strip().lower()
-        if not nom:
-            continue
-        coeur_val = r.get("Coeur", r.get("coeur", ""))
-        zone = _pnf_zone_from_coeur_value(coeur_val)
-        if zone is not None:
-            out[nom] = zone
-            continue
-        in_perimetre = str(r.get("perimetre_parc", "")).strip().lower() == "oui"
-        if in_perimetre:
-            out[nom] = "Aire_adhesion_PNF"
     return out
 
 

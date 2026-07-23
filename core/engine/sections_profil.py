@@ -33,7 +33,7 @@ from core.common.pdf_table_sort import (
     sort_dataframe_desc as _sort_desc,
 )
 from core.common.percent_format import format_pct_int_from_rate, tab_counts_to_pct_strings, int_percents_largest_remainder
-from core.engine.pdf_utils import nb_non_conformes_brut, truncate_with_dash as _truncate_with_dash, pct_table_cell as _pct_table_cell
+from core.engine.engine_pdf_helpers import nb_non_conformes_brut, truncate_with_dash as _truncate_with_dash, pct_table_cell as _pct_table_cell
 from core.common.rendus_graphiques import chart_bar_stacked, chart_line_evolution, chart_pie, chart_bar_horizontal_stacked, chart_stackplot_resultats_domaine
 from core.common.utilitaires_metier import _load_csv_opt
 from core.common.dataframe_rollup import rollup_small_categories

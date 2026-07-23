@@ -378,30 +378,12 @@ def warn_if_unknown_carto_dept(dept_code: str) -> bool:
 def is_map_valid_for_dept(
     map_png: Path,
     dept_code: str,
-    *,
-    allow_legacy_sd21: bool = True,
 ) -> bool:
-    """
-    True si la carte PNG correspond au département demandé.
-
-    Sans fichier ``.XX.dept`` : acceptation rétroactive uniquement pour le 21
-    (cartes historiques Côte-d'Or générées avant le marqueur département).
-    """
+    """True si la carte PNG correspond au département demandé."""
     if not map_png.exists():
         return False
-
-    from core.chemins_projet import get_cartes_dir
-    try:
-        abs_map = map_png.resolve()
-        abs_cartes_dir = get_cartes_dir().resolve()
-        if not abs_map.is_relative_to(abs_cartes_dir):
-            return True
-        if not abs_map.name.startswith("carte_"):
-            return True
-    except Exception:
-        pass
     target = normalize_dept_code(dept_code)
     marker_dept = read_map_dept_marker(map_png)
     if marker_dept is not None:
         return marker_dept == target
-    return bool(allow_legacy_sd21 and target == "21")
+    return False

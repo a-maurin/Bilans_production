@@ -33,7 +33,7 @@ from core.common.pdf_table_sort import (
     sort_dataframe_desc as _sort_desc,
 )
 from core.common.percent_format import format_pct_int_from_rate
-from core.engine.pdf_utils import (
+from core.engine.engine_pdf_helpers import (
     nb_non_conformes_brut,
     truncate_with_dash,
     pct_table_cell as _pct_table_cell,

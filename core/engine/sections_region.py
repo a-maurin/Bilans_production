@@ -19,21 +19,68 @@ from core.common.utilitaires_metier import get_dept_name
 from core.common.pdf_report_builder import PDFReportBuilder
 from core.common.rendus_graphiques import chart_interdept_stacked_bar, chart_pie
 
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None
 
-def _generate_dept_vignette(dept_code: str, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
-    """Génère une mini-vignette cartographique épurée du département avec pochoir institutionnel."""
+
+def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
+    """
+    Génère la vignette cartographique épurée du département avec conservation STRICTE du ratio d'aspect
+    (pas de déformation) et carte de chaleur de la pression de contrôle.
+    """
     out_path = tmp_dir / img_name
-    fig, ax = plt.subplots(figsize=(2.6 * figure_scale, 2.0 * figure_scale), dpi=150)
+    fig, ax = plt.subplots(figsize=(2.8 * figure_scale, 2.0 * figure_scale), dpi=150)
     fig.patch.set_facecolor('white')
-    ax.set_facecolor('#f8fafc')
+    ax.set_facecolor('#ffffff')
+    
+    # CRITIQUE : Conserver l'échelle géographique 1:1 pour ne jamais déformer/écraser le département
+    ax.set_aspect('equal')
     
     try:
         from core.cartographie.pochoir_helper import load_department_gdf
         from core.chemins_projet import PROJECT_ROOT
-        gdf = load_department_gdf(dept_code, project_root=PROJECT_ROOT)
-        if gdf is not None and not gdf.empty:
-            gdf.plot(ax=ax, color='#e6f0fa', edgecolor='#003366', linewidth=1.2)
-            minx, miny, maxx, maxy = gdf.total_bounds
+        gdf_dept = load_department_gdf(dept_code, project_root=PROJECT_ROOT)
+        
+        if gdf_dept is not None and not gdf_dept.empty:
+            gdf_dept.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.2, aspect='equal')
+            
+            # Recherche de la couche géolocalisée des points de contrôles (GPKG)
+            gpkg_files = list(out_dir.rglob("controles_*.gpkg"))
+            pts_dept = None
+            if gpd is not None and gpkg_files:
+                try:
+                    gdf_pts = gpd.read_file(gpkg_files[0])
+                    if gdf_pts.crs is None or gdf_pts.crs.to_epsg() != 2154:
+                        if gdf_pts.crs is not None:
+                            gdf_pts = gdf_pts.to_crs("EPSG:2154")
+                    
+                    dept_str_z = str(dept_code).zfill(2)
+                    if "num_depart" in gdf_pts.columns:
+                        pts_dept = gdf_pts[gdf_pts["num_depart"].astype(str).str.zfill(2) == dept_str_z]
+                    else:
+                        pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
+                except Exception:
+                    pts_dept = None
+            
+            # Subposition de la pression de contrôle (Heatmap/Hexbin)
+            if pts_dept is not None and not pts_dept.empty:
+                x_coords = pts_dept.geometry.x
+                y_coords = pts_dept.geometry.y
+                ax.hexbin(
+                    x_coords, y_coords,
+                    gridsize=15,
+                    cmap='YlOrRd',
+                    mincnt=1,
+                    alpha=0.85,
+                    edgecolors='none'
+                )
+                ax.set_title("Pression de contrôle", fontsize=8, fontweight='bold', color='#003366', pad=2)
+            else:
+                ax.set_title(f"Département {dept_code}", fontsize=8, fontweight='bold', color='#003366', pad=2)
+
+            minx, miny, maxx, maxy = gdf_dept.total_bounds
             pad_x = (maxx - minx) * 0.05
             pad_y = (maxy - miny) * 0.05
             ax.set_xlim(minx - pad_x, maxx + pad_x)
@@ -44,7 +91,7 @@ def _generate_dept_vignette(dept_code: str, tmp_dir: Path, img_name: str, figure
         ax.text(0.5, 0.5, f"Département {dept_code}", ha='center', va='center', fontsize=9, color='#003366')
         
     ax.axis('off')
-    plt.tight_layout(pad=0.2)
+    plt.tight_layout(pad=0.1)
     fig.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig)
     return out_path
@@ -100,9 +147,6 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
 
 def render_sec_region_fiches(ctx: PdfContext) -> None:
     """Rendu de la Partie 2 : Fiches Départementales (1 Page A4 portrait stricte par département)."""
-    title = ctx.section_title.get("sec_region_fiches", "2. Fiches départementales")
-    ctx.builder.add_section("sec_region_fiches", title)
-
     csv_path = ctx.out_dir / "region_detail_par_dept.csv"
     if not csv_path.exists():
         ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
@@ -119,12 +163,18 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
     dept_dir = ctx.out_dir / "departements"
     dept_dir.mkdir(parents=True, exist_ok=True)
 
+    title_sec2 = ctx.section_title.get("sec_region_fiches", "2. Fiches départementales")
+
     for idx, d in enumerate(depts):
         dept_str = str(d)
         dept_name = get_dept_name(dept_str)
         df_dept = df[df["departement"] == dept_str]
 
+        # Titre du chapitre 2 placé en haut de la Page 5 pour éviter l'orphelin en bas de Page 4
         ctx.builder.add_page_break()
+        if idx == 0:
+            ctx.builder.add_section("sec_region_fiches", title_sec2, level=1)
+
         sec_id = f"sec_dept_{dept_str}"
         sec_label = f"Département {dept_str} - {dept_name}"
         ctx.builder.add_section(sec_id, sec_label, level=2, toc_level=1)
@@ -136,7 +186,6 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
         total_pve = int(df_dept["nb_pve"].sum()) if not df_dept.empty else 0
 
         if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
-            # Bandeau neutre 0 donnée
             ctx.builder.add_callout_box(
                 f"Aucun contrôle ou donnée répertorié pour le département {dept_str} - {dept_name} sur le périmètre sélectionné.",
                 title="Département sans activité ciblée"
@@ -151,7 +200,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
             ctx.builder.add_key_figures(dept_kfis)
             ctx.builder.add_spacer(4)
 
-            # 2. Double Visuel Côte-à-Côte 50/50 (Vignette Carto à gauche + Camembert à droite)
+            # 2. Double Visuel Côte-à-Côte 50/50 (Carte de chaleur carto non déformée à gauche + Camembert à droite)
             cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
             df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
             for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
@@ -161,8 +210,8 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
             pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
             
             try:
-                vignette_path = _generate_dept_vignette(dept_str, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
-                img_vignette = RLImage(str(vignette_path), width=ctx.avail_w * 0.45, height=ctx.avail_w * 0.30)
+                vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
+                img_vignette = RLImage(str(vignette_path), width=ctx.avail_w * 0.46, height=ctx.avail_w * 0.32)
             except Exception:
                 img_vignette = Paragraph("<i>Vignette cartographique</i>", ctx.builder.styles["Normal"])
 
@@ -176,7 +225,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                         img_name,
                         figure_scale=ctx.figure_scale
                     )
-                    img_pie = RLImage(str(pie_path), width=ctx.avail_w * 0.45, height=ctx.avail_w * 0.30)
+                    img_pie = RLImage(str(pie_path), width=ctx.avail_w * 0.46, height=ctx.avail_w * 0.32)
                 except Exception:
                     img_pie = Paragraph("<i>Graphique indisponible</i>", ctx.builder.styles["Normal"])
             else:
@@ -195,7 +244,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]))
-            ctx.builder.elements.append(double_visuel_tbl)
+            ctx.builder.story.append(double_visuel_tbl)
             ctx.builder.add_spacer(4)
 
             # 3. Micro-tableau condensé (Top 5 des domaines métiers + Autres domaines si > 5)
@@ -227,7 +276,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 keep_together=True
             )
 
-        # 4. Export du PDF autonome individuel 1-page par département
+        # 4. Export du PDF autonome individuel 1-page dans departements/Fiche_Dept_<Code>.pdf (Mise en page identique)
         try:
             dept_pdf_path = dept_dir / f"Fiche_Dept_{dept_str}.pdf"
             b_dept = PDFReportBuilder(
@@ -243,7 +292,12 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 )
             else:
                 b_dept.add_key_figures(dept_kfis)
-                b_dept.add_spacer(6)
+                b_dept.add_spacer(4)
+                
+                # Inclusion du double visuel identique dans la fiche autonome
+                b_dept.story.append(double_visuel_tbl)
+                b_dept.add_spacer(4)
+                
                 b_dept.add_table(
                     tbl_dept,
                     caption=f"Synthèse par domaine (Top 5) - {dept_name}",

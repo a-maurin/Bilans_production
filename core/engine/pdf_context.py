@@ -66,6 +66,9 @@ class PdfContext:
     # Titres des sections résolus
     section_title: dict[str, str]
     
+    # Option annexe régionale
+    annexe_detaillee: bool = False
+    
     # Chiffres clés / résumé
     nb_localisations: int = 0
     nb_ops: int = 0

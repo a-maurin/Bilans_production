@@ -66,6 +66,8 @@ def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
     if echelle_norm == "region":
         cfg = _load_regions_config()
         region_deps = cfg.get("REGION_DEPARTEMENTS", {})
+        if code_norm not in region_deps and f"r{code_norm}" in region_deps:
+            code_norm = f"r{code_norm}"
         return list(region_deps.get(code_norm, []))
     if echelle_norm == "bmi":
         filters = get_bmi_filters(code_norm)
@@ -81,6 +83,8 @@ def get_region_name(code: str) -> str:
     cfg = _load_regions_config()
     names = cfg.get("REGION_NAMES", {})
     code_norm = str(code).strip()
+    if code_norm not in names and f"r{code_norm}" in names:
+        code_norm = f"r{code_norm}"
     return str(names.get(code_norm, f"Région {code_norm}"))
 
 

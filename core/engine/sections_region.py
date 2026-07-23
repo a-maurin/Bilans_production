@@ -7,209 +7,325 @@
 # Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
 # sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
 # Voir la Licence Publique Générale GNU pour plus de détails.
-#
-# CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
-# intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
-# clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
-# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
-# de l'auteur original (Aguirre MAURIN).
 
-#
-import pandas as pd
 from pathlib import Path
-from reportlab.platypus import Paragraph, Spacer
+import pandas as pd
+import matplotlib.pyplot as plt
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib import colors
 from core.common.pdf_utils import ofb_table
 from core.engine.pdf_context import PdfContext
+from core.common.utilitaires_metier import get_dept_name
+from core.common.pdf_report_builder import PDFReportBuilder
+from core.common.rendus_graphiques import chart_interdept_stacked_bar, chart_pie
 
-def render_sec_region_detail(ctx: PdfContext) -> None:
-    ctx.builder.add_section("secregion", ctx.section_title.get("secregion", "Détail par département"))
+
+def _generate_dept_vignette(dept_code: str, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
+    """Génère une mini-vignette cartographique épurée du département avec pochoir institutionnel."""
+    out_path = tmp_dir / img_name
+    fig, ax = plt.subplots(figsize=(2.6 * figure_scale, 2.0 * figure_scale), dpi=150)
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('#f8fafc')
     
-    # Intégration du graphique comparatif interdépartemental
-    profil_id = ctx.profile.get("id") if ctx.profile else "global"
-    ratio_csv = ctx.out_dir / f"{profil_id}_ratio_pej_departement.csv"
-    if ratio_csv.exists():
+    try:
+        from core.cartographie.pochoir_helper import load_department_gdf
+        from core.chemins_projet import PROJECT_ROOT
+        gdf = load_department_gdf(dept_code, project_root=PROJECT_ROOT)
+        if gdf is not None and not gdf.empty:
+            gdf.plot(ax=ax, color='#e6f0fa', edgecolor='#003366', linewidth=1.2)
+            minx, miny, maxx, maxy = gdf.total_bounds
+            pad_x = (maxx - minx) * 0.05
+            pad_y = (maxy - miny) * 0.05
+            ax.set_xlim(minx - pad_x, maxx + pad_x)
+            ax.set_ylim(miny - pad_y, maxy + pad_y)
+        else:
+            ax.text(0.5, 0.5, f"Département {dept_code}", ha='center', va='center', fontsize=9, color='#003366')
+    except Exception:
+        ax.text(0.5, 0.5, f"Département {dept_code}", ha='center', va='center', fontsize=9, color='#003366')
+        
+    ax.axis('off')
+    plt.tight_layout(pad=0.2)
+    fig.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    return out_path
+
+
+def render_sec_region_dashboard(ctx: PdfContext) -> None:
+    """Rendu de la Partie 1 : Dashboard Régional Macro (Pavés KPI Cards + Visuels interdépartementaux)."""
+    title = ctx.section_title.get("sec_region_dashboard", "1. Synthèse régionale")
+    ctx.builder.add_section("sec_region_dashboard", title)
+
+    # 1. Pavés KPI Cards Régionaux (Stylisés)
+    kf: list[tuple[str, str]] = []
+    if ctx.nb_ops:
+        kf.append((str(ctx.nb_ops), "Opérations de contrôle"))
+    if ctx.nb_localisations:
+        kf.append((str(ctx.nb_localisations), "Localisations de contrôle"))
+    if ctx.nb_pej or ctx.nb_pa or ctx.nb_pve:
+        kf.append((f"{ctx.nb_pej or 0} / {ctx.nb_pa or 0} / {ctx.nb_pve or 0}", "Procédures PEJ / PA / PVe"))
+    ctx.builder.add_key_figures(kf)
+    ctx.builder.add_spacer(10)
+
+    # 2. Graphique comparatif interdépartemental
+    csv_path = ctx.out_dir / "region_detail_par_dept.csv"
+    if csv_path.exists():
         try:
-            df_ratio = pd.read_csv(ratio_csv, sep=";", encoding="utf-8")
-            if not df_ratio.empty:
-                from core.common.rendus_graphiques import chart_ppp_ratio_pej
-                from core.common.utilitaires_metier import get_dept_name
+            df = pd.read_csv(csv_path, sep=";", encoding="utf-8")
+            if not df.empty:
+                df["departement"] = df["departement"].astype(str)
+                depts = sorted(df["departement"].unique().tolist())
+                depts_labels = [f"{d} - {get_dept_name(d)}" for d in depts]
                 
-                depts_labels = []
-                totals = []
-                ppps = []
-                for _, r in df_ratio.iterrows():
-                    d = str(r["departement"])
-                    depts_labels.append(f"{d} - {get_dept_name(d)}")
-                    totals.append(int(r["total_pej"]))
-                    ppps.append(int(r["ppp_pej"]))
-                    
-                img_name = f"ratio_pej_depts_{profil_id}.png"
-                chart_path = chart_ppp_ratio_pej(
-                    depts_labels, totals, ppps, ctx.tmp_dir, img_name, figure_scale=ctx.figure_scale
+                categories = ["PEJ", "PA", "PVe"]
+                data_by_cat = {
+                    "PEJ": [df[df["departement"] == d]["nb_pej"].sum() for d in depts],
+                    "PA": [df[df["departement"] == d]["nb_pa"].sum() for d in depts],
+                    "PVe": [df[df["departement"] == d]["nb_pve"].sum() for d in depts]
+                }
+                
+                chart_path = chart_interdept_stacked_bar(
+                    depts_labels,
+                    categories,
+                    data_by_cat,
+                    ctx.tmp_dir,
+                    "interdept_procedures.png",
+                    title="Comparaison de l'activité procédurale par département",
+                    figure_scale=ctx.figure_scale
                 )
-                
-                ctx.builder.add_section("secregion_ratio", "Part de l'activité thématique par département", level=2, toc_level=1)
                 ctx.builder.add_image(Path(chart_path), width_ratio=ctx.chart_bar_w)
-                ctx.builder.add_spacer(10)
-                
-                tbl_syn = [["Département", "Nombre total de PEJ", "Procédures PPP ciblées", "Part relative"]]
-                for _, r in df_ratio.iterrows():
-                    d = str(r["departement"])
-                    tbl_syn.append([
-                        f"{d} - {get_dept_name(d)}",
-                        str(int(r["total_pej"])),
-                        str(int(r["ppp_pej"])),
-                        f"{r['ratio_pourcent']:.1f} %"
-                    ])
-                ctx.builder.add_table(
-                    tbl_syn,
-                    caption="Synthèse comparative de l'activité judiciaire par département",
-                    col_widths=[ctx.avail_w * 0.40, ctx.avail_w * 0.20, ctx.avail_w * 0.20, ctx.avail_w * 0.20],
-                    col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT"],
-                    keep_together=True
-                )
-                ctx.builder.add_page_break()
+                ctx.builder.add_spacer(5)
         except Exception as e:
-            ctx.builder.add_paragraph(f"<i>Impossible de tracer le graphique comparatif des départements : {e}</i>")
+            ctx.builder.add_paragraph(f"<i>Impossible d'afficher le graphique comparatif : {e}</i>")
+
+
+def render_sec_region_fiches(ctx: PdfContext) -> None:
+    """Rendu de la Partie 2 : Fiches Départementales (1 Page A4 portrait stricte par département)."""
+    title = ctx.section_title.get("sec_region_fiches", "2. Fiches départementales")
+    ctx.builder.add_section("sec_region_fiches", title)
 
     csv_path = ctx.out_dir / "region_detail_par_dept.csv"
     if not csv_path.exists():
         ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
         return
-        
+
     df = pd.read_csv(csv_path, sep=";", encoding="utf-8")
     if df.empty:
         ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
         return
-        
+
     df["departement"] = df["departement"].astype(str)
-    
-    # Ensure columns
+    depts = sorted(df["departement"].unique().tolist())
+
+    dept_dir = ctx.out_dir / "departements"
+    dept_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx, d in enumerate(depts):
+        dept_str = str(d)
+        dept_name = get_dept_name(dept_str)
+        df_dept = df[df["departement"] == dept_str]
+
+        ctx.builder.add_page_break()
+        sec_id = f"sec_dept_{dept_str}"
+        sec_label = f"Département {dept_str} - {dept_name}"
+        ctx.builder.add_section(sec_id, sec_label, level=2, toc_level=1)
+
+        total_ops = int(df_dept["nb_operations"].sum()) if not df_dept.empty else 0
+        total_locs = int(df_dept["nb_localisations"].sum()) if not df_dept.empty else 0
+        total_pej = int(df_dept["nb_pej"].sum()) if not df_dept.empty else 0
+        total_pa = int(df_dept["nb_pa"].sum()) if not df_dept.empty else 0
+        total_pve = int(df_dept["nb_pve"].sum()) if not df_dept.empty else 0
+
+        if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
+            # Bandeau neutre 0 donnée
+            ctx.builder.add_callout_box(
+                f"Aucun contrôle ou donnée répertorié pour le département {dept_str} - {dept_name} sur le périmètre sélectionné.",
+                title="Département sans activité ciblée"
+            )
+        else:
+            # 1. Pavés KPI Cards Départementales
+            dept_kfis = [
+                (str(total_ops), "Opérations"),
+                (str(total_locs), "Localisations"),
+                (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
+            ]
+            ctx.builder.add_key_figures(dept_kfis)
+            ctx.builder.add_spacer(4)
+
+            # 2. Double Visuel Côte-à-Côte 50/50 (Vignette Carto à gauche + Camembert à droite)
+            cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
+            df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
+            for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
+                if c not in df_dom.columns:
+                    df_dom[c] = 0
+
+            pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
+            
+            try:
+                vignette_path = _generate_dept_vignette(dept_str, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
+                img_vignette = RLImage(str(vignette_path), width=ctx.avail_w * 0.45, height=ctx.avail_w * 0.30)
+            except Exception:
+                img_vignette = Paragraph("<i>Vignette cartographique</i>", ctx.builder.styles["Normal"])
+
+            if pie_dict:
+                try:
+                    img_name = f"pie_dept_{dept_str}.png"
+                    pie_path = chart_pie(
+                        pie_dict,
+                        f"Répartition par domaine ({dept_name})",
+                        ctx.tmp_dir,
+                        img_name,
+                        figure_scale=ctx.figure_scale
+                    )
+                    img_pie = RLImage(str(pie_path), width=ctx.avail_w * 0.45, height=ctx.avail_w * 0.30)
+                except Exception:
+                    img_pie = Paragraph("<i>Graphique indisponible</i>", ctx.builder.styles["Normal"])
+            else:
+                img_pie = Paragraph("<i>Aucune donnée thématique</i>", ctx.builder.styles["Normal"])
+
+            double_visuel_tbl = Table(
+                [[img_vignette, img_pie]],
+                colWidths=[ctx.avail_w * 0.48, ctx.avail_w * 0.48]
+            )
+            double_visuel_tbl.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            ctx.builder.elements.append(double_visuel_tbl)
+            ctx.builder.add_spacer(4)
+
+            # 3. Micro-tableau condensé (Top 5 des domaines métiers + Autres domaines si > 5)
+            df_dom_sorted = df_dom.sort_values(by="nb_localisations", ascending=False)
+            top5_df = df_dom_sorted.head(5)
+            other_df = df_dom_sorted.iloc[5:]
+
+            tbl_dept = [["Domaine Métier", "Opérations", "Localisations", "PEJ / PA / PVe"]]
+            for _, r in top5_df.iterrows():
+                tbl_dept.append([
+                    str(r["domaine"]),
+                    str(int(r["nb_operations"])),
+                    str(int(r["nb_localisations"])),
+                    f"{int(r.get('nb_pej', 0))} / {int(r.get('nb_pa', 0))} / {int(r.get('nb_pve', 0))}"
+                ])
+            if not other_df.empty:
+                tbl_dept.append([
+                    f"Autres domaines ({len(other_df)})",
+                    str(int(other_df["nb_operations"].sum())),
+                    str(int(other_df["nb_localisations"].sum())),
+                    f"{int(other_df['nb_pej'].sum())} / {int(other_df['nb_pa'].sum())} / {int(other_df['nb_pve'].sum())}"
+                ])
+
+            ctx.builder.add_table(
+                tbl_dept,
+                caption=f"Synthèse par domaine (Top 5) - {dept_name}",
+                col_widths=[ctx.avail_w * 0.40, ctx.avail_w * 0.20, ctx.avail_w * 0.20, ctx.avail_w * 0.20],
+                col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
+                keep_together=True
+            )
+
+        # 4. Export du PDF autonome individuel 1-page par département
+        try:
+            dept_pdf_path = dept_dir / f"Fiche_Dept_{dept_str}.pdf"
+            b_dept = PDFReportBuilder(
+                dept_pdf_path,
+                f"Bilan Départemental {dept_str} - {dept_name}",
+                title=f"Bilan Départemental {dept_str} - {dept_name}"
+            )
+            b_dept.add_section("sec_dept_solo", f"Synthèse Activité - {dept_name}", level=1)
+            if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
+                b_dept.add_callout_box(
+                    f"Aucun contrôle ou donnée répertorié pour le département {dept_str} - {dept_name} sur le périmètre sélectionné.",
+                    title="Département sans activité ciblée"
+                )
+            else:
+                b_dept.add_key_figures(dept_kfis)
+                b_dept.add_spacer(6)
+                b_dept.add_table(
+                    tbl_dept,
+                    caption=f"Synthèse par domaine (Top 5) - {dept_name}",
+                    col_widths=[b_dept.avail_w * 0.40, b_dept.avail_w * 0.20, b_dept.avail_w * 0.20, b_dept.avail_w * 0.20],
+                    col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
+                    keep_together=True
+                )
+            b_dept.build()
+        except Exception as e_dept_pdf:
+            pass
+
+
+def render_sec_region_detail(ctx: PdfContext) -> None:
+    """Rendu de l'Annexe Technique Détaillée (Détail matriciel par domaine et par thème)."""
+    title = ctx.section_title.get("secregion", "Détail par département")
+    ctx.builder.add_section("secregion", title)
+
+    csv_path = ctx.out_dir / "region_detail_par_dept.csv"
+    if not csv_path.exists():
+        ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
+        return
+
+    df = pd.read_csv(csv_path, sep=";", encoding="utf-8")
+    if df.empty:
+        ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
+        return
+
+    df["departement"] = df["departement"].astype(str)
     for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
         if c not in df.columns:
             df[c] = 0
-            
-    # List of departments (sorted)
+
     depts = sorted(df["departement"].unique().tolist())
-    
-    # Group by Domaine
+
     for domaine, group_dom in df.groupby("domaine"):
         if domaine == "Hors domaine":
             continue
-            
+
         ctx.builder.add_section(f"secregion_{domaine}", f"Domaine : {domaine}", level=3)
-        
-        # To compute total region for each theme
-        # We aggregate over departments
         agg_theme = group_dom.groupby("theme")[["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]].sum().reset_index()
-        
-        if len(depts) > 5:
-            # Transposed layout for many departments
-            # Columns: Thème | Département | Opérations | Localisations | PEJ / PA / PVe
-            headers = ["Thème", "Département", "Opérations", "Localisations", "PEJ / PA / PVe"]
-            w_theme = ctx.avail_w * 0.25
-            w_dep = ctx.avail_w * 0.25
-            w_ops = ctx.avail_w * 0.15
-            w_loc = ctx.avail_w * 0.15
-            w_pej = ctx.avail_w * 0.20
-            col_widths = [w_theme, w_dep, w_ops, w_loc, w_pej]
-            col_aligns = ["LEFT", "LEFT", "CENTER", "CENTER", "CENTER"]
-            
-            tbl = [headers]
-            from core.common.utilitaires_metier import get_dept_name
-            
-            for _, row_theme in agg_theme.iterrows():
-                theme = str(row_theme["theme"])
-                df_theme = group_dom[group_dom["theme"] == theme]
-                
-                first = True
-                for d in depts:
-                    sub = df_theme[df_theme["departement"] == d]
-                    if sub.empty:
-                        v_ops, v_locs, v_pej, v_pa, v_pve = 0, 0, 0, 0, 0
-                    else:
-                        v_ops = sub["nb_operations"].sum()
-                        v_locs = sub["nb_localisations"].sum()
-                        v_pej = sub["nb_pej"].sum()
-                        v_pa = sub["nb_pa"].sum()
-                        v_pve = sub["nb_pve"].sum()
-                        
-                    dept_label = f"{d} - {get_dept_name(d)}"
-                    theme_label = theme if first else ""
-                    first = False
-                    
-                    row = [
-                        theme_label,
-                        dept_label,
-                        str(int(v_ops)),
-                        str(int(v_locs)),
-                        f"{int(v_pej)} / {int(v_pa)} / {int(v_pve)}"
-                    ]
-                    tbl.append(row)
-                
-                # Add total row for this theme
-                tot_suites = f"{int(row_theme['nb_pej'])} / {int(row_theme['nb_pa'])} / {int(row_theme['nb_pve'])}"
+
+        headers = ["Thème", "Département", "Opérations", "Localisations", "PEJ / PA / PVe"]
+        col_widths = [ctx.avail_w * 0.25, ctx.avail_w * 0.25, ctx.avail_w * 0.15, ctx.avail_w * 0.15, ctx.avail_w * 0.20]
+        col_aligns = ["LEFT", "LEFT", "CENTER", "CENTER", "CENTER"]
+        tbl = [headers]
+
+        for _, row_theme in agg_theme.iterrows():
+            theme = str(row_theme["theme"])
+            df_theme = group_dom[group_dom["theme"] == theme]
+            first = True
+            for d in depts:
+                sub = df_theme[df_theme["departement"] == d]
+                if sub.empty:
+                    v_ops, v_locs, v_pej, v_pa, v_pve = 0, 0, 0, 0, 0
+                else:
+                    v_ops = sub["nb_operations"].sum()
+                    v_locs = sub["nb_localisations"].sum()
+                    v_pej = sub["nb_pej"].sum()
+                    v_pa = sub["nb_pa"].sum()
+                    v_pve = sub["nb_pve"].sum()
+
+                dept_label = f"{d} - {get_dept_name(d)}"
+                theme_label = theme if first else ""
+                first = False
+
                 tbl.append([
-                    "",
-                    "Total Région",
-                    str(int(row_theme["nb_operations"])),
-                    str(int(row_theme["nb_localisations"])),
-                    tot_suites
+                    theme_label,
+                    dept_label,
+                    str(int(v_ops)),
+                    str(int(v_locs)),
+                    f"{int(v_pej)} / {int(v_pa)} / {int(v_pve)}"
                 ])
-        else:
-            # Standard layout (departments in columns)
-            # Columns: Thème | Métrique | Total | Dép 1 | Dép 2 | ...
-            headers = ["Thème", "Métrique", "Total Région"] + depts
-            
-            # Calculate col widths based on landscape A4. 
-            # A4 landscape is 297mm x 210mm. Avail_w is about 297 - margins ~ 260mm = ~730 points.
-            # "Thème" -> 20%, "Métrique" -> 15%, "Total" -> 10%, depts -> rest divided by len(depts)
-            w_theme = ctx.avail_w * 0.25
-            w_met = ctx.avail_w * 0.15
-            w_tot = ctx.avail_w * 0.10
-            w_dep = (ctx.avail_w - w_theme - w_met - w_tot) / max(1, len(depts))
-            col_widths = [w_theme, w_met, w_tot] + [w_dep] * len(depts)
-            col_aligns = ["LEFT", "LEFT", "CENTER"] + ["CENTER"] * len(depts)
-            
-            tbl = [headers]
-            
-            for _, row_theme in agg_theme.iterrows():
-                theme = str(row_theme["theme"])
-                # Filter original df for this theme
-                df_theme = group_dom[group_dom["theme"] == theme]
-                
-                # Row 1: Operations
-                row_ops = [theme, "Opérations", str(int(row_theme["nb_operations"]))]
-                for d in depts:
-                    v = df_theme[df_theme["departement"] == d]["nb_operations"].sum()
-                    row_ops.append(str(int(v)) if v > 0 else "0")
-                tbl.append(row_ops)
-                
-                # Row 2: Localisations
-                row_locs = ["", "Localisations", str(int(row_theme["nb_localisations"]))]
-                for d in depts:
-                    v = df_theme[df_theme["departement"] == d]["nb_localisations"].sum()
-                    row_locs.append(str(int(v)) if v > 0 else "0")
-                tbl.append(row_locs)
-                
-                # Row 3: PEJ / PA / PVe
-                tot_suites = f"{int(row_theme['nb_pej'])} / {int(row_theme['nb_pa'])} / {int(row_theme['nb_pve'])}"
-                row_suites = ["", "PEJ / PA / PVe", tot_suites]
-                for d in depts:
-                    sub = df_theme[df_theme["departement"] == d]
-                    if sub.empty:
-                        row_suites.append("0 / 0 / 0")
-                    else:
-                        v_pej = int(sub["nb_pej"].sum())
-                        v_pa = int(sub["nb_pa"].sum())
-                        v_pve = int(sub["nb_pve"].sum())
-                        if v_pej == 0 and v_pa == 0 and v_pve == 0:
-                            row_suites.append("0 / 0 / 0")
-                        else:
-                            row_suites.append(f"{v_pej} / {v_pa} / {v_pve}")
-                tbl.append(row_suites)
-                
+
+            tot_suites = f"{int(row_theme['nb_pej'])} / {int(row_theme['nb_pa'])} / {int(row_theme['nb_pve'])}"
+            tbl.append([
+                "",
+                "Total Région",
+                str(int(row_theme["nb_operations"])),
+                str(int(row_theme["nb_localisations"])),
+                tot_suites
+            ])
+
         ctx.builder.add_table(
             tbl,
             caption=f"Détail par département pour le domaine {domaine}",

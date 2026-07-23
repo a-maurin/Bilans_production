@@ -262,6 +262,12 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--annexe-detaillee",
+        action="store_true",
+        default=False,
+        help="Inclure l'annexe technique détaillée par domaine/thème dans les bilans régionaux.",
+    )
+    parser.add_argument(
         "--diffusion",
         choices=("interne", "externe"),
         default=None,
@@ -411,6 +417,8 @@ def main() -> int:
         pnf = bool(pnf_rep)
     if pnf is not None:
         cli_options["pnf"] = pnf
+    if args.annexe_detaillee:
+        cli_options["annexe_detaillee"] = True
 
     diffusion = args.diffusion
     if not diffusion and _is_interactive():

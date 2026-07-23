@@ -135,6 +135,7 @@ def generate_profile_pdf_report(
     output_filename: str | None = None,
     diffusion: str = "interne",
     cartes: bool = True,
+    cli_options: dict | None = None,
 ) -> None:
     """Point d’entrée moteur unique pour générer le PDF d'un profil."""
     date_deb_ts = pd.to_datetime(date_deb) if date_deb is not None else pd.Timestamp("2025-01-01")
@@ -155,6 +156,7 @@ def generate_profile_pdf_report(
         output_filename=output_filename,
         diffusion=diffusion,
         cartes=cartes,
+        cli_options=cli_options,
     )
 
 
@@ -218,6 +220,7 @@ def generate_pdf_report(
     output_filename: str | None = None,
     diffusion: str = "interne",
     cartes: bool = True,
+    cli_options: dict | None = None,
 ) -> None:
     from core.common.rendus_graphiques import apply_mpl_style
 
@@ -234,6 +237,7 @@ def generate_pdf_report(
         output_filename=output_filename,
         diffusion=diffusion,
         cartes=cartes,
+        cli_options=cli_options,
     )
 
 
@@ -250,6 +254,7 @@ def _generate_pdf_content(
     output_filename: str | None = None,
     diffusion: str = "interne",
     cartes: bool = True,
+    cli_options: dict | None = None,
 ) -> None:
     chart_ratios = compute_pdf_ratios(load_chart_display_config(_ROOT, preset=chart_preset))
     scope = str((profile or {}).get("presentation_scope", "global")).strip() or "global"
@@ -390,32 +395,19 @@ def _generate_pdf_content(
     section_title = {sid: title for sid, title in resolved_section_defs}
 
     if echelle == "region":
-        import re
-        insert_idx = len(sections)
-        for i, (sid, _) in enumerate(sections):
-            if sid in ("sec5map", "sec5", "sec6"):
-                insert_idx = i
-                break
-        
-        num_chap = 5
-        if insert_idx > 0:
-            prev_title = sections[insert_idx - 1][1]
-            m_prev = re.match(r"^(\d+)\.", prev_title)
-            if m_prev:
-                num_chap = int(m_prev.group(1)) + 1
+        annexe_detaillee = bool((cli_options or {}).get("annexe_detaillee", False))
+        sections = [
+            ("sec_region_dashboard", "1. Synthèse régionale"),
+            ("sec_region_fiches", "2. Fiches départementales"),
+            ("sec5map", "3. Localisation cartographique"),
+        ]
+        if annexe_detaillee:
+            sections.append(("secregion", "4. Annexe technique : Détail par domaine et thème"))
+            sections.append(("sec6", "5. Annexes méthodologiques"))
+        else:
+            sections.append(("sec6", "4. Annexes méthodologiques"))
 
-        secregion_title = f"{num_chap}. Détail par département"
-        sections.insert(insert_idx, ("secregion", secregion_title))
-        section_title["secregion"] = secregion_title
-
-        for idx in range(insert_idx + 1, len(sections)):
-            sid, title = sections[idx]
-            m_next = re.match(r"^(\d+)\.(.*)$", title)
-            if m_next:
-                num = int(m_next.group(1))
-                new_title = f"{num + 1}.{m_next.group(2)}"
-                sections[idx] = (sid, new_title)
-                section_title[sid] = new_title
+        section_title = {sid: title for sid, title in sections}
 
     tables_layout = resolve_tables_layout(presentation_cfg)
     charte_cfg = resolve_charte_config(presentation_cfg)
@@ -516,6 +508,7 @@ def _generate_pdf_content(
         global_map_layout=global_map_layout,
         map_captions=map_captions,
         map_id=map_id,
+        annexe_detaillee=bool((cli_options or {}).get("annexe_detaillee", False)),
     )
 
     registry = SectionRegistry()
@@ -536,7 +529,9 @@ def _generate_pdf_content(
     registry.register("sec5map", render_sec5map)
     registry.register("sec6", render_sec6)
     
-    from core.engine.sections_region import render_sec_region_detail
+    from core.engine.sections_region import render_sec_region_dashboard, render_sec_region_fiches, render_sec_region_detail
+    registry.register("sec_region_dashboard", render_sec_region_dashboard)
+    registry.register("sec_region_fiches", render_sec_region_fiches)
     registry.register("secregion", render_sec_region_detail)
 
 

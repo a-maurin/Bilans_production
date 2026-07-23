@@ -1015,11 +1015,16 @@ def render_sec5map(ctx: PdfContext) -> None:
 def render_sec6(ctx: PdfContext) -> None:
     ctx.builder.add_section("sec6", ctx.section_title["sec6"])
     vent_mode = resolve_ventilation_mode_global(ctx.date_deb, ctx.date_fin)
+    if str(ctx.dept_name_typo).lower().startswith("région"):
+        perim_label = ctx.dept_name_typo
+    else:
+        perim_label = f"du département {ctx.dept_name_typo}"
+
     methodo = build_sec6_methodology_html(
         effective_cfg=ctx.presentation_cfg,
         context=build_sec6_methodology_context(
             period_str=f"du {ctx.date_deb.date():%d/%m/%Y} au {ctx.date_fin.date():%d/%m/%Y}",
-            perimetre_name=f"de la {ctx.dept_name_typo}",
+            perimetre_name=perim_label,
             perimetre_code=str(ctx.dept_code),
             profile_label="Bilan global",
             profile_id=ctx.profile_id,

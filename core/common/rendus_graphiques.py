@@ -994,3 +994,61 @@ def chart_ppp_ratio_pej(
         ax.spines[spine].set_visible(False)
         
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
+
+
+def chart_interdept_stacked_bar(
+    depts: list[str],
+    categories: list[str],
+    data_by_category: dict[str, list[int]],
+    tmp_dir: Path,
+    name: str,
+    *,
+    title: str = "Comparaison interdépartementale par catégorie",
+    colors: list[str] | None = None,
+    figure_scale: float = 1.0,
+) -> str:
+    """Graphique comparatif interdépartemental en barres empilées horizontales."""
+    apply_mpl_style()
+    
+    if not colors:
+        colors = CHART_BAR_GROUPED_COLORS[:len(categories)]
+        
+    fig_w = CHART_FIG_WIDTH * figure_scale
+    fig_h = max(2.5, 0.5 * len(depts) + 1.2) * figure_scale
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    
+    y_pos = np.arange(len(depts))
+    bar_width = 0.55
+    left_acc = np.zeros(len(depts))
+    
+    for cat, color in zip(categories, colors):
+        vals = np.array(data_by_category.get(cat, [0] * len(depts)))
+        ax.barh(y_pos, vals, bar_width, left=left_acc, label=cat, color=color)
+        left_acc += vals
+        
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(depts, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel("Nombre total", fontsize=9)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    
+    ax.set_title(
+        title,
+        fontsize=13,
+        fontweight="bold",
+        color=COLOR_PRIMARY,
+        pad=15,
+    )
+    
+    for i, tot in enumerate(left_acc):
+        ax.text(tot, i, f" {int(tot)}", va="center", ha="left", fontsize=8.5, fontweight="bold")
+        
+    _legend_below_axis(ax, ncol=min(4, max(1, len(categories))), anchor_y=-0.16)
+    
+    max_tot = max(left_acc) if len(left_acc) > 0 and max(left_acc) > 0 else 10
+    ax.set_xlim(0, max_tot * 1.2 + 1)
+    
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+        
+    return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)

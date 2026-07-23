@@ -598,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'themes': document.getElementById('theme-snc').value ? [document.getElementById('theme-snc').value] : [],
             'types_action': document.getElementById('type-action-snc').value ? [document.getElementById('type-action-snc').value] : [],
             cartes: cartesCheckbox.checked,
+            'annexe-detaillee': document.getElementById('annexe-detaillee') ? document.getElementById('annexe-detaillee').checked : false,
             cartes_selection: cartesSelection,
             pnf: document.getElementById('pnf').checked,
             brochure: document.getElementById('brochure').checked,

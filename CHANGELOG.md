@@ -4,6 +4,25 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 
 ---
 
+## [v1.0.5] - 2026-07-24 : Bilans régionaux, Moteur PDF mutualisé & Purge Legacy
+
+### Édition PDF et Bilans Régionaux
+* **Refonte des bilans régionaux** : Intégration du dashboard macro synthétique, des cartes de chaleur (heatmaps) et des fiches départementales (1-page & double visuel).
+* **Mutualisation PDF & LayerResolver** : Unification du moteur d'exportation PDF et résolution dynamique des couches QGIS en fonction des rôles métiers (`LayerResolver`).
+* **Feuilles de style & Impression** : Optimisation des rendus et ajustement de `print.css` pour l'export dashboard.
+
+### Explorer Web et Interface
+* **Cartographie & Explorer** : Améliorations de l'affichage (légende, clustering des points), support de la multi-sélection et ajout du bouton de copie.
+* **Filtres & Données** : Correctifs sur les filtres thématiques (zones PNF/TUB, détection PVe hors couches) et corrections des géométries/CRS.
+* **UI & Paramètres** : Correction du blocage d'enregistrement des paramètres (erreur de zoom).
+
+### Core, Robustesse et Tests
+* **Purge Legacy SD21** : Suppression intégrale du code obsolète SD21 et modularisation complète de l'orchestrateur.
+* **Dépendances & Fallbacks** : Résolution des conflits d'importation (GeoPandas/Pandas), gestion robuste des fallbacks OGR (`osgeo.gdal`) et ajout à l'auto-installeur.
+* **Tests unitaires** : Alignement et mise à jour globale de la suite de tests unitaires et d'intégration.
+
+---
+
 ## [v1.0.4] - 2026-07-16 : Export PDF dynamique & Améliorations Explorer
 
 ### Édition PDF et Rapports

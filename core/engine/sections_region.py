@@ -28,7 +28,7 @@ except ImportError:
 def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
     """
     Génère la vignette cartographique épurée du département avec conservation STRICTE du ratio d'aspect
-    (pas de déformation) et carte de chaleur de la pression de contrôle.
+    (1:1, pas de déformation) et carte de chaleur de la pression de contrôle (Hexbin / Heatmap).
     """
     out_path = tmp_dir / img_name
     fig, ax = plt.subplots(figsize=(2.8 * figure_scale, 2.0 * figure_scale), dpi=150)
@@ -46,7 +46,7 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
         if gdf_dept is not None and not gdf_dept.empty:
             gdf_dept.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.2, aspect='equal')
             
-            # Recherche de la couche géolocalisée des points de contrôles (GPKG)
+            # Recherche récursive de la couche géolocalisée des points de contrôles (GPKG)
             gpkg_files = list(out_dir.rglob("controles_*.gpkg"))
             pts_dept = None
             if gpd is not None and gpkg_files:
@@ -65,11 +65,11 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                 except Exception:
                     pts_dept = None
             
-            # Traçage de la carte de chaleur de la pression de contrôle (Hexbin / Heatmap)
+            # Carte de chaleur / Hexbin de la densité de la pression de contrôle
             if pts_dept is not None and not pts_dept.empty:
                 x_coords = pts_dept.geometry.x
                 y_coords = pts_dept.geometry.y
-                ax.hexbin(
+                hb = ax.hexbin(
                     x_coords, y_coords,
                     gridsize=18,
                     cmap='YlOrRd',
@@ -77,9 +77,9 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                     alpha=0.85,
                     edgecolors='none'
                 )
-            else:
-                # Si aucun point dans le GPKG, tracer des points d'exemple représentatifs pour la maquette
-                pass
+                cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.7, aspect=18)
+                cbar.set_label('Pression de contrôle (Faible ➔ Forte)', fontsize=6.5, color='#003366')
+                cbar.ax.tick_params(labelsize=5.5)
 
             minx, miny, maxx, maxy = gdf_dept.total_bounds
             pad_x = (maxx - minx) * 0.05
@@ -147,7 +147,7 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
 
 
 def render_sec_region_fiches(ctx: PdfContext) -> None:
-    """Rendu de la Partie 2 : Fiches Départementales (1 Page A4 portrait stricte par département)."""
+    """Rendu de la Partie 2 : Fiches Départementales (1 Page A4 portrait stricte dans le rapport consolidé)."""
     csv_path = ctx.out_dir / "region_detail_par_dept.csv"
     if not csv_path.exists():
         ctx.builder.add_paragraph("Aucune donnée régionale détaillée disponible.")
@@ -171,7 +171,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
         dept_name = get_dept_name(dept_str)
         df_dept = df[df["departement"] == dept_str]
 
-        # Titre du chapitre 2 placé en haut de la Page 5 pour éviter l'orphelin en bas de Page 4
+        # Élimination du titre orphelin en bas de page 4 : le titre du chapitre 2 est posé en haut de la Page 5
         ctx.builder.add_page_break()
         if idx == 0:
             ctx.builder.add_section("sec_region_fiches", title_sec2, level=1)
@@ -186,22 +186,22 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
         total_pa = int(df_dept["nb_pa"].sum()) if not df_dept.empty else 0
         total_pve = int(df_dept["nb_pve"].sum()) if not df_dept.empty else 0
 
+        dept_kfis = [
+            (str(total_ops), "Opérations"),
+            (str(total_locs), "Localisations"),
+            (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
+        ]
+
+        # 1. Traitement pour le Rapport Consolidé Régional (1 Page A4 portrait)
         if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
             ctx.builder.add_callout_box(
                 f"Aucun contrôle ou donnée répertorié pour le département {dept_str} - {dept_name} sur le périmètre sélectionné.",
                 title="Département sans activité ciblée"
             )
         else:
-            # 1. Pavés KPI Cards Départementales
-            dept_kfis = [
-                (str(total_ops), "Opérations"),
-                (str(total_locs), "Localisations"),
-                (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
-            ]
             ctx.builder.add_key_figures(dept_kfis)
             ctx.builder.add_spacer(4)
 
-            # 2. Double Visuel Côte-à-Côte 50/50 (Carte de chaleur carto non déformée à gauche + Camembert à droite)
             cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
             df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
             for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
@@ -248,7 +248,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
             ctx.builder.story.append(double_visuel_tbl)
             ctx.builder.add_spacer(4)
 
-            # 3. Micro-tableau condensé (Top 5 des domaines métiers + Autres domaines si > 5)
+            # Micro-tableau condensé (Top 5)
             df_dom_sorted = df_dom.sort_values(by="nb_localisations", ascending=False)
             top5_df = df_dom_sorted.head(5)
             other_df = df_dom_sorted.iloc[5:]
@@ -277,15 +277,19 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 keep_together=True
             )
 
-        # 4. Export du PDF autonome individuel 1-page dans departements/Fiche_Dept_<Code>.pdf (Mise en page identique)
+        # 2. Export du PDF autonome individuel 2-PAGES (departements/Fiche_Dept_<Code>.pdf)
         try:
             dept_pdf_path = dept_dir / f"Fiche_Dept_{dept_str}.pdf"
             b_dept = PDFReportBuilder(
                 dept_pdf_path,
                 f"Bilan Départemental {dept_str} - {dept_name}",
-                title=f"Bilan Départemental {dept_str} - {dept_name}"
+                title=f"Bilan Départemental {dept_str} - {dept_name}",
+                content_only=True
             )
-            b_dept.add_section("sec_dept_solo", f"Synthèse Activité - {dept_name}", level=1)
+            b_dept.begin_content_pages()
+            
+            # --- PAGE 1 DU PDF AUTONOME ---
+            b_dept.add_section("sec_dept_solo", f"Département {dept_str} - {dept_name}", level=1)
             if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
                 b_dept.add_callout_box(
                     f"Aucun contrôle ou donnée répertorié pour le département {dept_str} - {dept_name} sur le périmètre sélectionné.",
@@ -294,11 +298,8 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
             else:
                 b_dept.add_key_figures(dept_kfis)
                 b_dept.add_spacer(4)
-                
-                # Inclusion du double visuel identique dans la fiche autonome
                 b_dept.story.append(double_visuel_tbl)
                 b_dept.add_spacer(4)
-                
                 b_dept.add_table(
                     tbl_dept,
                     caption=f"Synthèse par domaine (Top 5) - {dept_name}",
@@ -306,6 +307,32 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                     col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
                     keep_together=True
                 )
+                
+                # --- PAGE 2 DU PDF AUTONOME : DÉTAIL MATRICIEL EXHAUSTIF ---
+                b_dept.add_page_break()
+                b_dept.add_section("sec_dept_solo_detail", f"Détail par domaine et thème - {dept_name}", level=2)
+                
+                # Tableau matriciel complet sans restriction au Top 5
+                headers_full = ["Domaine Métier", "Thème", "Opérations", "Localisations", "PEJ / PA / PVe"]
+                tbl_full = [headers_full]
+                
+                for _, r_full in df_dept.iterrows():
+                    tbl_full.append([
+                        str(r_full.get("domaine", "")),
+                        str(r_full.get("theme", "")),
+                        str(int(r_full.get("nb_operations", 0))),
+                        str(int(r_full.get("nb_localisations", 0))),
+                        f"{int(r_full.get('nb_pej', 0))} / {int(r_full.get('nb_pa', 0))} / {int(r_full.get('nb_pve', 0))}"
+                    ])
+                
+                b_dept.add_table(
+                    tbl_full,
+                    caption=f"Détail exhaustif des contrôles et procédures - {dept_name}",
+                    col_widths=[b_dept.avail_w * 0.30, b_dept.avail_w * 0.30, b_dept.avail_w * 0.13, b_dept.avail_w * 0.13, b_dept.avail_w * 0.14],
+                    col_aligns=["LEFT", "LEFT", "CENTER", "CENTER", "CENTER"],
+                    keep_together=False
+                )
+                
             b_dept.build()
         except Exception as e_dept_pdf:
             pass

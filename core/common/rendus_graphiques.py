@@ -206,6 +206,7 @@ def chart_pie(
     legend_percent_only: bool = False,
     apply_mpl: bool = True,
     palette: list[str] | None = None,
+    donut: bool = False,
 ) -> str:
     if apply_mpl:
         apply_mpl_style()
@@ -276,7 +277,10 @@ def chart_pie(
             pie_h_in / fig_h,
         ]
     )
-    wedges, _ = ax.pie(values, startangle=90, colors=colors_pie)
+    if donut:
+        wedges, _ = ax.pie(values, startangle=90, colors=colors_pie, wedgeprops=dict(width=0.45, edgecolor="white"))
+    else:
+        wedges, _ = ax.pie(values, startangle=90, colors=colors_pie)
     ax.set_aspect("equal")
     if str(title).strip():
         ax.set_title(

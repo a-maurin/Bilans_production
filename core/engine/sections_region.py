@@ -4,29 +4,16 @@
 # selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
 # la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
 #
-# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
-# sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
-# Voir la Licence Publique Générale GNU pour plus de détails.
-#
-# CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
-# intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
-# clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
-# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
-# de l'auteur original (Aguirre MAURIN).
-
-# Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier
-# selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
-# la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
-#
-# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
+# Ce programme est distribué dans l'espoir qu'il sera utile, me SANS AUCUNE GARANTIE ;
 # sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
 # Voir la Licence Publique Générale GNU pour plus de détails.
 
+import logging
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from PIL import Image as PILImage
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
 from core.common.pdf_utils import ofb_table
 from core.engine.pdf_context import PdfContext
@@ -34,10 +21,26 @@ from core.common.utilitaires_metier import get_dept_name
 from core.common.pdf_report_builder import PDFReportBuilder
 from core.common.rendus_graphiques import chart_interdept_stacked_bar, chart_pie
 
+logger = logging.getLogger(__name__)
+
 try:
     import geopandas as gpd
 except ImportError:
     gpd = None
+
+
+def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text: str, styles: dict) -> RLImage | Paragraph:
+    """Instancie une RLImage ReportLab en conservant mathématiquement le ratio largeur/hauteur réel."""
+    if not img_path.exists():
+        return Paragraph(f"<i>{fallback_text}</i>", styles["Normal"])
+    try:
+        with PILImage.open(img_path) as im:
+            w_px, h_px = im.size
+        aspect = (h_px / float(w_px)) if w_px > 0 else 0.7
+        target_h = target_w * aspect
+        return RLImage(str(img_path), width=target_w, height=target_h)
+    except Exception:
+        return Paragraph(f"<i>{fallback_text}</i>", styles["Normal"])
 
 
 def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
@@ -61,12 +64,27 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
         if gdf_dept is not None and not gdf_dept.empty:
             gdf_dept.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.2, aspect='equal')
             
-            # Recherche récursive de la couche géolocalisée des points de contrôles (GPKG)
-            gpkg_files = list(out_dir.rglob("controles_*.gpkg"))
+            # Recherche multi-chemins du fichier GeoPackage des points de contrôle
+            carto_dir_default = PROJECT_ROOT / "data" / "sources" / "sig" / "CARTO"
+            gpkg_files = list(carto_dir_default.glob("controles_*.gpkg"))
+            if not gpkg_files:
+                gpkg_files = list(out_dir.rglob("controles_*.gpkg"))
+            
             pts_dept = None
             if gpd is not None and gpkg_files:
                 try:
-                    gdf_pts = gpd.read_file(gpkg_files[0])
+                    # Sélection du GPKG correspondant spécifiquement au code région/département courant (ex: r44 ou 44)
+                    code_clean = str(dept_code).strip().lower()
+                    out_dir_code = str(out_dir.name).strip().lower()
+                    matching = [
+                        f for f in gpkg_files 
+                        if code_clean in f.name.lower() 
+                        or (code_clean.replace("r", "") in f.name.lower() if code_clean.startswith("r") else False)
+                        or out_dir_code in f.name.lower()
+                    ]
+                    target_gpkg = matching[0] if matching else gpkg_files[0]
+                    
+                    gdf_pts = gpd.read_file(target_gpkg)
                     if gdf_pts.crs is None or gdf_pts.crs.to_epsg() != 2154:
                         if gdf_pts.crs is not None:
                             gdf_pts = gdf_pts.to_crs("EPSG:2154")
@@ -113,12 +131,90 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
     return out_path
 
 
+def _generate_region_choropleth(
+    dept_counts: dict[str, int],
+    dept_code: str,
+    tmp_dir: Path,
+    img_name: str,
+    figure_scale: float = 1.0
+) -> Path:
+    """Génère la carte choroplèthe régionale (aplat par département selon le volume d'opérations)."""
+    out_path = tmp_dir / img_name
+    fig, ax = plt.subplots(figsize=(3.6 * figure_scale, 2.6 * figure_scale), dpi=150)
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('#ffffff')
+    ax.set_aspect('equal')
+    
+    try:
+        from core.cartographie.pochoir_helper import load_department_gdf
+        from core.chemins_projet import PROJECT_ROOT
+        gdf_region = load_department_gdf(dept_code, project_root=PROJECT_ROOT, dissolve=False)
+        if gdf_region is not None and not gdf_region.empty:
+            col_dep = "insee_dep" if "insee_dep" in gdf_region.columns else ("INSEE_DEP" if "INSEE_DEP" in gdf_region.columns else gdf_region.columns[0])
+            gdf_region["dep_code_clean"] = gdf_region[col_dep].astype(str).str.strip().str.upper()
+            gdf_region["nb_ops"] = gdf_region["dep_code_clean"].map(
+                lambda d: dept_counts.get(d, dept_counts.get(d.zfill(2), dept_counts.get(str(int(d)) if d.isdigit() else d, 0)))
+            ).fillna(0)
+            
+            gdf_region.plot(
+                column="nb_ops",
+                cmap="YlGnBu",
+                linewidth=0.8,
+                ax=ax,
+                edgecolor="#003366",
+                legend=True,
+                legend_kwds={
+                    "orientation": "horizontal",
+                    "shrink": 0.7,
+                    "pad": 0.02,
+                    "label": "Volume d'opérations de contrôle"
+                }
+            )
+            
+            for _, row in gdf_region.iterrows():
+                centroid = row.geometry.centroid
+                dep = row["dep_code_clean"]
+                ops = int(row["nb_ops"])
+                ax.annotate(
+                    f"{dep}\n({ops})",
+                    xy=(centroid.x, centroid.y),
+                    ha="center",
+                    va="center",
+                    fontsize=6.5,
+                    fontweight="bold",
+                    color="#002b49",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.65)
+                )
+            
+            ax.set_axis_off()
+            fig.tight_layout(pad=0.1)
+            fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+            plt.close(fig)
+            return out_path
+    except Exception as e:
+        plt.close(fig)
+        logger.warning(f"Impossible de générer la carte choroplèthe régionale : {e}")
+    return out_path
+
+
 def render_sec_region_dashboard(ctx: PdfContext) -> None:
-    """Rendu de la Partie 1 : Dashboard Régional Macro (Pavés KPI Cards + Visuels interdépartementaux)."""
+    """
+    Rendu de la Partie 1 : Synthèse Régionale structurée de manière équilibrée sur 2 pages A4.
+    
+    PAGE 1 :
+      - En-tête de section "1. Synthèse régionale"
+      - Pavés KPI Cards Régionaux (Ops, Localisations, Procédures)
+      - Table visuelle 2 colonnes : Carte choroplèthe régionale | Diagramme Donut par domaine
+      - Saut de page strict (PageBreak)
+      
+    PAGE 2 :
+      - Tableau comparatif interdépartemental (Ops, Locs, PEJ, PA, PVe)
+      - Graphique en barres empilées de l'activité procédurale par département
+    """
     title = ctx.section_title.get("sec_region_dashboard", "1. Synthèse régionale")
     ctx.builder.add_section("sec_region_dashboard", title)
 
-    # 1. Pavés KPI Cards Régionaux (Stylisés)
+    # 1. Pavés KPI Cards Régionaux
     kf: list[tuple[str, str]] = []
     if ctx.nb_ops:
         kf.append((str(ctx.nb_ops), "Opérations de contrôle"))
@@ -129,36 +225,148 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     ctx.builder.add_key_figures(kf)
     ctx.builder.add_spacer(10)
 
-    # 2. Graphique comparatif interdépartemental
     csv_path = ctx.out_dir / "region_detail_par_dept.csv"
+    df = pd.DataFrame()
     if csv_path.exists():
         try:
             df = pd.read_csv(csv_path, sep=";", encoding="utf-8")
-            if not df.empty:
-                df["departement"] = df["departement"].astype(str)
-                depts = sorted(df["departement"].unique().tolist())
-                depts_labels = [f"{d} - {get_dept_name(d)}" for d in depts]
-                
-                categories = ["PEJ", "PA", "PVe"]
-                data_by_cat = {
-                    "PEJ": [df[df["departement"] == d]["nb_pej"].sum() for d in depts],
-                    "PA": [df[df["departement"] == d]["nb_pa"].sum() for d in depts],
-                    "PVe": [df[df["departement"] == d]["nb_pve"].sum() for d in depts]
-                }
-                
-                chart_path = chart_interdept_stacked_bar(
-                    depts_labels,
-                    categories,
-                    data_by_cat,
-                    ctx.tmp_dir,
-                    "interdept_procedures.png",
-                    title="Comparaison de l'activité procédurale par département",
-                    figure_scale=ctx.figure_scale
-                )
-                ctx.builder.add_image(Path(chart_path), width_ratio=ctx.chart_bar_w)
-                ctx.builder.add_spacer(5)
+        except Exception:
+            df = pd.DataFrame()
+
+    # --- PAGE 1 VISUELS CÔTE À CÔTE : CARTE CHOROPLÈTHE & DONUT PAR DOMAINE ---
+    dept_counts: dict[str, int] = {}
+    domain_counts: dict[str, int] = {}
+    if not df.empty:
+        df["departement"] = df["departement"].astype(str)
+        if "nb_operations" in df.columns:
+            dept_counts = df.groupby("departement")["nb_operations"].sum().to_dict()
+            domain_counts = df.groupby("domaine")["nb_operations"].sum().to_dict()
+
+    body_style = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
+
+    # Visuel 1 : Carte choroplèthe
+    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale)
+    if carto_path.exists():
+        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.48, "Carte régionale indisponible", ctx.builder.styles)
+    else:
+        img_carto = Paragraph("<para align='center'><i>Carte régionale non disponible</i></para>", body_style)
+
+    # Visuel 2 : Diagramme Donut par Domaine
+    if domain_counts and sum(domain_counts.values()) > 0:
+        donut_path = chart_pie(
+            domain_counts,
+            "Répartition par Domaine de contrôle",
+            ctx.tmp_dir,
+            "region_domaines_donut.png",
+            figure_scale=ctx.figure_scale,
+            donut=True,
+            legend_ncol=1
+        )
+        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.48, "Graphique domaines indisponible", ctx.builder.styles)
+    else:
+        img_donut = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
+
+    # Assemblage dans une table 2 colonnes épurée
+    col_w = ctx.avail_w * 0.49
+    visuels_tbl = Table([[img_carto, img_donut]], colWidths=[col_w, col_w])
+    visuels_tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    ctx.builder.story.append(visuels_tbl)
+
+    # --- SAUT DE PAGE VERS LA PAGE 2 DE LA SYNTHÈSE RÉGIONALE ---
+    ctx.builder.story.append(PageBreak())
+
+    # --- PAGE 2 : TABLEAU COMPARATIF INTERDÉPARTEMENTAL & GRAPHIQUE DES PROCÉDURES ---
+    if not df.empty:
+        df["departement"] = df["departement"].astype(str)
+        depts = sorted(df["departement"].unique().tolist())
+
+        # 1. Construction du tableau comparatif interdépartemental
+        table_data = [["Dépt", "Libellé département", "Opérations", "Localisations", "PEJ", "PA", "PVe"]]
+        tot_ops, tot_locs, tot_pej, tot_pa, tot_pve = 0, 0, 0, 0, 0
+
+        for d in depts:
+            sub = df[df["departement"] == d]
+            ops = int(sub["nb_operations"].sum()) if "nb_operations" in sub.columns else 0
+            locs = int(sub["nb_localisations"].sum()) if "nb_localisations" in sub.columns else 0
+            pej = int(sub["nb_pej"].sum()) if "nb_pej" in sub.columns else 0
+            pa = int(sub["nb_pa"].sum()) if "nb_pa" in sub.columns else 0
+            pve = int(sub["nb_pve"].sum()) if "nb_pve" in sub.columns else 0
+
+            tot_ops += ops
+            tot_locs += locs
+            tot_pej += pej
+            tot_pa += pa
+            tot_pve += pve
+
+            table_data.append([
+                d,
+                get_dept_name(d),
+                f"{ops:,}".replace(",", "\u202f"),
+                f"{locs:,}".replace(",", "\u202f"),
+                f"{pej:,}".replace(",", "\u202f"),
+                f"{pa:,}".replace(",", "\u202f"),
+                f"{pve:,}".replace(",", "\u202f")
+            ])
+
+        # Ligne de totalisation régionale
+        table_data.append([
+            "Total",
+            "Périmètre régional",
+            f"{tot_ops:,}".replace(",", "\u202f"),
+            f"{tot_locs:,}".replace(",", "\u202f"),
+            f"{tot_pej:,}".replace(",", "\u202f"),
+            f"{tot_pa:,}".replace(",", "\u202f"),
+            f"{tot_pve:,}".replace(",", "\u202f")
+        ])
+
+        col_widths = [
+            0.08 * ctx.avail_w,
+            0.34 * ctx.avail_w,
+            0.12 * ctx.avail_w,
+            0.14 * ctx.avail_w,
+            0.10 * ctx.avail_w,
+            0.10 * ctx.avail_w,
+            0.12 * ctx.avail_w
+        ]
+        col_aligns = ["C", "L", "R", "R", "R", "R", "R"]
+
+        tbl_interdept = ofb_table(table_data, col_widths=col_widths, col_aligns=col_aligns)
+        ctx.builder.story.append(tbl_interdept)
+        ctx.builder.add_spacer(12)
+
+        # 2. Graphique comparatif des procédures en barres empilées
+        try:
+            depts_labels = [f"{d} - {get_dept_name(d)}" for d in depts]
+            categories = ["PEJ", "PA", "PVe"]
+            data_by_cat = {
+                "PEJ": [int(df[df["departement"] == d]["nb_pej"].sum()) if "nb_pej" in df.columns else 0 for d in depts],
+                "PA": [int(df[df["departement"] == d]["nb_pa"].sum()) if "nb_pa" in df.columns else 0 for d in depts],
+                "PVe": [int(df[df["departement"] == d]["nb_pve"].sum()) if "nb_pve" in df.columns else 0 for d in depts]
+            }
+            
+            chart_path = chart_interdept_stacked_bar(
+                depts_labels,
+                categories,
+                data_by_cat,
+                ctx.tmp_dir,
+                "interdept_procedures.png",
+                title="Comparaison de l'activité procédurale par département",
+                figure_scale=ctx.figure_scale
+            )
+            img_chart = _create_proportional_rl_image(Path(chart_path), ctx.avail_w * ctx.chart_bar_w, "Graphique comparatif indisponible", ctx.builder.styles)
+            ctx.builder.story.append(img_chart)
+            ctx.builder.add_spacer(5)
         except Exception as e:
             ctx.builder.add_paragraph(f"<i>Impossible d'afficher le graphique comparatif : {e}</i>")
+    else:
+        ctx.builder.add_paragraph("<i>Aucune donnée régionale détaillée disponible pour la synthèse interdépartementale.</i>")
 
 
 def render_sec_region_fiches(ctx: PdfContext) -> None:
@@ -225,25 +433,19 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
 
             pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
             
-            try:
-                vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
-                img_vignette = RLImage(str(vignette_path), width=ctx.avail_w * 0.46, height=ctx.avail_w * 0.32)
-            except Exception:
-                img_vignette = Paragraph("<i>Vignette cartographique</i>", ctx.builder.styles["Normal"])
+            vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
+            img_vignette = _create_proportional_rl_image(vignette_path, ctx.avail_w * 0.46, "Vignette cartographique", ctx.builder.styles)
 
             if pie_dict:
-                try:
-                    img_name = f"pie_dept_{dept_str}.png"
-                    pie_path = chart_pie(
-                        pie_dict,
-                        f"Répartition par domaine ({dept_name})",
-                        ctx.tmp_dir,
-                        img_name,
-                        figure_scale=ctx.figure_scale
-                    )
-                    img_pie = RLImage(str(pie_path), width=ctx.avail_w * 0.46, height=ctx.avail_w * 0.32)
-                except Exception:
-                    img_pie = Paragraph("<i>Graphique indisponible</i>", ctx.builder.styles["Normal"])
+                img_name = f"pie_dept_{dept_str}.png"
+                pie_path = chart_pie(
+                    pie_dict,
+                    f"Répartition par domaine ({dept_name})",
+                    ctx.tmp_dir,
+                    img_name,
+                    figure_scale=ctx.figure_scale
+                )
+                img_pie = _create_proportional_rl_image(Path(pie_path), ctx.avail_w * 0.46, "Graphique indisponible", ctx.builder.styles)
             else:
                 img_pie = Paragraph("<i>Aucune donnée thématique</i>", ctx.builder.styles["Normal"])
 
@@ -327,7 +529,6 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 b_dept.add_page_break()
                 b_dept.add_section("sec_dept_solo_detail", f"Détail par domaine et thème - {dept_name}", level=2)
                 
-                # Tableau matriciel complet sans restriction au Top 5
                 headers_full = ["Domaine Métier", "Thème", "Opérations", "Localisations", "PEJ / PA / PVe"]
                 tbl_full = [headers_full]
                 

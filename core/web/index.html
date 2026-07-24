@@ -52,6 +52,26 @@ de l'auteur original (Aguirre MAURIN).
                       <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
                     </svg>
                 </button>
+                <a href="#" onclick="openHelpModal(); return false;" class="nav-item"
+                    style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;"
+                    title="Guide et Aide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </a>
+                <a href="#" onclick="openSettingsModal(); return false;" class="nav-item"
+                    style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;" title="Paramètres">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                </a>
             </nav>
         </div>
     </header>
@@ -427,7 +447,273 @@ de l'auteur original (Aguirre MAURIN).
                 fetch('/api/shutdown').catch(() => {});
             }
         }
+
+        // --- Fonctions d'Aide et Paramètres ---
+        function openHelpModal() {
+            document.getElementById('help-modal').classList.remove('hidden');
+        }
+
+        function closeHelpModal() {
+            document.getElementById('help-modal').classList.add('hidden');
+        }
+
+        function startGuidedTour() {
+            closeHelpModal();
+            window.location.href = 'explorer.html';
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settings-modal').classList.remove('hidden');
+            loadSettings();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+
+                const profil = data.profil || {};
+                document.getElementById('set-profil-nom').value = profil.nom || '';
+                document.getElementById('set-profil-prenom').value = profil.prenom || '';
+                document.getElementById('set-profil-service').value = profil.service || '';
+
+                const geo = data.geo || {};
+                document.getElementById('set-geo-code').value = geo.code_geo_defaut || '';
+                document.getElementById('set-geo-annee').value = geo.annee_reference || 2024;
+
+                const ui = data.ui || {};
+                document.getElementById('set-ui-vue').value = ui.vue_lancement || 'explorer';
+                document.getElementById('set-ui-theme').value = ui.theme || 'clair';
+                document.getElementById('set-ui-zoom').value = ui.zoom_defaut || 8;
+
+                const exportData = data.export || {};
+                document.getElementById('set-export-dpi').value = exportData.dpi || 300;
+                document.getElementById('set-export-brutes').checked = !!exportData.inclure_donnees_brutes;
+
+                const systeme = data.systeme || {};
+                document.getElementById('set-sys-dossier').value = systeme.dossier_export || '';
+                document.getElementById('set-sys-proxy').value = systeme.proxy || '';
+
+                const tech = data.tech || {};
+                document.getElementById('set-tech-port').value = tech.port_serveur || 5000;
+                document.getElementById('set-tech-debug').checked = !!tech.mode_debug;
+
+                const useOffset = localStorage.getItem('ui_cluster_offset') !== 'false';
+                document.getElementById('set-ui-cluster-offset').checked = useOffset;
+                document.getElementById('set-ui-cluster-zoom').value = localStorage.getItem('ui_cluster_zoom') || 10;
+            } catch (err) {
+                console.error("Erreur chargement paramètres:", err);
+            }
+        }
+
+        async function saveSettings() {
+            const btn = document.getElementById('btn-save-settings');
+            const originalText = btn.innerText;
+            btn.innerText = "Enregistrement...";
+            btn.disabled = true;
+
+            const payload = {
+                profil: {
+                    nom: document.getElementById('set-profil-nom').value,
+                    prenom: document.getElementById('set-profil-prenom').value,
+                    service: document.getElementById('set-profil-service').value
+                },
+                geo: {
+                    code_geo_defaut: document.getElementById('set-geo-code').value,
+                    annee_reference: parseInt(document.getElementById('set-geo-annee').value) || 2024
+                },
+                ui: {
+                    vue_lancement: document.getElementById('set-ui-vue').value,
+                    theme: document.getElementById('set-ui-theme').value,
+                    zoom_defaut: parseInt(document.getElementById('set-ui-zoom').value) || 8
+                },
+                export: {
+                    dpi: parseInt(document.getElementById('set-export-dpi').value) || 300,
+                    inclure_donnees_brutes: document.getElementById('set-export-brutes').checked
+                },
+                systeme: {
+                    dossier_export: document.getElementById('set-sys-dossier').value,
+                    proxy: document.getElementById('set-sys-proxy').value
+                },
+                tech: {
+                    port_serveur: parseInt(document.getElementById('set-tech-port').value) || 5000,
+                    mode_debug: document.getElementById('set-tech-debug').checked
+                }
+            };
+
+            localStorage.setItem('ui_cluster_offset', document.getElementById('set-ui-cluster-offset').checked);
+            localStorage.setItem('ui_cluster_zoom', document.getElementById('set-ui-cluster-zoom').value);
+
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                closeSettingsModal();
+            } catch (err) {
+                console.error("Erreur sauvegarde paramètres:", err);
+                alert("Erreur lors de la sauvegarde.");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
     </script>
+
+    <!-- Modal Aide / Guide Complet -->
+    <div id="help-modal" class="hidden"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999999; display: flex; justify-content: center; align-items: center;">
+        <div
+            style="background: var(--color-bg-card); border-radius: 8px; width: 900px; max-width: 95vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+
+            <!-- Header Modal -->
+            <div
+                style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0; font-size: 18px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        style="color: var(--color-primary);">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    Guide Complet d'OFBilan
+                </h2>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="startGuidedTour()" class="btn btn-secondary"
+                        style="font-size: 12px; padding: 6px 12px;">▶ Relancer la visite rapide</button>
+                    <button type="button" onclick="closeHelpModal()"
+                        style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+                </div>
+            </div>
+
+            <!-- Corps Modal : 2 Colonnes -->
+            <div style="display: flex; flex: 1; overflow: hidden;">
+                <!-- Colonne Gauche : Sommaire -->
+                <div style="width: 250px; background: #f1f5f9; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto;">
+                    <h3 style="font-size: 13px; color: #64748b; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.5px;">Sommaire</h3>
+                    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;">
+                        <li><a href="#help-intro" style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">1. Introduction</a></li>
+                        <li><a href="#help-filters" style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">2. Les filtres d'exploration</a></li>
+                        <li><a href="#help-map" style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">3. La carte interactive</a></li>
+                        <li><a href="#help-charts" style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">4. Les graphiques statistiques</a></li>
+                        <li><a href="#help-pdf" style="text-decoration: none; color: #334155; font-weight: 500; font-size: 13px; display: block; padding: 6px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">5. Générer un bilan PDF</a></li>
+                    </ul>
+                </div>
+
+                <!-- Colonne Droite : Contenu -->
+                <div style="flex: 1; padding: 30px; overflow-y: auto; scroll-behavior: smooth;" id="help-content-area">
+                    <div id="help-intro" style="margin-bottom: 40px;">
+                        <h3 style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">1. Introduction à OFBilan</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Bienvenue dans OFBilan. Ce logiciel vous permet d'analyser visuellement les données de contrôle de votre territoire et d'en extraire des bilans PDF prêts à l'emploi.</p>
+                    </div>
+                    <div id="help-filters" style="margin-bottom: 40px;">
+                        <h3 style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">2. Les filtres d'exploration</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Dans le panneau d'analyse interactive, vous pouvez définir les filtres (profil, dates, périmètre) et charger les données correspondantes.</p>
+                    </div>
+                    <div id="help-map" style="margin-bottom: 40px;">
+                        <h3 style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">3. La carte interactive</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">La carte permet de visualiser la répartition géographique et les zones de densité des contrôles.</p>
+                    </div>
+                    <div id="help-charts" style="margin-bottom: 40px;">
+                        <h3 style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">4. Les graphiques statistiques</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Les graphiques analysent la saisonnalité, les résultats et la répartition par type d'usager.</p>
+                    </div>
+                    <div id="help-pdf" style="margin-bottom: 40px;">
+                        <h3 style="color: var(--color-primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">5. Générer un bilan PDF</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: #334155;">Dans cette vue (Éditeur de bilans), configurez vos paramètres de bilan et cliquez sur le bouton de génération pour produire le rapport PDF au format A4.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Paramètres -->
+    <div id="settings-modal" class="hidden"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999999; display: flex; justify-content: center; align-items: center;">
+        <div
+            style="background: var(--color-bg-card); border-radius: 8px; width: 800px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div
+                style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0; font-size: 18px; color: #1e293b;">Paramètres OFBilan</h2>
+                <button type="button" onclick="closeSettingsModal()"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">&times;</button>
+            </div>
+
+            <div
+                style="padding: 20px; overflow-y: auto; flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: left;">
+                <!-- Colonne Gauche -->
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="card" style="margin: 0;">
+                        <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Profil Utilisateur</h3>
+                        <div class="form-group"><label>Nom</label><input type="text" id="set-profil-nom"></div>
+                        <div class="form-group"><label>Prénom</label><input type="text" id="set-profil-prenom"></div>
+                        <div class="form-group"><label>Service / Unité</label><input type="text" id="set-profil-service"></div>
+                    </div>
+                    <div class="card" style="margin: 0;">
+                        <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Période et code service par défaut</h3>
+                        <div class="form-group"><label>Code géographique défaut</label><input type="text" id="set-geo-code" placeholder="ex: 21, r27, FR"></div>
+                        <div class="form-group"><label>Année de référence par défaut</label><input type="number" id="set-geo-annee" value="2024"></div>
+                    </div>
+                    <div class="card" style="margin: 0;">
+                        <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Export & Rapports</h3>
+                        <div class="form-group"><label>Qualité des cartes (DPI)</label><input type="number" id="set-export-dpi" value="300"></div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="set-export-brutes" style="margin:0;">
+                            <label for="set-export-brutes" style="margin:0; cursor:pointer;">Inclure les données brutes en annexe</label>
+                        </div>
+                    </div>
+                </div>
+                <!-- Colonne Droite -->
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="card" style="margin: 0;">
+                        <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Interface</h3>
+                        <div class="form-group">
+                            <label>Vue au lancement</label>
+                            <select id="set-ui-vue">
+                                <option value="explorer">Analyse Interactive</option>
+                                <option value="pdf">Édition PDF</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Thème</label>
+                            <select id="set-ui-theme">
+                                <option value="clair">Clair</option>
+                                <option value="sombre">Sombre</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Zoom carte par défaut</label><input type="number" id="set-ui-zoom" value="8"></div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                            <input type="checkbox" id="set-ui-cluster-offset" checked style="margin:0;">
+                            <label for="set-ui-cluster-offset" style="margin:0; cursor:pointer;">Écarter les clusters superposés</label>
+                        </div>
+                        <div class="form-group"><label>Niveau de zoom minimal pour l'écartement :</label><input type="number" id="set-ui-cluster-zoom" value="10"></div>
+                    </div>
+                    <div class="card" style="margin: 0;">
+                        <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Paramètres avancés</h3>
+                        <div class="form-group"><label>Dossier d'export</label><input type="text" id="set-sys-dossier" placeholder="~/Documents/OFBilan_Exports"></div>
+                        <div class="form-group"><label>Proxy</label><input type="text" id="set-sys-proxy" placeholder="http://proxy:port"></div>
+                        <div class="form-group"><label>Port Serveur Local</label><input type="number" id="set-tech-port" value="5000"></div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                            <input type="checkbox" id="set-tech-debug" style="margin:0;">
+                            <label for="set-tech-debug" style="margin:0; cursor:pointer;">Activer le mode Débogage</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                style="padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc; border-radius: 0 0 8px 8px;">
+                <button type="button" class="btn btn-primary" onclick="closeSettingsModal()">Annuler</button>
+                <button type="button" class="btn btn-secondary" id="btn-save-settings" onclick="saveSettings()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

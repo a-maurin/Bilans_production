@@ -38,7 +38,8 @@ DEFAUT_PARAMETRES: Dict[str, Any] = {
     "ui": {
         "vue_lancement": "explorer",
         "theme": "clair",
-        "zoom_defaut": 8
+        "zoom_defaut": 8,
+        "auto_select_gabarit": False
     },
     "carto": {
         "fond_plan": "OSM",

@@ -298,6 +298,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
 
+        if parsed_path == "/api/gabarits":
+            try:
+                from core.common.chargeur_gabarits import list_gabarits
+                gabarits = list_gabarits(SRC_DIR)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                self.wfile.write(json.dumps(gabarits, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
         if parsed_path == "/api/profils":
             try:
                 import yaml

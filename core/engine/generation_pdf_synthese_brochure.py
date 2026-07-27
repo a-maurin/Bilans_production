@@ -428,6 +428,97 @@ def _theme_pct_strings_brochure(values: list[int], *, total_value: int) -> list[
     ]
 
 
+def _build_treemap_placeholder_banner(builder: PDFReportBuilder, outer_w: float):
+    inner_w = encadre_inner_width(outer_w, pad_pt=_PAD_STD_PT)
+    p_style = ParagraphStyle(
+        "BrochureTreemapPlaceholder",
+        parent=builder.styles["BodyText"],
+        fontName=builder.styles["BodyText"].fontName,
+        fontSize=8.5,
+        leading=11.0,
+        textColor=rl_colors.HexColor("#4B5563"),
+        alignment=1,
+    )
+    p = Paragraph("<i>treemap temps par thématique en attente d'implémentation</i>", p_style)
+    body_tbl = Table([[p]], colWidths=[inner_w])
+    body_tbl.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), rl_colors.HexColor("#F3F4F6")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("BOX", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#D1D5DB")),
+        ])
+    )
+    return encadre_section(
+        outer_w,
+        "TEMPS PASSÉS PAR THÉMATIQUES",
+        [body_tbl],
+        builder.styles,
+    )
+
+
+def _build_matrice_themes_table(
+    proc_theme: pd.DataFrame | None,
+    inner_w: float,
+) -> Table:
+    if proc_theme is None or proc_theme.empty:
+        return brochure_table(
+            [["Thématiques du plan de contrôle", "PA", "PJ", "PVe"], ["Aucune donnée de procédure", "0", "0", "0"]],
+            col_widths=col_widths_from_fracs(inner_w, [0.55, 0.15, 0.15, 0.15]),
+            col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT"],
+            header_row=True,
+        )
+
+    df = proc_theme.copy()
+    for col in ("nb_pa", "nb_pej", "nb_pve"):
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = df[col].fillna(0).astype(int)
+
+    if "nb_total" in df.columns:
+        df["nb_total_calc"] = df["nb_total"].astype(int)
+    else:
+        df["nb_total_calc"] = df["nb_pa"] + df["nb_pej"] + df["nb_pve"]
+
+    df = df[df["nb_total_calc"] >= 1]
+
+    if df.empty:
+        return brochure_table(
+            [["Thématiques du plan de contrôle", "PA", "PJ", "PVe"], ["Aucune procédure enregistrée", "0", "0", "0"]],
+            col_widths=col_widths_from_fracs(inner_w, [0.55, 0.15, 0.15, 0.15]),
+            col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT"],
+            header_row=True,
+        )
+
+    df = df.sort_values(by="nb_total_calc", ascending=False)
+
+    col_fracs = [0.55, 0.15, 0.15, 0.15]
+    col_widths = col_widths_from_fracs(inner_w, col_fracs)
+    col_aligns = ["LEFT", "RIGHT", "RIGHT", "RIGHT"]
+
+    rows: list[list[str]] = [["Thématiques du plan de contrôle", "PA", "PJ", "PVe"]]
+
+    theme_col = "theme" if "theme" in df.columns else df.columns[0]
+    for _, r in df.iterrows():
+        label = _truncate_theme(str(r.get(theme_col, "")), max_len=36)
+        pa_val = str(int(r.get("nb_pa", 0)))
+        pej_val = str(int(r.get("nb_pej", 0)))
+        pve_val = str(int(r.get("nb_pve", 0)))
+        rows.append([label, pa_val, pej_val, pve_val])
+
+    return brochure_table(
+        rows,
+        col_widths=col_widths,
+        col_aligns=col_aligns,
+        split_by_row=False,
+        header_row=True,
+    )
+
+
 def _append_dual_panels(
     builder: PDFReportBuilder,
     *,
@@ -741,6 +832,7 @@ def generate_synthese_brochure_pdf_report(
     diffusion: str = "externe",
     cartes: bool = True,
     brochure: bool = True,
+    gabarit: str | None = None,
 ) -> None:
     del chart_preset, brochure
     apply_brochure_mpl_style()
@@ -761,6 +853,7 @@ def generate_synthese_brochure_pdf_report(
         output_filename=output_filename,
         diffusion=diffusion,
         cartes=cartes,
+        gabarit=gabarit,
     )
 
 
@@ -776,13 +869,15 @@ def _generate_synthese_brochure_pdf(
     output_filename: str | None,
     diffusion: str,
     cartes: bool,
+    gabarit: str | None = None,
 ) -> None:
     profil_id = str(profile.get("id", PROFILE_ID))
     scope = str(profile.get("presentation_scope", "global")).strip() or "global"
     resolved = resolve_pdf_presentation_config(
-        _ROOT, scope=scope, profile_id=profil_id, diffusion=diffusion
+        _ROOT, scope=scope, profile_id=profil_id, diffusion=diffusion, gabarit_id=gabarit
     )
     presentation_cfg = resolved.get("effective", {}) if isinstance(resolved, dict) else {}
+    gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit
 
     cfg = BilanConfig.from_strings(
         str(date_deb.date()),
@@ -928,14 +1023,17 @@ def _generate_synthese_brochure_pdf(
         split_by_row=False,
         header_row=False,
     )
-    themes_panel = encadre_section(
-        themes_w,
-        "Principaux thèmes d'activité",
-        themes_body,
-        builder.styles,
-        col_headers=["Nb", "Taux"],
-        col_width_fracs=_BROCHURE_THEME_COL_FRACS,
-    )
+    if gabarit_id == "srp_r27":
+        themes_panel = _build_treemap_placeholder_banner(builder, themes_w)
+    else:
+        themes_panel = encadre_section(
+            themes_w,
+            "Principaux thèmes d'activité",
+            themes_body,
+            builder.styles,
+            col_headers=["Nb", "Taux"],
+            col_width_fracs=_BROCHURE_THEME_COL_FRACS,
+        )
     results_panel = encadre_section(
         results_w,
         "Résultats des contrôles",
@@ -1082,12 +1180,21 @@ def _generate_synthese_brochure_pdf(
         builder.styles,
         variant="default",
     )
-    result_panel = encadre_section(
-        result_w,
-        "Résultats par type d'usager",
-        result_chart_body,
-        builder.styles,
-    )
+    if gabarit_id == "srp_r27":
+        matrice_tbl = _build_matrice_themes_table(proc_theme, result_inner_w)
+        result_panel = encadre_section(
+            result_w,
+            "Thématiques du plan de contrôle (PA / PJ / PVe)",
+            [matrice_tbl],
+            builder.styles,
+        )
+    else:
+        result_panel = encadre_section(
+            result_w,
+            "Résultats par type d'usager",
+            result_chart_body,
+            builder.styles,
+        )
     _append_page2_row(builder, [pie_panel, result_panel], [pie_w, top_gap, result_w])
     _append_spacer(builder, _BROCHURE_SECTION_GAP_MM)
 

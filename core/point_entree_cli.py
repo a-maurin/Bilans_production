@@ -299,11 +299,32 @@ def main() -> int:
         action="store_true",
         help="Ne pas ouvrir automatiquement le fichier PDF généré.",
     )
+    parser.add_argument(
+        "--gabarit",
+        type=str,
+        default=None,
+        help="Identifiant du gabarit de présentation PDF à appliquer (ex: srp_r27).",
+    )
+    parser.add_argument(
+        "--list-gabarits",
+        action="store_true",
+        help="Lister les gabarits de présentation disponibles.",
+    )
     args = parser.parse_args()
 
     # Configuration du logging selon l'option --debug
     console_level = logging.DEBUG if args.debug else logging.WARNING
     configure_logging(console_level)
+
+    if args.list_gabarits:
+        from core.common.chargeur_gabarits import list_gabarits
+        gabarits = list_gabarits()
+        if not gabarits:
+            print("Aucun gabarit de présentation trouvé.", file=sys.stderr)
+            return 0
+        for g in gabarits:
+            print(f"- {g['gabarit_id']} : {g['label']}")
+        return 0
 
     if args.list_type_usagers:
         labels = _load_type_usager_labels()
@@ -442,6 +463,9 @@ def main() -> int:
 
     if args.no_open:
         cli_options["no_open"] = True
+
+    if args.gabarit:
+        cli_options["gabarit"] = args.gabarit
 
     from core.common.chargeurs_donnees import init_session_cache, clear_session_cache
 

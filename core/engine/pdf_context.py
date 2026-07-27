@@ -94,12 +94,14 @@ class PdfContext:
     pej_dom: pd.DataFrame | None = None
     proc_summary: dict[str, Any] | None = field(default_factory=dict)
     
-    # Paramètres de cartographie
+    # Paramètres de cartographie et gabarit
     cartes: bool = True
     global_map_paths: list[Path] = field(default_factory=list)
     global_map_layout: str = "vertical"
     map_captions: list[str] | None = None
     map_id: str = "global"
+    gabarit_id: str | None = None
+    layout_mode: str = "standard"
 
     @property
     def profile_id(self) -> str:

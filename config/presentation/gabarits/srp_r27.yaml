@@ -1,0 +1,23 @@
+version: 1
+gabarit_id: srp_r27
+label: "R27 - Service Régional Police (BFC)"
+description: "Gabarit de présentation avec mise en page brochure condensée pour le SRP Bourgogne-Franche-Comté"
+
+cible: les_deux
+organisation:
+  code_region: r27
+  service: srp
+
+layout: brochure_custom
+
+title:
+  line2_mode: fixed
+  line2_fixed: "Service Régional Police – BFC"
+
+sections:
+  order:
+    - sec1
+    - sec2
+    - sec4
+    - sec3
+    - sec6

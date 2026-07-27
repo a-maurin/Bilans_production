@@ -398,10 +398,11 @@ def resolve_pdf_presentation_config(
     scope: str,
     profile_id: str | None = None,
     diffusion: str | None = "interne",
+    gabarit_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Résout la config effective :
-    defaults -> scopes[scope] -> profiles[profile_id] (si scope compatible).
+    defaults -> scopes[scope] -> profiles[profile_id] -> gabarit_id (si valide/compatible).
     """
     raw = load_pdf_presentation_raw_config(root)
 
@@ -434,6 +435,23 @@ def resolve_pdf_presentation_config(
             overlay = {k: v for k, v in ext_cfg.items() if k != "scope"}
             effective = _deep_merge(effective, overlay)
 
+    layout_mode = "standard"
+    if gabarit_id:
+        from core.common.chargeur_gabarits import load_gabarit, is_gabarit_compatible
+        gabarit_data = load_gabarit(gabarit_id, root)
+        target_cible = "brochure" if scope == "synthese_regionale" else "bilan"
+        if gabarit_data and is_gabarit_compatible(gabarit_data, profile_id=profile_id, cible=target_cible):
+            layout_mode = str(gabarit_data.get("layout", "standard")).strip()
+            gabarit_overrides = {
+                k: v for k, v in gabarit_data.items()
+                if k not in (
+                    "version", "gabarit_id", "label", "description",
+                    "cible", "organisation", "profils_compatibles", "layout"
+                )
+            }
+            if gabarit_overrides:
+                effective = _deep_merge(effective, gabarit_overrides)
+
     registry = raw.get("feature_registry", {})
     if isinstance(registry, dict):
         apply_feature_registry_to_effective(effective, scope, registry)
@@ -444,6 +462,8 @@ def resolve_pdf_presentation_config(
         "feature_registry": raw.get("feature_registry", {}),
         "effective": effective,
         "diffusion": diffusion_norm,
+        "gabarit_id": gabarit_id,
+        "layout_mode": layout_mode,
     }
 
 

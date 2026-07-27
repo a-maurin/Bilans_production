@@ -3570,11 +3570,13 @@ def _generate_pdf(
     export_prefix = profile.get("_export_prefix") or profil_id
     display_label = single_label if (is_single_usager and single_label) else label
     diffusion = str(options.get("diffusion", "interne")).strip().lower()
+    gabarit_id = options.get("gabarit")
     resolved_presentation_cfg = resolve_pdf_presentation_config(
         PROJECT_ROOT,
         scope="thematique",
         profile_id=profil_id,
         diffusion=diffusion,
+        gabarit_id=gabarit_id,
     )
     presentation_cfg = (
         resolved_presentation_cfg.get("effective", {})

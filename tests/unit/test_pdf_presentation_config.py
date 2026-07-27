@@ -607,3 +607,12 @@ def test_pdf_sommaire_includes_section_32() -> None:
     assert idx_sec42 == idx_sec41 + 1, "sec42 doit suivre immédiatement sec41 dans le sommaire thématique"
 
 
+def test_resolve_pdf_presentation_config_gabarit_overlay(tmp_path: Path):
+    resolved = resolve_pdf_presentation_config(tmp_path, scope="global", profile_id=None, gabarit_id="srp_r27")
+    assert resolved["gabarit_id"] == "srp_r27"
+    assert resolved["layout_mode"] == "brochure_custom"
+    title_line2 = resolved["effective"].get("title", {}).get("line2_fixed")
+    assert title_line2 == "Service Régional Police – BFC"
+
+
+

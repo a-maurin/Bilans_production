@@ -301,6 +301,7 @@ def generate_synthese_pdf_report(
     diffusion: str = "externe",
     cartes: bool = True,
     brochure: bool = False,
+    gabarit: str | None = None,
 ) -> None:
     del chart_preset, brochure
     apply_mpl_style()
@@ -336,6 +337,7 @@ def generate_synthese_pdf_report(
         output_filename=output_filename,
         diffusion=diffusion,
         cartes=cartes,
+        gabarit=gabarit,
     )
 
 

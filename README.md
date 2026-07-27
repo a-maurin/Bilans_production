@@ -2,9 +2,9 @@
 
 # OFBilan (Extension QGIS)
 
-**OFBilan** est un outil avancé d'aide à la décision, d'exploration de données et de communication. Il s'appuie sur les données de contrôles (OSCEAN) et les procédures (PVe / PEJ / PA) de l'Office Français de la Biodiversité (OFB).
+**OFBilan** est un outil d'aide à la décision, d'exploration de données et de communication. Il s'appuie sur les données de contrôles (OSCEAN) et les procédures (PVe / PEJ / PA) de l'Office Français de la Biodiversité (OFB).
 
-Conçu pour allier la puissance d'analyse spatiale de QGIS à la flexibilité d'une interface web moderne, **OFBilan est distribué sous la forme d'une extension QGIS**.
+**OFBilan est distribué sous la forme d'une extension QGIS**.
 
 ---
 
@@ -15,16 +15,16 @@ Le programme s'articule autour de deux modules majeurs :
 ### 1. OFBilan Explorer (Analyse interactive)
 Une interface web embarquée pour l'exploration fluide de vos données :
 *   **Cartographie interactive (Leaflet)** : Visualisation géographique instantanée des points de contrôle, clustering dynamique et génération de cartes de chaleur (Heatmaps) filtrables par année.
-*   **Tableaux de bord (Chart.js)** : Statistiques clés actualisées en temps réel selon l'emprise spatiale et les filtres actifs (Top 5 thématiques, répartition des suites données, etc.).
+*   **Tableaux de bord (Chart.js)** : Statistiques clés actualisées selon l'emprise spatiale et les filtres actifs (Top 5 thématiques, répartition des suites données, etc.).
 *   **Filtrage multi-critères à la volée** : Affinez instantanément vos données par période, département, BMI, type d'usager, thématique ou nature de l'infraction.
 *   **Interface ergonomique** : Légende dynamique, console d'édition intégrée avec outils de copie rapide, et gestion optimisée des regroupements cartographiques.
 
 ### 2. Éditeur de Bilans PDF (Génération de rapports)
-Un puissant moteur de rendu pour automatiser vos rapports d'activité :
+Un moteur de rendu pour automatiser vos rapports d'activité :
 *   **Catalogue sur mesure** : Bilans globaux, thématiques (eau, chasse, espèces, pollutions...) ou ciblés par type d'usager, paramétrables via des profils YAML.
-*   **Mise en page professionnelle** : Génération de rapports détaillés ou de brochures A4 synthétiques (4 pages).
+*   **Mise en page professionnelle** : Génération de rapports détaillés ou de brochures synthétiques.
 *   **Gestion de la confidentialité** : Double périmètre de diffusion (versions *Internes* détaillées vs *Externes* anonymisées pour les partenaires).
-*   **Cartographie native automatisée** : Communication directe avec le moteur QGIS pour insérer automatiquement des cartes territoriales de haute qualité dans les rapports PDF.
+*   **Cartographie native automatisée** : Communication directe avec le moteur QGIS pour insérer automatiquement des cartes territoriales dans les rapports PDF.
 
 ---
 

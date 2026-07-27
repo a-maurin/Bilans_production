@@ -2,7 +2,7 @@
 
 # OFBilan (Extension QGIS)
 
-**OFBilan** est un outil avancé d'aide à la décision, d'exploration de données et de communication. Il s'appuie sur les données de contrôles (OSCEAN) et les procédures (PVe / PEJ / PA) de l'Office Français de la Biodiversité (OFB).
+**OFBilan** est un outil d'aide à la décision, d'exploration de données et de communication. Il s'appuie sur les données de contrôles (OSCEAN) et les procédures (PVe / PEJ / PA) de l'Office Français de la Biodiversité (OFB).
 
 Conçu pour allier la puissance d'analyse spatiale de QGIS à la flexibilité d'une interface web moderne, **OFBilan est distribué sous la forme d'une extension QGIS**.
 

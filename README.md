@@ -12,14 +12,14 @@ Conçu pour allier la puissance d'analyse spatiale de QGIS à la flexibilité d'
 
 Le programme s'articule autour de deux modules majeurs :
 
-### 1. OFBilan Explorer (Analyse Dynamique & Interactive)
+### 1. OFBilan Explorer (Analyse interactive)
 Une interface web embarquée pour l'exploration fluide de vos données :
 *   **Cartographie interactive (Leaflet)** : Visualisation géographique instantanée des points de contrôle, clustering dynamique et génération de cartes de chaleur (Heatmaps) filtrables par année.
 *   **Tableaux de bord (Chart.js)** : Statistiques clés actualisées en temps réel selon l'emprise spatiale et les filtres actifs (Top 5 thématiques, répartition des suites données, etc.).
 *   **Filtrage multi-critères à la volée** : Affinez instantanément vos données par période, département, BMI, type d'usager, thématique ou nature de l'infraction.
 *   **Interface ergonomique** : Légende dynamique, console d'édition intégrée avec outils de copie rapide, et gestion optimisée des regroupements cartographiques.
 
-### 2. Éditeur de Bilans PDF (Génération de Rapports)
+### 2. Éditeur de Bilans PDF (Génération de rapports)
 Un puissant moteur de rendu pour automatiser vos rapports d'activité :
 *   **Catalogue sur mesure** : Bilans globaux, thématiques (eau, chasse, espèces, pollutions...) ou ciblés par type d'usager, paramétrables via des profils YAML.
 *   **Mise en page professionnelle** : Génération de rapports détaillés ou de brochures A4 synthétiques (4 pages).

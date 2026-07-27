@@ -217,9 +217,6 @@ de l'auteur original (Aguirre MAURIN).
             z-index: 1;
         }
 
-        .hidden {
-            display: none !important;
-        }
 
         .data-table th {
             font-weight: 600;
@@ -261,7 +258,7 @@ de l'auteur original (Aguirre MAURIN).
             transition: all 0.2s ease;
             font-weight: 600;
         }
-        
+
         .btn-quick-year:hover {
             background-color: #e2e8f0;
         }
@@ -295,13 +292,15 @@ de l'auteur original (Aguirre MAURIN).
             <nav class="app-nav">
                 <a href="explorer.html" class="nav-item active">Analyse Interactive</a>
                 <a href="index.html" class="nav-item">Éditeur de Bilans</a>
-                <a href="#" onclick="restartServer(); return false;" class="nav-item"
-                    style="margin-left: auto; color: #F4A261; font-weight: 600;"
-                    title="Redémarrer le serveur local (Utile après mise à jour des données brutes)">↻ Redémarrer</a>
+                <a href="#" onclick="restartServer(); return false;" class="nav-item nav-item-push"
+                    style="color: #F4A261; font-weight: 600;"
+                    title="Redémarrer le serveur local (Utile après mise à jour des données brutes)">↻ <span
+                        class="nav-text-hide-medium">Redémarrer</span></a>
                 <a href="#" onclick="shutdownServer(); return false;" class="nav-item"
-                    style="color: #D95C4A; font-weight: 600;" title="Éteindre le serveur">⏻ Éteindre</a>
-                <button id="btn-update-sources" class="nav-item"
-                    style="margin-left: 15px; background:none; border:none; cursor:pointer; color: #cbd5e1; display:flex; align-items:center; gap:5px; font-weight:600;"
+                    style="color: #D95C4A; font-weight: 600;" title="Éteindre le serveur">⏻ <span
+                        class="nav-text-hide-medium">Éteindre</span></a>
+                <button id="btn-update-sources" class="nav-item nav-icon-btn"
+                    style="background:none; border:none; cursor:pointer; color: #cbd5e1; font-weight:600;"
                     title="Mettre à jour les sources">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                         viewBox="0 0 16 16">
@@ -310,19 +309,20 @@ de l'auteur original (Aguirre MAURIN).
                         <path
                             d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
                     </svg>
+                    <span class="nav-label-mobile">Mise à jour les sources</span>
                 </button>
-                <a href="#" onclick="openHelpModal(); return false;" class="nav-item"
-                    style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;"
-                    title="Guide et Aide">
+                <a href="#" onclick="openHelpModal(); return false;" class="nav-item nav-icon-btn"
+                    style="color: #cbd5e1;" title="Guide et Aide">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                     </svg>
+                    <span class="nav-label-mobile">Aide et guide</span>
                 </a>
-                <a href="#" onclick="openSettingsModal(); return false;" class="nav-item"
-                    style="margin-left: 15px; color: #cbd5e1; display: flex; align-items: center;" title="Paramètres">
+                <a href="#" onclick="openSettingsModal(); return false;" class="nav-item nav-icon-btn"
+                    style="color: #cbd5e1;" title="Paramètres">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -330,31 +330,32 @@ de l'auteur original (Aguirre MAURIN).
                             d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
                         </path>
                     </svg>
+                    <span class="nav-label-mobile">Paramètres</span>
                 </a>
             </nav>
         </div>
     </header>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const btnUpdate = document.getElementById('btn-update-sources');
             let isInitialDownload = false;
-            
-            if(btnUpdate) {
-                btnUpdate.addEventListener('click', function(e) {
+
+            if (btnUpdate) {
+                btnUpdate.addEventListener('click', function (e) {
                     const consoleContainer = document.getElementById('update-console-container');
                     const consoleOutput = document.getElementById('update-console-output');
-                    
+
                     consoleContainer.classList.remove('hidden');
                     consoleContainer.style.display = 'flex';
                     consoleOutput.innerHTML = "Démarrage de la mise à jour...\n";
-                    
+
                     const evtSource = new EventSource("/api/update-sources");
-                    
-                    evtSource.onmessage = function(event) {
+
+                    evtSource.onmessage = function (event) {
                         consoleOutput.innerHTML += event.data + "\n";
                         consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                        
+
                         if (event.data.startsWith("[TERMINE]")) {
                             evtSource.close();
                             consoleOutput.innerHTML += "\nMise à jour terminée. Redémarrage du serveur...\n";
@@ -373,8 +374,8 @@ de l'auteur original (Aguirre MAURIN).
                             }, 3000);
                         }
                     };
-                    
-                    evtSource.onerror = function() {
+
+                    evtSource.onerror = function () {
                         consoleOutput.innerHTML += "[ERREUR] Connexion SSE perdue.\n";
                         evtSource.close();
                         if (isInitialDownload) {
@@ -387,15 +388,15 @@ de l'auteur original (Aguirre MAURIN).
                         }, 3000);
                     };
                 });
-                
+
                 // Vérification automatique au démarrage
                 fetch('/api/check-sources')
                     .then(r => r.json())
                     .then(data => {
-                        if(data.needs_update) {
+                        if (data.needs_update) {
                             console.log("Sources manquantes, lancement automatique du premier téléchargement...");
                             isInitialDownload = true;
-                            btnUpdate.click(); 
+                            btnUpdate.click();
                         }
                     })
                     .catch(e => console.error("Erreur check-sources:", e));
@@ -620,8 +621,7 @@ de l'auteur original (Aguirre MAURIN).
                 style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; flex: 1;">
                 <!-- Bloc Carte & Saisonnalité -->
                 <div style="display: flex; flex-direction: column; gap: 15px; min-width: 0;">
-                    <div class="card"
-                        style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
+                    <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <h2 style="margin-bottom: 0 !important;">Localisation des données</h2>
@@ -637,7 +637,8 @@ de l'auteur original (Aguirre MAURIN).
                                     <input type="radio" name="map-mode" value="heatmap" style="margin: 0;"> Chaleur
                                 </label>
                                 <span style="color: var(--color-border);">|</span>
-                                <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;"></div>
+                                <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;">
+                                </div>
                                 <span style="color: var(--color-border);">|</span>
                                 <button type="button" id="btn-fullscreen-map"
                                     style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 2px; font-weight: 600; color: var(--color-primary);"
@@ -1042,10 +1043,11 @@ de l'auteur original (Aguirre MAURIN).
                                 id="set-ui-zoom" value="8"></div>
                         <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
                             <input type="checkbox" id="set-ui-cluster-offset" checked style="margin:0;">
-                            <label for="set-ui-cluster-offset" style="margin:0; cursor:pointer;">Écarter les clusters superposés</label>
+                            <label for="set-ui-cluster-offset" style="margin:0; cursor:pointer;">Écarter les clusters
+                                superposés</label>
                         </div>
-                        <div class="form-group"><label>Niveau de zoom minimal pour l'écartement :</label><input type="number"
-                                id="set-ui-cluster-zoom" value="10"></div>
+                        <div class="form-group"><label>Niveau de zoom minimal pour l'écartement :</label><input
+                                type="number" id="set-ui-cluster-zoom" value="10"></div>
                     </div>
                     <div class="card" style="margin: 0;">
                         <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Paramètres avancés</h3>

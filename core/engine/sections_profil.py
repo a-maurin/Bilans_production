@@ -845,6 +845,8 @@ def render_sec42(ctx: PdfContext) -> None:
     if not (is_block_enabled(ctx.presentation_cfg, "sec4.show_resultats_par_type_usager_chart", True) or is_block_enabled(ctx.presentation_cfg, "sec4.show_resultats_par_type_usager_table", True)):
         return
     if ctx.res_usager is None or ctx.res_usager.empty:
+        ctx.builder.add_section("sec42", ctx.section_title["sec42"], level=2, toc_level=1)
+        ctx.builder.add_paragraph("Aucun résultat de contrôle par type d'usager pour la période.")
         return
 
     sec4_bar_w = ctx.chart_bar_w * 0.86
@@ -987,8 +989,11 @@ def render_sec5map(ctx: PdfContext) -> None:
         if is_section_enabled(ctx.presentation_cfg, "sec5map", True) and ctx.show_placeholder:
             ctx.builder.add_paragraph("<i>Cartographie désactivée pour ce bilan.</i>")
     elif is_section_enabled(ctx.presentation_cfg, "sec5map", True) and ctx.global_map_paths and show_map_block:
+        echelle_val = getattr(ctx, "echelle", "departement")
+        is_reg = echelle_val == "region" or str(getattr(ctx, "dept_name_typo", "")).lower().startswith("région")
+        loc_str = "la région" if is_reg else "le département"
         ctx.builder.append_pending_paragraph(
-            "Répartition spatiale des contrôles et procédures sur le département "
+            f"Répartition spatiale des contrôles et procédures sur {loc_str} "
             "(générateur cartographique).",
         )
         ctx.builder.add_maps(

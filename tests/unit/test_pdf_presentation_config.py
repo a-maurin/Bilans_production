@@ -572,3 +572,38 @@ scopes:
 
     # Doit hériter de global pour l'ordre des sections
     assert effective["sections"]["order"] == ["sec1", "sec3", "sec2"]
+
+
+def test_pdf_sommaire_includes_section_32() -> None:
+    """Vérifie que sec42 (3.2. Résultats des contrôles par type d'usager) est dans sections_toc pour la synthèse et le profil global."""
+    root = Path(__file__).resolve().parents[2]
+    
+    from core.common.pdf_presentation_config import inject_sec4_subsections, resolve_sections_for_toc
+    
+    base_defs = [
+        ("sec1", "1. Chiffres clés"),
+        ("sec2", "2. Contrôles et procédures"),
+        ("sec4", "3. Activité par type d’usager"),
+        ("sec3", "4. Procédures (PEJ, PA, PVe)"),
+        ("sec5", "5. Cartographie"),
+        ("sec6", "6. Annexes"),
+    ]
+    full_defs = inject_sec4_subsections(base_defs)
+
+    # 1. Vérification sous scope global
+    resolved_global = resolve_pdf_presentation_config(root, scope="global", profile_id=None)
+    toc_global = resolve_sections_for_toc(resolved_global["effective"], full_defs)
+    toc_global_ids = [sid for sid, _ in toc_global]
+    assert "sec42" in toc_global_ids, "sec42 doit figurer dans le sommaire global"
+
+    # 2. Vérification sous scope thématique (où sec41 et sec42 sont toutes deux activées)
+    resolved_them = resolve_pdf_presentation_config(root, scope="thematique", profile_id="chasse")
+    toc_them = resolve_sections_for_toc(resolved_them["effective"], full_defs)
+    toc_them_ids = [sid for sid, _ in toc_them]
+    assert "sec42" in toc_them_ids, "sec42 doit figurer dans le sommaire thématique"
+    assert "sec41" in toc_them_ids, "sec41 doit figurer dans le sommaire thématique"
+    idx_sec41 = toc_them_ids.index("sec41")
+    idx_sec42 = toc_them_ids.index("sec42")
+    assert idx_sec42 == idx_sec41 + 1, "sec42 doit suivre immédiatement sec41 dans le sommaire thématique"
+
+

@@ -613,6 +613,7 @@ def resolve_layers_for_config(
                 else:
                     uri = str(gpkg_path)
                 layer.setDataSource(uri, layer.name(), "ogr")
+                layer.setSubsetString("")
                 logger.info("Source de données '%s' substituée par : %s", layer.name(), gpkg_path.name)
         
         results.append((layer, resolved_name, source))
@@ -1206,18 +1207,20 @@ def _depart_attr_condition(field_name: str, depart: str) -> str:
     if len(deps) > 1 or (deps and (depart.upper().startswith("R") or depart.upper().startswith("BMI-"))):
         in_values = []
         for p in deps:
-            in_values.append(repr(p))
+            p_str = str(p).strip()
+            in_values.append(repr(p_str))
+            in_values.append(repr(f"{p_str}.0"))
             try:
-                in_values.append(str(int(p)))
+                in_values.append(str(int(p_str)))
             except ValueError:
                 pass
         return f'"{field_name}" IN ({", ".join(in_values)})'
         
     try:
         depart_int = int(depart)
-        return f'"{field_name}" IN ({depart!r}, {depart_int})'
+        return f'"{field_name}" IN ({depart!r}, {depart!r} || \'.0\', {depart_int})'
     except ValueError:
-        return f'"{field_name}" = {depart!r}'
+        return f'"{field_name}" IN ({depart!r}, {depart!r} || \'.0\')'
 
 
 def _build_date_condition(fields, field_name: str, date_deb: str, date_fin: str) -> str:
@@ -1649,9 +1652,14 @@ def _apply_legend_labels(
 ) -> None:
     """Met à jour les libellés de la légende du layout avec les legend_label du profil."""
     if legend_labels_map is None:
-        legend_labels_map = {
-            lc.layer_name: (lc.legend_label or lc.layer_name) for lc in prof.layers.values()
-        }
+        legend_labels_map = {}
+        for lc in prof.layers.values():
+            lbl = lc.legend_label or lc.layer_name
+            if lbl.startswith("localisation_infrac_FAITS"):
+                lbl = "Localisation des infractions"
+            elif lbl == "emprise_dep":
+                lbl = "Périmètre de l'étude"
+            legend_labels_map[lc.layer_name] = lbl
     if not legend_labels_map:
         return
 
@@ -1850,9 +1858,9 @@ def resolve_map_title(prof: "ProfileConfig", dept_code: Optional[str] = None) ->
             periode = f"Du {clean_date_deb} au {clean_date_fin}"
 
     parts = [base_title]
-    if dept_name:
+    if dept_name and dept_name.lower() not in base_title.lower():
         parts.append(dept_name)
-    if periode:
+    if periode and periode.lower() not in base_title.lower():
         parts.append(periode)
         
     return " — ".join(parts)
@@ -2639,10 +2647,15 @@ def run_export(
 
                     apply_date_filter(layer, lcfg, prof.date_deb, prof.date_fin, config=carto_config, profile=prof)
 
-                    # Log et alerte sur le nombre d'entités après filtrage
+                    # Log et alerte sur le nombre d'entités après filtrage (avec diagnostic poussé)
                     try:
                         f_count = layer.featureCount()
+                        sub_str = layer.subsetString()
+                        source_uri = layer.publicSource()
+                        logger.info("    🔍 [DIAGNOSTIC CARTO] Couche '%s' (Source: %s)", resolved_name, source_uri)
+                        logger.info("    🔍 [DIAGNOSTIC CARTO] Filter (subsetString): %s", repr(sub_str))
                         logger.info("    -> Couche '%s' : %d entité(s) après filtrage", resolved_name, f_count)
+                        
                         if f_count == 0 and getattr(lcfg, "layer_role", None) != "pochoir" and getattr(lcfg, "layer_role", None) != "contexte":
                             logger.warning(
                                 "    ⚠️ [VIDE] La couche '%s' ne contient AUCUNE entité avec les filtres actuels "

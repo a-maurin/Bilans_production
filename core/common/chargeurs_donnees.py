@@ -42,10 +42,29 @@ from core.common.utilitaires_metier import (
 logger = logging.getLogger(__name__)
 
 def read_vector_attributes(path: Path) -> pd.DataFrame:
-    """Lit les attributs d'une couche vecteur (sans géométrie). Fallback OGR si geopandas absent."""
+    """Lit les attributs d'une couche vecteur (sans géométrie). Fallback OGR si geopandas absent.
+
+    Les coordonnées WGS84 (x_wgs84, y_wgs84) sont extraites de la géométrie
+    avant sa suppression si elles ne sont pas déjà présentes comme attributs.
+    Cela permet aux exports cartographiques de construire des GeoDataFrames
+    même quand les fichiers sources ne stockent pas les coordonnées en attributs.
+    """
     try:
         import geopandas as gpd
         gdf = gpd.read_file(path)
+        # Extraire coordonnées WGS84 depuis la géométrie si pas déjà en attributs
+        if gdf.geometry is not None and not gdf.geometry.isna().all():
+            try:
+                has_x = any(c in gdf.columns for c in ("x_wgs84", "longitude", "lon", "x"))
+                has_y = any(c in gdf.columns for c in ("y_wgs84", "latitude", "lat", "y"))
+                if not has_x or not has_y:
+                    gdf_wgs84 = gdf.to_crs("EPSG:4326") if (gdf.crs and gdf.crs.to_epsg() != 4326) else gdf
+                    if not has_x:
+                        gdf["x_wgs84"] = gdf_wgs84.geometry.x
+                    if not has_y:
+                        gdf["y_wgs84"] = gdf_wgs84.geometry.y
+            except Exception:
+                pass
         return pd.DataFrame(gdf.drop(columns=["geometry"], errors="ignore"))
     except ImportError:
         from osgeo import ogr
@@ -199,7 +218,19 @@ def safe_to_datetime(series: pd.Series) -> pd.Series:
     return res
 
 
-
+def _filter_dept_series(df: pd.DataFrame, col: str, target_depts: Sequence[str]) -> pd.DataFrame:
+    """Filtre un DataFrame en gérant la normalisation des codes départements (ex: 21, 21.0, 021)."""
+    if df.empty or col not in df.columns or not target_depts or "FR" in target_depts:
+        return df
+    clean_s = df[col].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+    targets = set()
+    for d in target_depts:
+        d_str = str(d).strip().upper()
+        targets.add(d_str)
+        if d_str.isdigit():
+            targets.add(str(int(d_str)))
+            targets.add(d_str.zfill(2))
+    return df[clean_s.isin(targets)].copy()
 
 
 def _find_latest_dated_file(directory: Path, prefix: str, exts: Tuple[str, ...]) -> Path:
@@ -290,7 +321,7 @@ def load_point_ctrl(
             elif echelle_norm != "bmi" and "num_depart" in df_all.columns:
                 dept_codes = get_departements_pour_perimetre(echelle, code)
                 if dept_codes and "FR" not in dept_codes:
-                    df_all = df_all[df_all["num_depart"].astype(str).str.strip().isin(dept_codes)].copy()
+                    df_all = _filter_dept_series(df_all, "num_depart", dept_codes)
         if date_deb is not None and date_fin is not None:
             try:
                 deb_ts = pd.to_datetime(date_deb)
@@ -478,7 +509,7 @@ def load_point_ctrl(
         # Filtre à posteriori par département
         if target_depts is not None and "FR" not in target_depts:
             if "num_depart" in df.columns:
-                df = df[df["num_depart"].astype(str).str.strip().isin(target_depts)].copy()
+                df = _filter_dept_series(df, "num_depart", target_depts)
         
         frames.append(df)
 
@@ -505,7 +536,7 @@ def load_point_ctrl(
         elif echelle_norm != "bmi" and "num_depart" in df_all.columns:
             dept_codes = get_departements_pour_perimetre(echelle, code)
             if dept_codes and "FR" not in dept_codes:
-                df_all = df_all[df_all["num_depart"].astype(str).str.strip().isin(dept_codes)].copy()
+                df_all = _filter_dept_series(df_all, "num_depart", dept_codes)
     if date_deb is not None and date_fin is not None:
         try:
             deb_ts = pd.to_datetime(date_deb)

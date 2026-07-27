@@ -447,12 +447,13 @@ def ensure_maps_for_profiles(
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
     diffusion: str = "interne",
+    force_regen: bool = False,
 ) -> List[Path]:
     """
     Ensure that maps exist for a list of cartographic profiles.
 
-    - Utilise les cartes pré-générées si elles existent déjà.
-    - Tente de générer les cartes manquantes via QGIS (run_export) si disponible.
+    - Utilise les cartes pré-générées si elles existent déjà (sauf si force_regen=True).
+    - Tente de générer les cartes manquantes/forcées via QGIS (run_export) si disponible.
     - Ne lève pas d'erreur en cas d'échec de génération : retourne simplement
       les cartes trouvées.
     """
@@ -482,12 +483,12 @@ def ensure_maps_for_profiles(
     missing: List[str] = []
     for pid in unique_ids:
         m = resolve_map_png_path(pid, bilan_profiles=bilan_profiles, target_dir=target_dir)
-        if m and is_map_valid_for_dept(m, carto_dept):
+        if m and is_map_valid_for_dept(m, carto_dept) and not force_regen:
             existing.append(m)
         elif m:
             marker = read_map_dept_marker(m)
             logger.info(
-                "Carte %s ignorée pour le département %s (marqueur=%s, profil=%s) — régénération QGIS prévue",
+                "Carte %s ignorée/forcée pour le département %s (marqueur=%s, profil=%s) — régénération QGIS prévue",
                 m.name,
                 carto_dept,
                 marker or "absent",

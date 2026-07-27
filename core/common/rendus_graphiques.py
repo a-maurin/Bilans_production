@@ -193,6 +193,57 @@ def _sanitize_chart_period_tick_labels(labels: list) -> list[str]:
     return out
 
 
+def _prepare_pie_data(
+    data: dict,
+    group_below_pct: float = 1.0,
+    other_label: str = "Autres domaines",
+) -> dict:
+    """
+    Filtre, regroupe les catégories < group_below_pct % dans 'Autres domaines'
+    et trie les données par ordre décroissant (avec 'Autres domaines' en toute fin).
+    Exclut du regroupement les graphiques de statuts (Conforme / Non-conforme / En attente).
+    """
+    if not data:
+        return {}
+
+    status_keys = {"conforme", "non-conforme", "non conformes", "non-conformes", "en attente", "attente"}
+    is_status = all(str(k).strip().lower() in status_keys for k in data.keys())
+
+    total = sum(int(v) for v in data.values() if int(v) > 0)
+    if total <= 0:
+        return {}
+
+    if is_status or group_below_pct <= 0:
+        sorted_pairs = sorted(
+            [(str(k), int(v)) for k, v in data.items() if int(v) > 0],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return dict(sorted_pairs)
+
+    main_items: list[tuple[str, int]] = []
+    other_count = 0
+
+    for k, v in data.items():
+        val = int(v)
+        if val <= 0:
+            continue
+        pct = (val / total) * 100.0
+        if pct < group_below_pct or str(k).strip().lower() in ("autres domaines", "autres"):
+            other_count += val
+        else:
+            main_items.append((str(k), val))
+
+    # Trier les items principaux par ordre décroissant de valeur
+    main_items.sort(key=lambda x: x[1], reverse=True)
+
+    # Placer "Autres domaines" à la toute fin
+    if other_count > 0:
+        main_items.append((other_label, other_count))
+
+    return dict(main_items)
+
+
 def chart_pie(
     data: dict,
     title: str,
@@ -207,11 +258,14 @@ def chart_pie(
     apply_mpl: bool = True,
     palette: list[str] | None = None,
     donut: bool = False,
+    group_below_pct: float = 1.0,
+    other_label: str = "Autres domaines",
 ) -> str:
     if apply_mpl:
         apply_mpl_style()
-    labels = list(data.keys())
-    values = list(data.values())
+    prepared_data = _prepare_pie_data(data, group_below_pct=group_below_pct, other_label=other_label)
+    labels = list(prepared_data.keys())
+    values = list(prepared_data.values())
     fig_w = CHART_FIG_WIDTH * figure_scale if figsize is None else (figsize[0] * figure_scale)
     # Palette : rouge doux pour les infractions / non-conformes, gris foncé
     # pour l'attente, sinon palette standard CHART_PIE_COLORS.
@@ -240,13 +294,11 @@ def chart_pie(
         ncol = max(1, int(legend_ncol))
     else:
         ncol = min(len(legend_labels), 4) if legend_labels else 1
-
-    # Heuristique pour la césure (wrap) et le nombre de colonnes
-    max_label_len = max([len(lb) for lb in labels] + [0])
-    if max_label_len > 25 and ncol > 2:
-        ncol = 2
-    if max_label_len > 40 and ncol > 1:
-        ncol = 1
+        max_label_len = max([len(lb) for lb in labels] + [0])
+        if max_label_len > 25 and ncol > 2:
+            ncol = 2
+        if max_label_len > 40 and ncol > 1:
+            ncol = 1
         
     leg_fs = CHART_LEGEND_FONT_SIZE_REF if legend_fontsize is None else float(legend_fontsize)
     # Wrap proportionnel au nombre de colonnes (environ 100 caractères de base pour toute la largeur de 7.2 pouces)
@@ -278,9 +330,9 @@ def chart_pie(
         ]
     )
     if donut:
-        wedges, _ = ax.pie(values, startangle=90, colors=colors_pie, wedgeprops=dict(width=0.45, edgecolor="white"))
+        wedges, _ = ax.pie(values, startangle=90, counterclock=False, colors=colors_pie, wedgeprops=dict(width=0.45, edgecolor="white"))
     else:
-        wedges, _ = ax.pie(values, startangle=90, colors=colors_pie)
+        wedges, _ = ax.pie(values, startangle=90, counterclock=False, colors=colors_pie)
     ax.set_aspect("equal")
     if str(title).strip():
         ax.set_title(
@@ -317,15 +369,19 @@ def chart_pie_legend_right(
     *,
     figure_scale: float = 1.0,
     legend_percent_only: bool = False,
-    legend_fontsize: float = 7.5,
+    legend_fontsize: float = 8.5,
     apply_mpl: bool = True,
     palette: list[str] | None = None,
+    donut: bool = False,
+    group_below_pct: float = 1.0,
+    other_label: str = "Autres domaines",
 ) -> str:
-    """Camembert compact avec légende à droite (brochure, colonne étroite)."""
+    """Camembert / Donut compact avec légende à droite en 1 seule colonne (libellés compacts sur 2 lignes)."""
     if apply_mpl:
         apply_mpl_style()
-    labels = list(data.keys())
-    values = list(data.values())
+    prepared_data = _prepare_pie_data(data, group_below_pct=group_below_pct, other_label=other_label)
+    labels = list(prepared_data.keys())
+    values = list(prepared_data.values())
     colors_pie = []
     pie_palette = palette if palette else CHART_PIE_COLORS
     for i, lb in enumerate(labels):
@@ -346,15 +402,18 @@ def chart_pie_legend_right(
             if legend_percent_only
             else [f"{lb}\n0 (0 %)" for lb in labels]
         )
-    fig_w = 5.2 * figure_scale
-    fig_h = max(2.8, 0.35 * len(labels) + 1.8) * figure_scale
+    fig_w = 6.4 * figure_scale
+    fig_h = max(2.2, 0.32 * len(labels) + 0.8) * figure_scale
     fig, (ax_pie, ax_leg) = plt.subplots(
         1,
         2,
         figsize=(fig_w, fig_h),
-        gridspec_kw={"width_ratios": [1.15, 1.0], "wspace": 0.08},
+        gridspec_kw={"width_ratios": [1.1, 1.35], "wspace": 0.05},
     )
-    wedges, _ = ax_pie.pie(values, startangle=90, colors=colors_pie)
+    if donut:
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, wedgeprops=dict(width=0.45, edgecolor="white"))
+    else:
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie)
     ax_pie.set_aspect("equal")
     if str(title).strip():
         ax_pie.set_title(
@@ -371,10 +430,11 @@ def chart_pie_legend_right(
         loc="center left",
         fontsize=legend_fontsize,
         frameon=False,
-        handlelength=0.9,
-        handletextpad=0.35,
+        handlelength=1.0,
+        handletextpad=0.45,
+        labelspacing=0.55,
     )
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.92 if not str(title).strip() else 0.85, bottom=0.06)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.92 if not str(title).strip() else 0.86, bottom=0.04)
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
 
 

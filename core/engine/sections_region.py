@@ -4,9 +4,17 @@
 # selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
 # la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
 #
-# Ce programme est distribué dans l'espoir qu'il sera utile, me SANS AUCUNE GARANTIE ;
+# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
 # sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
 # Voir la Licence Publique Générale GNU pour plus de détails.
+#
+# CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
+# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
+# clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
+# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
+# de l'auteur original (Aguirre MAURIN).
+
 
 import logging
 from pathlib import Path
@@ -19,7 +27,7 @@ from core.common.pdf_utils import ofb_table
 from core.engine.pdf_context import PdfContext
 from core.common.utilitaires_metier import get_dept_name
 from core.common.pdf_report_builder import PDFReportBuilder
-from core.common.rendus_graphiques import chart_interdept_stacked_bar, chart_pie
+from core.common.rendus_graphiques import chart_interdept_stacked_bar, chart_pie, chart_pie_legend_right
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +49,34 @@ def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text
         return RLImage(str(img_path), width=target_w, height=target_h)
     except Exception:
         return Paragraph(f"<i>{fallback_text}</i>", styles["Normal"])
+
+
+def _shapely_to_pathpatch(geom, transform):
+    """Convertit un Polygon ou MultiPolygon Shapely en PathPatch Matplotlib pour le clipping."""
+    from matplotlib.patches import PathPatch
+    from matplotlib.path import Path
+    import numpy as np
+
+    codes = []
+    verts = []
+
+    def _add_poly(poly):
+        ext = np.asarray(poly.exterior.coords)
+        verts.extend(ext)
+        codes.extend([Path.MOVETO] + [Path.LINETO] * (len(ext) - 2) + [Path.CLOSEPOLY])
+        for interior in poly.interiors:
+            int_coords = np.asarray(interior.coords)
+            verts.extend(int_coords)
+            codes.extend([Path.MOVETO] + [Path.LINETO] * (len(int_coords) - 2) + [Path.CLOSEPOLY])
+
+    if geom.geom_type == 'Polygon':
+        _add_poly(geom)
+    elif geom.geom_type == 'MultiPolygon':
+        for poly in geom.geoms:
+            _add_poly(poly)
+
+    path = Path(verts, codes)
+    return PathPatch(path, transform=transform, facecolor='none', edgecolor='none')
 
 
 def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
@@ -66,23 +102,32 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
             
             # Recherche multi-chemins du fichier GeoPackage des points de contrôle
             carto_dir_default = PROJECT_ROOT / "data" / "sources" / "sig" / "CARTO"
-            gpkg_files = list(carto_dir_default.glob("controles_*.gpkg"))
-            if not gpkg_files:
-                gpkg_files = list(out_dir.rglob("controles_*.gpkg"))
+            gpkg_files = list(out_dir.rglob("controles_*.gpkg")) + list(out_dir.glob("controles_*.gpkg"))
+            gpkg_files += list(carto_dir_default.glob("controles_*.gpkg"))
             
             pts_dept = None
             if gpd is not None and gpkg_files:
                 try:
-                    # Sélection du GPKG correspondant spécifiquement au code région/département courant (ex: r44 ou 44)
+                    import re
                     code_clean = str(dept_code).strip().lower()
-                    out_dir_code = str(out_dir.name).strip().lower()
-                    matching = [
-                        f for f in gpkg_files 
-                        if code_clean in f.name.lower() 
-                        or (code_clean.replace("r", "") in f.name.lower() if code_clean.startswith("r") else False)
-                        or out_dir_code in f.name.lower()
-                    ]
-                    target_gpkg = matching[0] if matching else gpkg_files[0]
+                    out_dir_name = str(out_dir.name).strip().lower()
+                    reg_match = re.search(r"r\d+", out_dir_name)
+                    reg_tag = reg_match.group(0) if reg_match else ""
+
+                    matching = []
+                    for f in gpkg_files:
+                        fname = f.name.lower()
+                        if reg_tag and reg_tag in fname:
+                            matching.append(f)
+                        elif code_clean in fname:
+                            matching.append(f)
+
+                    if matching:
+                        matching.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                        target_gpkg = matching[0]
+                    else:
+                        gpkg_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                        target_gpkg = gpkg_files[0]
                     
                     gdf_pts = gpd.read_file(target_gpkg)
                     if gdf_pts.crs is None or gdf_pts.crs.to_epsg() != 2154:
@@ -90,11 +135,16 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                             gdf_pts = gdf_pts.to_crs("EPSG:2154")
                     
                     target_dept = str(dept_code).strip().split('.')[0].zfill(2)
-                    if "num_depart" in gdf_pts.columns:
+                    # Priorité 1 : filtrage spatial strict (points géographiquement dans le département)
+                    try:
+                        pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
+                    except Exception:
+                        pts_dept = None
+                    
+                    # Secours (Priorité 2) : si le sjoin ne donne aucun point, filtrer par l'attribut num_depart
+                    if (pts_dept is None or pts_dept.empty) and "num_depart" in gdf_pts.columns:
                         dept_clean = gdf_pts["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
                         pts_dept = gdf_pts[dept_clean == target_dept]
-                    else:
-                        pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
                 except Exception:
                     pts_dept = None
             
@@ -110,8 +160,18 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                     alpha=0.85,
                     edgecolors='none'
                 )
+
+                # Découpage (clipping) strict aux frontières départementales
+                try:
+                    poly_geom = gdf_dept.geometry.unary_union
+                    patch = _shapely_to_pathpatch(poly_geom, ax.transData)
+                    ax.add_patch(patch)
+                    hb.set_clip_path(patch)
+                except Exception:
+                    pass
+
                 cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.7, aspect=18)
-                cbar.set_label('Pression de contrôle (Faible ➔ Forte)', fontsize=6.5, color='#003366')
+                cbar.set_label('Pression de contrôle (Faible -> Forte)', fontsize=6.5, color='#003366')
                 cbar.ax.tick_params(labelsize=5.5)
 
             minx, miny, maxx, maxy = gdf_dept.total_bounds
@@ -140,7 +200,7 @@ def _generate_region_choropleth(
 ) -> Path:
     """Génère la carte choroplèthe régionale (aplat par département selon le volume d'opérations)."""
     out_path = tmp_dir / img_name
-    fig, ax = plt.subplots(figsize=(3.6 * figure_scale, 2.6 * figure_scale), dpi=150)
+    fig, ax = plt.subplots(figsize=(4.2 * figure_scale, 2.1 * figure_scale), dpi=150)
     fig.patch.set_facecolor('white')
     ax.set_facecolor('#ffffff')
     ax.set_aspect('equal')
@@ -165,12 +225,19 @@ def _generate_region_choropleth(
                 legend=True,
                 legend_kwds={
                     "orientation": "horizontal",
-                    "shrink": 0.7,
+                    "shrink": 0.35,
                     "pad": 0.02,
                     "label": "Volume d'opérations de contrôle"
                 }
             )
             
+            # Affinage de la typographie de la colorbar (6pt pour le titre, 5.5pt pour les ticks)
+            if len(fig.axes) > 1:
+                cbar_ax = fig.axes[-1]
+                cbar_ax.tick_params(labelsize=5.5)
+                cbar_ax.xaxis.label.set_size(6.0)
+                cbar_ax.xaxis.label.set_color('#003366')
+
             for _, row in gdf_region.iterrows():
                 centroid = row.geometry.centroid
                 dep = row["dep_code_clean"]
@@ -180,14 +247,14 @@ def _generate_region_choropleth(
                     xy=(centroid.x, centroid.y),
                     ha="center",
                     va="center",
-                    fontsize=6.5,
+                    fontsize=6.0,
                     fontweight="bold",
                     color="#002b49",
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.65)
+                    bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.65)
                 )
             
             ax.set_axis_off()
-            fig.tight_layout(pad=0.1)
+            fig.tight_layout(pad=0.05)
             fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
             plt.close(fig)
             return out_path
@@ -204,7 +271,8 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     PAGE 1 :
       - En-tête de section "1. Synthèse régionale"
       - Pavés KPI Cards Régionaux (Ops, Localisations, Procédures)
-      - Table visuelle 2 colonnes : Carte choroplèthe régionale | Diagramme Donut par domaine
+      - Carte choroplèthe régionale centrée (58 % de largeur)
+      - Diagramme Donut par domaine centré (Légende 3 colonnes sous l'anneau, 0 % filtrés)
       - Saut de page strict (PageBreak)
       
     PAGE 2 :
@@ -223,7 +291,7 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     if ctx.nb_pej or ctx.nb_pa or ctx.nb_pve:
         kf.append((f"{ctx.nb_pej or 0} / {ctx.nb_pa or 0} / {ctx.nb_pve or 0}", "Procédures PEJ / PA / PVe"))
     ctx.builder.add_key_figures(kf)
-    ctx.builder.add_spacer(10)
+    ctx.builder.add_spacer(6)
 
     csv_path = ctx.out_dir / "region_detail_par_dept.csv"
     df = pd.DataFrame()
@@ -233,7 +301,7 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
         except Exception:
             df = pd.DataFrame()
 
-    # --- PAGE 1 VISUELS CÔTE À CÔTE : CARTE CHOROPLÈTHE & DONUT PAR DOMAINE ---
+    # --- PAGE 1 VISUELS SUPERPOSÉS : CARTE CHOROPLÈTHE & DONUT PAR DOMAINE ---
     dept_counts: dict[str, int] = {}
     domain_counts: dict[str, int] = {}
     if not df.empty:
@@ -244,40 +312,51 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
 
     body_style = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
 
-    # Visuel 1 : Carte choroplèthe
+    # Visuel 1 : Carte choroplèthe régionale centrée (54 % de largeur)
     carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale)
     if carto_path.exists():
-        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.48, "Carte régionale indisponible", ctx.builder.styles)
+        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.54, "Carte régionale indisponible", ctx.builder.styles)
     else:
         img_carto = Paragraph("<para align='center'><i>Carte régionale non disponible</i></para>", body_style)
 
-    # Visuel 2 : Diagramme Donut par Domaine
-    if domain_counts and sum(domain_counts.values()) > 0:
-        donut_path = chart_pie(
-            domain_counts,
+    tbl_carto = Table([[img_carto]], colWidths=[ctx.avail_w])
+    tbl_carto.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    ctx.builder.story.append(tbl_carto)
+    ctx.builder.add_spacer(4)
+
+    # Visuel 2 : Diagramme Donut par Domaine (82 % de largeur, Donut agrandi avec légende à droite sur 1 colonne)
+    domain_counts_filtered = {k: int(v) for k, v in domain_counts.items() if int(v) > 0}
+    if domain_counts_filtered and sum(domain_counts_filtered.values()) > 0:
+        donut_path = chart_pie_legend_right(
+            domain_counts_filtered,
             "Répartition par Domaine de contrôle",
             ctx.tmp_dir,
             "region_domaines_donut.png",
             figure_scale=ctx.figure_scale,
             donut=True,
-            legend_ncol=1
+            legend_fontsize=8.5
         )
-        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.48, "Graphique domaines indisponible", ctx.builder.styles)
+        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.82, "Graphique domaines indisponible", ctx.builder.styles)
     else:
         img_donut = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
 
-    # Assemblage dans une table 2 colonnes épurée
-    col_w = ctx.avail_w * 0.49
-    visuels_tbl = Table([[img_carto, img_donut]], colWidths=[col_w, col_w])
-    visuels_tbl.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    tbl_donut = Table([[img_donut]], colWidths=[ctx.avail_w])
+    tbl_donut.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
-    ctx.builder.story.append(visuels_tbl)
+    ctx.builder.story.append(tbl_donut)
 
     # --- SAUT DE PAGE VERS LA PAGE 2 DE LA SYNTHÈSE RÉGIONALE ---
     ctx.builder.story.append(PageBreak())
@@ -438,14 +517,15 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
 
             if pie_dict:
                 img_name = f"pie_dept_{dept_str}.png"
-                pie_path = chart_pie(
+                pie_path = chart_pie_legend_right(
                     pie_dict,
                     f"Répartition par domaine ({dept_name})",
                     ctx.tmp_dir,
                     img_name,
-                    figure_scale=ctx.figure_scale
+                    figure_scale=ctx.figure_scale,
+                    legend_fontsize=7.5
                 )
-                img_pie = _create_proportional_rl_image(Path(pie_path), ctx.avail_w * 0.46, "Graphique indisponible", ctx.builder.styles)
+                img_pie = _create_proportional_rl_image(Path(pie_path), ctx.avail_w * 0.48, "Graphique indisponible", ctx.builder.styles)
             else:
                 img_pie = Paragraph("<i>Aucune donnée thématique</i>", ctx.builder.styles["Normal"])
 

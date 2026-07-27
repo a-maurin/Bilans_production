@@ -96,7 +96,7 @@ def render_sec1(ctx: PdfContext) -> None:
     )
 
     ctx.builder.add_section(
-        "sec2_1",
+        "sec21",
         "2.1. Activité de police par thème du plan de contrôle",
         level=2,
         toc_level=1,
@@ -140,7 +140,7 @@ def render_sec1(ctx: PdfContext) -> None:
         ctx.builder.add_keep_together_block([])
 
     ctx.builder.add_section(
-        "sec2_2",
+        "sec22",
         "2.2. Résultat des contrôles au titre de la police administrative",
         level=2,
         toc_level=1,
@@ -169,7 +169,7 @@ def render_sec1(ctx: PdfContext) -> None:
     elif ctx.show_placeholder:
         ctx.builder.add_paragraph("Aucune donnée de résultat de contrôle sur la période.")
 
-    ctx.builder.add_section("sec2_3", "2.3. Activité procédurale", level=2, toc_level=1)
+    ctx.builder.add_section("sec23", "2.3. Activité procédurale", level=2, toc_level=1)
     ctx.builder.append_pending_paragraph(
         "Les effectifs PEJ du tableau ci-dessous regroupent les saisines engagées à l’issue "
         "des contrôles réalisés sur la période et les saisines PEJ ouvertes hors activité de "
@@ -178,67 +178,69 @@ def render_sec1(ctx: PdfContext) -> None:
     if ctx.act_proc is not None and not ctx.act_proc.empty:
         tbl = [["Thème", "PEJ", "PA"]]
         for _, row in ctx.act_proc.head(25).iterrows():
-            tbl.append(
-                [
-                    _wrap_table_label(row["theme"]),
-                    str(int(row.get("nb_pej", 0))),
-                    str(int(row.get("nb_pa", 0))),
-                ]
-            )
+            tbl.append([_wrap_table_label(row["theme"]), str(int(row["nb_pej"])), str(int(row["nb_pa"]))])
         ctx.builder.add_table(
             tbl,
-            caption=pdf_metric_caption("Procédures par thème", "proc"),
-            col_widths=[ctx.avail_w * 0.52, ctx.avail_w * 0.24, ctx.avail_w * 0.24],
+            caption="Nombre de procédures d'enquête judiciaire (PEJ) et d'actes administratifs (PA)",
+            col_widths=[ctx.avail_w * 0.54, ctx.avail_w * 0.23, ctx.avail_w * 0.23],
             col_aligns=["LEFT", "RIGHT", "RIGHT"],
+            keep_together=False,
+            keep_caption_with_table=True,
         )
     elif ctx.show_placeholder:
-        ctx.builder.append_pending_paragraph("Aucune procédure sur la période.")
+        ctx.builder.append_pending_paragraph("Aucune donnée d'activité procédurale sur la période.")
         ctx.builder.add_keep_together_block([])
-
-    # ── 3. Activité par type d'usager ──
 
 
 def render_sec4_usagers(ctx: PdfContext) -> None:
     ctx.builder.add_section("sec4", "3. Activité de police par type d'usager")
     ctx.builder.append_pending_paragraph(
-        "⚠️ <i>Note importante : Le décompte des effectifs selon le type d'usager suit des règles spécifiques qui sont détaillées dans la notice méthodologique.</i>",
+        "<i>Note importante : Le décompte des effectifs selon le type d'usager suit des "
+        "règles spécifiques qui sont détaillées dans la notice méthodologique.</i>"
     )
-    ctx.builder.add_spacer(2)
-    ctx.builder.append_pending_paragraph(
-        "Pour la partie contrôles : cumul des <b>effectifs</b> par type d'usager (chaque usager "
-        "renseigné sur une fiche est compté avec son effectif ; ces effectifs sont calculés au "
-        "niveau des fiches de contrôle et ne se confondent donc pas avec le nombre de "
-        "localisations de contrôle), des PEJ ouvertes à l'issue d'un contrôle et des PEJ hors "
-        "fiche contrôle, "
-        "ventilés par thème du plan de contrôle (détail en § 3.1). "
-        "Pour la partie procédurale (§ 3.3) : une procédure ne comporte qu'un seul type d'usager."
-    )
-
-    act_par_type = _sort_desc(_load_csv_opt(ctx.out_dir, "synthese_activite_par_type_usager.csv"), ["nb_total"])
-    act_ut = _sort_desc(_load_csv_opt(ctx.out_dir, "synthese_activite_usager_theme.csv"), ["nb_total"])
-    
-    pie_data = _pie_data_controles_par_type_usager(act_par_type)
-    if pie_data:
-        pie_path = chart_pie(
-            pie_data,
-            "Répartition des effectifs contrôlés et saisines PEJ hors contrôle par type d'usager",
-            ctx.tmp_dir,
-            "pie_synthese_controles_par_type_usager.png",
-            legend_percent_only=True,
-            figure_scale=ctx.ref_pie_fs,
-            **_chart_pie_compact_legend_kw(
-                len(pie_data),
+    act_ut = _load_csv_opt(ctx.out_dir, "synthese_activite_usager_theme.csv")
+    act_u = _load_csv_opt(ctx.out_dir, "synthese_activite_usager.csv")
+    if act_u is not None and not act_u.empty:
+        pie_data = {
+            _display_type_usager(r["type_usager"]): int(r["nb_total"])
+            for _, r in act_u.iterrows()
+            if int(r["nb_total"]) > 0
+        }
+        pie_path = None
+        if pie_data:
+            pie_path = chart_pie(
+                pie_data,
+                "",
+                ctx.tmp_dir,
+                "pie_synthese_activite_usager.png",
+                figure_scale=ctx.ref_pie_fs,
                 legend_fontsize=ctx.ref_pie_legend_fs,
-            ),
-        )
-        ctx.builder.append_pending_image(
-            Path(pie_path),
-            width_ratio=ctx.ref_pie_w,
-            spacer_after_mm=0.4,
+            )
+        tbl_u = [["Type d'usager", "Contrôles PA", "PEJ hors contrôle", "Total"]]
+        tot_g = float(act_u["nb_total"].sum()) or 1.0
+        for _, r in act_u.iterrows():
+            nb_tot = int(r["nb_total"])
+            pct = format_pct_int_from_rate(nb_tot / tot_g)
+            tbl_u.append(
+                [
+                    _truncate_with_dash(_display_type_usager(r["type_usager"]), 34),
+                    str(int(r.get("nb_localisations", 0))),
+                    str(int(r.get("nb_pej_hors_controle", 0))),
+                    f"{nb_tot} ({pct})",
+                ]
+            )
+        ctx.builder.add_table_and_image_keep_together(
+            tbl_u,
+            table_caption=pdf_metric_caption("Répartition de l'activité par type d'usager", "effectifs"),
+            col_widths=[ctx.avail_w * 0.44, ctx.avail_w * 0.18, ctx.avail_w * 0.18, ctx.avail_w * 0.20],
+            col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT"],
+            image_path=Path(pie_path) if pie_path else None,
+            image_width_ratio=ctx.ref_pie_w,
+            spacer_after_mm=1.0,
         )
 
     ctx.builder.add_section(
-        "sec4_1",
+        "sec41",
         "3.1. Thème de contrôle par type d'usager",
         level=2,
         toc_level=1,
@@ -287,7 +289,7 @@ def render_sec4_usagers(ctx: PdfContext) -> None:
         ctx.builder.add_keep_together_block([])
 
     ctx.builder.add_section(
-        "sec4_2",
+        "sec42",
         "3.2. Résultat des contrôles par type d'usager",
         level=2,
         toc_level=1,
@@ -352,8 +354,8 @@ def render_sec4_usagers(ctx: PdfContext) -> None:
             caption=pdf_metric_caption("Résultats des contrôles par type d'usager", "effectifs"),
             keep_together=True,
         )
-    elif ctx.show_placeholder:
-        ctx.builder.add_paragraph("Aucun résultat par type d'usager.")
+    else:
+        ctx.builder.add_paragraph("Aucun résultat de contrôle par type d'usager pour la période.")
 
 
 

@@ -596,18 +596,34 @@ def _run_global_profile_via_yaml(
         # 1. GPKG pour point_ctrl
         if not point.empty:
             df_pts = point.copy()
-            if "x" in df_pts.columns and "y" in df_pts.columns:
-                df_pts["_lon"] = pd.to_numeric(df_pts["x"], errors="coerce")
-                df_pts["_lat"] = pd.to_numeric(df_pts["y"], errors="coerce")
-                mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna()
+            if hasattr(df_pts, "geometry") and df_pts.geometry is not None and not df_pts.geometry.isna().all():
+                try:
+                    df_pts_wgs84 = df_pts.to_crs("EPSG:4326") if (hasattr(df_pts, "crs") and df_pts.crs and df_pts.crs.to_epsg() != 4326) else df_pts
+                    df_pts["_lon"] = df_pts_wgs84.geometry.x
+                    df_pts["_lat"] = df_pts_wgs84.geometry.y
+                except Exception:
+                    pass
+
+            if "_lon" not in df_pts.columns or df_pts["_lon"].isna().all():
+                lon_col = next((c for c in ("x", "x_wgs84", "longitude", "lon") if c in df_pts.columns), None)
+                lat_col = next((c for c in ("y", "y_wgs84", "latitude", "lat") if c in df_pts.columns), None)
+                if lon_col and lat_col:
+                    df_pts["_lon"] = pd.to_numeric(df_pts[lon_col], errors="coerce")
+                    df_pts["_lat"] = pd.to_numeric(df_pts[lat_col], errors="coerce")
+
+            if "_lon" in df_pts.columns and "_lat" in df_pts.columns:
+                mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna() & (df_pts["_lon"] != 0) & (df_pts["_lat"] != 0)
                 if mask_geo.any():
                     gdf_pts = gpd.GeoDataFrame(
                         df_pts[mask_geo],
                         geometry=gpd.points_from_xy(df_pts.loc[mask_geo, "_lon"], df_pts.loc[mask_geo, "_lat"]),
                         crs="EPSG:4326"
-                    ).to_crs("EPSG:2154")
+                    )
+                    gdf_pts.columns = [str(c).lower() for c in gdf_pts.columns]
                     for col in gdf_pts.select_dtypes(include=['datetime64[ns, UTC]', 'datetime64[ns]', 'datetime64']).columns:
                         gdf_pts[col] = gdf_pts[col].astype(str)
+                    if "num_depart" in gdf_pts.columns:
+                        gdf_pts["num_depart"] = gdf_pts["num_depart"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                     if "domaine" not in gdf_pts.columns:
                         gdf_pts["domaine"] = "Hors domaine"
                     else:
@@ -649,7 +665,7 @@ def _run_global_profile_via_yaml(
                         df_geo[mask_geo],
                         geometry=gpd.points_from_xy(df_geo.loc[mask_geo, "_lon"], df_geo.loc[mask_geo, "_lat"]),
                         crs="EPSG:4326"
-                    ).to_crs("EPSG:2154")
+                    )
                     for col in gdf.select_dtypes(include=['datetime64[ns, UTC]', 'datetime64[ns]', 'datetime64']).columns:
                         gdf[col] = gdf[col].astype(str)
                     gpkg_path = carto_dir / f"pve_{prefix}_export_automatique.gpkg"
@@ -693,6 +709,7 @@ def _run_global_profile_via_yaml(
                 bilan_profiles={profil_id: profile},
                 target_dir=out_dir,
                 diffusion=str(resolved_opts.get("diffusion", "interne")),
+                force_regen=True,
             )
         except Exception as e:
             logger = logging.getLogger("ofbilan.engine")
@@ -824,6 +841,7 @@ def _finalize_cartes_selection(
             bilan_profiles={bilan_key: profile},
             target_dir=target_dir,
             diffusion=str(resolved_opts.get("diffusion", "interne")),
+            force_regen=True,
         )
     return resolved_opts
 
@@ -2884,11 +2902,23 @@ def _export_csv(
             logger = logging.getLogger(__name__)
             
             df_pts = point_filtered.copy()
-            lon_col, lat_col = "x", "y"
-            if lon_col in df_pts.columns and lat_col in df_pts.columns:
-                df_pts["_lon"] = pd.to_numeric(df_pts[lon_col], errors="coerce")
-                df_pts["_lat"] = pd.to_numeric(df_pts[lat_col], errors="coerce")
-                mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna()
+            if hasattr(df_pts, "geometry") and df_pts.geometry is not None and not df_pts.geometry.isna().all():
+                try:
+                    df_pts_wgs84 = df_pts.to_crs("EPSG:4326") if (hasattr(df_pts, "crs") and df_pts.crs and df_pts.crs.to_epsg() != 4326) else df_pts
+                    df_pts["_lon"] = df_pts_wgs84.geometry.x
+                    df_pts["_lat"] = df_pts_wgs84.geometry.y
+                except Exception:
+                    pass
+
+            if "_lon" not in df_pts.columns or df_pts["_lon"].isna().all():
+                lon_col = next((c for c in ("x", "x_wgs84", "longitude", "lon") if c in df_pts.columns), None)
+                lat_col = next((c for c in ("y", "y_wgs84", "latitude", "lat") if c in df_pts.columns), None)
+                if lon_col and lat_col:
+                    df_pts["_lon"] = pd.to_numeric(df_pts[lon_col], errors="coerce")
+                    df_pts["_lat"] = pd.to_numeric(df_pts[lat_col], errors="coerce")
+
+            if "_lon" in df_pts.columns and "_lat" in df_pts.columns:
+                mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna() & (df_pts["_lon"] != 0) & (df_pts["_lat"] != 0)
                 
                 if mask_geo.any():
                     # Les coordonnées x,y dans point_ctrl sont généralement en WGS84 ou L93.
@@ -3493,6 +3523,15 @@ def _pdf_section_activite_par_types_usagers(
             header_font_size=7.5,
             trailing_spacer_mm=1.0,
         )
+    else:
+        if is_section_enabled(presentation_cfg, "sec42", True):
+            builder.add_section(
+                "sec42",
+                section_title.get("sec42", "3.2. Résultats des contrôles par type d'usager"),
+                level=2,
+                toc_level=1,
+            )
+            builder.add_paragraph("Aucun résultat de contrôle par type d'usager pour la période.")
 
     proc_summary = summarize_procedures_par_type_usager(results.get("proc_par_usager_domaine"))
     add_procedures_par_type_usager_subsection(
@@ -5907,6 +5946,7 @@ def _run_engine_thematic_pipeline(
                 bilan_profiles={profil_id: profile},
                 target_dir=out_dir,
                 diffusion=str(resolved_opts.get("diffusion", "interne")),
+                force_regen=True,
             )
         except Exception as e:
             logger = logging.getLogger("ofbilan.engine")

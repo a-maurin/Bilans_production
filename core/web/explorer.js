@@ -1067,17 +1067,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
 
-    // Légende de la carte (Dynamique)
+    // Légende de la carte (Dynamique & Rétractable)
     const mapLegend = L.control({ position: 'bottomright' });
     let mapLegendDiv = null;
+    let isLegendCollapsed = false;
+
+    window.toggleMapLegend = function(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        isLegendCollapsed = !isLegendCollapsed;
+        updateLegend();
+    };
 
     function updateLegend() {
         if (!mapLegendDiv) return;
 
         const renderItem = (color, label) => `
-            <div style="display:flex; align-items:center; margin-bottom:4px;">
-                <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${color}; margin-right:8px; border:1px solid rgba(0,0,0,0.1);"></span>
-                <span>${label}</span>
+            <div style="display:flex; align-items:center; margin-bottom:2px;">
+                <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background-color:${color}; margin-right:5px; flex-shrink:0; border:1px solid rgba(0,0,0,0.15);"></span>
+                <span style="font-size:9.5px; line-height:1.2; color:#334155;">${label}</span>
             </div>
         `;
 
@@ -1094,11 +1104,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasPve = (map.hasLayer(pveParent) && pveParent.getLayers().length > 0) || 
                        (typeof pveParentN1 !== 'undefined' && map.hasLayer(pveParentN1) && pveParentN1.getLayers().length > 0);
 
-        let html = '';
+        const hasAnyData = hasControles || hasPej || hasPa || hasPve;
+
+        if (!hasAnyData) {
+            mapLegendDiv.style.display = 'none';
+            return;
+        }
+
+        mapLegendDiv.style.display = 'block';
+
+        let bodyHtml = '';
 
         if (hasControles) {
-            html += `
-                <div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Contrôles</div>
+            bodyHtml += `
+                <div style="font-weight:bold; font-size:10px; margin-bottom:3px; color:#1e293b;">Contrôles</div>
                 ${renderItem('#10B981', 'Conforme')}
                 ${renderItem('#EF4444', 'Infraction / <br> Manquement')}
                 ${renderItem('#64748B', 'En attente / <br> Autre')}
@@ -1106,27 +1125,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (hasPej || hasPa || hasPve) {
-            if (html.length > 0) html += `<div style="margin-top:8px;"></div>`;
-            html += `<div style="font-weight:bold; margin-bottom:6px; color:#1e293b;">Procédures</div>`;
-            if (hasPej) html += renderItem('#3B82F6', 'PEJ');
-            if (hasPa) html += renderItem('#8B5CF6', 'PA');
-            if (hasPve) html += renderItem('#F97316', 'PVe');
+            if (bodyHtml.length > 0) bodyHtml += `<div style="margin-top:5px;"></div>`;
+            bodyHtml += `<div style="font-weight:bold; font-size:10px; margin-bottom:3px; color:#1e293b;">Procédures</div>`;
+            if (hasPej) bodyHtml += renderItem('#3B82F6', 'PEJ');
+            if (hasPa) bodyHtml += renderItem('#8B5CF6', 'PA');
+            if (hasPve) bodyHtml += renderItem('#F97316', 'PVe');
         }
 
-        mapLegendDiv.innerHTML = html;
-        mapLegendDiv.style.display = html.length > 0 ? 'block' : 'none';
+        const icon = isLegendCollapsed ? '▲' : '▼';
+        const toggleBtn = `<button class="legend-toggle-btn" onclick="toggleMapLegend(event)" title="${isLegendCollapsed ? 'Déplier la légende' : 'Réduire la légende'}" style="background:none; border:none; padding:0 0 0 6px; cursor:pointer; font-size:9px; color:#64748b; font-weight:bold;">${icon}</button>`;
+
+        mapLegendDiv.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; ${isLegendCollapsed ? '' : 'margin-bottom:3px; border-bottom:1px solid #f1f5f9; padding-bottom:2px;'}" class="legend-header">
+                <span style="font-weight:bold; font-size:9.5px; color:#475569;">Légende</span>
+                ${toggleBtn}
+            </div>
+            <div class="legend-body" style="${isLegendCollapsed ? 'display:none;' : 'display:block;'}">
+                ${bodyHtml}
+            </div>
+        `;
     }
 
     mapLegend.onAdd = function (map) {
         mapLegendDiv = L.DomUtil.create('div', 'info legend');
-        mapLegendDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-        mapLegendDiv.style.padding = '10px 14px';
-        mapLegendDiv.style.borderRadius = '6px';
-        mapLegendDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
-        mapLegendDiv.style.fontSize = '12px';
-        mapLegendDiv.style.lineHeight = '1.6';
+        mapLegendDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.92)';
+        mapLegendDiv.style.padding = '5px 8px';
+        mapLegendDiv.style.borderRadius = '5px';
+        mapLegendDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
+        mapLegendDiv.style.fontSize = '10px';
+        mapLegendDiv.style.lineHeight = '1.3';
         mapLegendDiv.style.color = '#334155';
         mapLegendDiv.style.display = 'none';
+        
+        L.DomEvent.disableClickPropagation(mapLegendDiv);
         
         return mapLegendDiv;
     };

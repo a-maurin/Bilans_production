@@ -103,13 +103,13 @@ points_global_domaines:
   field: coalesce("domaine", 'Hors domaine')
   # Bleu pour l'eau, Vert pour espèces/espaces, Gris pour transverses
   categories:
-    "Gestion qualitative de la ressource en eau": "#3498DB"
-    "Gestion quantitative de l'eau": "#2980B9"
-    "Préservation des milieux aquatiques": "#154360"
-    "Assurer la protection des espèces animales et végétales": "#2ECC71"
-    "Espaces protégés et protection des milieux et du cadre de vie": "#16A085"
-    "Sujets transversaux": "#95A5A6"
-    "Sécurité publique et Prévention des inondations": "#34495E"
+    "Assurer la protection des espèces animales et végétales": "#E74C3C"
+    "Espaces protégés et protection des milieux et du cadre de vie": "#1E8449"
+    "Préservation des milieux aquatiques": "#008080"
+    "Gestion qualitative de la ressource en eau": "#2980B9"
+    "Gestion quantitative de l'eau": "#00B4D8"
+    "Sujets transversaux": "#D35400"
+    "Sécurité publique et Prévention des inondations": "#6C5CE7"
     "Hors domaine": "#7F8C8D"
   symbol_size_mm: 2.4
   symbol_shape: circle

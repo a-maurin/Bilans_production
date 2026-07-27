@@ -86,6 +86,18 @@ COLOR_CHART_6 = "#4296CE"   # bleu clair
 CHART_PIE_COLORS = [COLOR_CHART_1, COLOR_CHART_2, COLOR_CHART_3, COLOR_CHART_4, COLOR_CHART_5, COLOR_CHART_6]
 CHART_BAR_GROUPED_COLORS = [COLOR_CHART_1, COLOR_CHART_2, COLOR_CHART_3, COLOR_CHART_4]
 
+# Couleurs thématiques dédiées par domaine de contrôle
+COLOR_MAP_DOMAINE = {
+    "Assurer la protection des espèces animales et végétales": "#E74C3C",
+    "Espaces protégés et protection des milieux et du cadre de vie": "#1E8449",
+    "Préservation des milieux aquatiques": "#008080",
+    "Gestion qualitative de la ressource en eau": "#2980B9",
+    "Gestion quantitative de l'eau": "#00B4D8",
+    "Sujets transversaux": "#D35400",
+    "Sécurité publique et Prévention des inondations": "#6C5CE7",
+    "Hors domaine": "#7F8C8D",
+}
+
 PAGE_W, PAGE_H = A4
 # Marges latérales (moitié de l’ancien 17 mm) : zone utile du PDF plus large.
 MARGIN_LEFT = 7.0 * mm

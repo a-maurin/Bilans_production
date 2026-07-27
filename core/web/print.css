@@ -225,8 +225,15 @@
     .info.legend {
         box-shadow: none !important;
         border: 1px solid #002F4B !important;
-        transform: scale(0.9);
+        padding: 4px 6px !important;
+        transform: scale(0.85);
         transform-origin: bottom right;
+    }
+    .legend-toggle-btn {
+        display: none !important;
+    }
+    .legend-body {
+        display: block !important;
     }
 
     div:has(> #chart-seasonality) {

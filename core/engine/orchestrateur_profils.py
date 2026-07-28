@@ -769,6 +769,8 @@ def _run_global_profile_via_yaml(
             pdf_kwargs["brochure"] = bool(resolved_opts.get("brochure", False))
         if "cli_options" in inspect.signature(generate_pdf_impl).parameters:
             pdf_kwargs["cli_options"] = resolved_opts
+        if "gabarit" in inspect.signature(generate_pdf_impl).parameters:
+            pdf_kwargs["gabarit"] = resolved_opts.get("gabarit")
         generate_pdf_impl(out_dir, **pdf_kwargs)
 
     print(f"\nTerminé ! Rapport disponible dans : {out_dir}")

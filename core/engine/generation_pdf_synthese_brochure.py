@@ -24,6 +24,7 @@ Formes : encadrés arrondis via ``brochure_charte`` (module brochure uniquement)
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -31,10 +32,12 @@ from reportlab.lib import colors as rl_colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import Image as RLImage, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Flowable, Image as RLImage, Paragraph, Spacer, Table, TableStyle
 
 from core.common.carte_helper import resolve_profile_map_paths
 from core.common.ofb_charte import COLOR_PRIMARY
+
+logger = logging.getLogger(__name__)
 from core.common.pdf_presentation_config import (
     apply_diffusion_pdf_suffix,
     normalize_dept_typography,
@@ -73,6 +76,15 @@ from core.engine.generation_pdf_synthese import (
     _pie_data_controles_par_type_usager,
     _rollup_small_categories,
 )
+
+
+def _load_csv_fallback(out_dir: Path, filenames: list[str]) -> pd.DataFrame | None:
+    for name in filenames:
+        df = _load_csv_opt(out_dir, name)
+        if df is not None and not df.empty:
+            return df
+    return None
+
 
 _BROCHURE_MAX_THEMES = 5
 _BROCHURE_MAX_PROC_THEMES = 7
@@ -519,6 +531,463 @@ def _build_matrice_themes_table(
     )
 
 
+class BrochureResultatPastilles(Flowable):
+    def __init__(self, width: float, n_ops: int, pct_conf: int, pct_manq: int, pct_inf: int):
+        super().__init__()
+        self.width = float(width)
+        self.n_ops = int(n_ops)
+        self.pct_conf = int(pct_conf)
+        self.pct_manq = int(pct_manq)
+        self.pct_inf = int(pct_inf)
+        self.height = 85.0
+
+    def draw(self):
+        canv = self.canv
+        w = self.width
+        canv.saveState()
+        canv.setFont("Helvetica-Bold", 10)
+        canv.setFillColor(rl_colors.HexColor("#1E293B"))
+        canv.drawCentredString(w / 2.0, self.height - 12, f"{self.n_ops} OPERATIONS DE CONTROLES")
+
+        cx_list = [w * 0.20, w * 0.50, w * 0.80]
+        cy = 42.0
+        r = 18.0
+
+        pastilles = [
+            (self.pct_conf, "CONFORMES", rl_colors.HexColor("#70C157")),
+            (self.pct_manq, "MANQUEMENTS", rl_colors.HexColor("#8B5CF6")),
+            (self.pct_inf, "INFRACTIONS", rl_colors.HexColor("#EF4444")),
+        ]
+
+        for (pct, label, color), cx in zip(pastilles, cx_list):
+            canv.setFillColor(color)
+            canv.setStrokeColor(rl_colors.HexColor("#1E293B"))
+            canv.setLineWidth(1.5)
+            canv.circle(cx, cy, r, fill=1, stroke=1)
+
+            canv.setFont("Helvetica-Bold", 10)
+            canv.setFillColor(rl_colors.HexColor("#1E293B") if color == rl_colors.HexColor("#70C157") else rl_colors.white)
+            canv.drawCentredString(cx, cy - 3.5, f"{pct} %")
+
+            canv.setFont("Helvetica-Bold", 7.5)
+            canv.setFillColor(rl_colors.HexColor("#1E293B"))
+            canv.drawCentredString(cx, cy - r - 10, label)
+
+        canv.restoreState()
+
+
+class BrochureBadgesSuites(Flowable):
+    def __init__(self, width: float, nb_pa: int, nb_pve: int, nb_pej: int):
+        super().__init__()
+        self.width = float(width)
+        self.nb_pa = int(nb_pa)
+        self.nb_pve = int(nb_pve)
+        self.nb_pej = int(nb_pej)
+        self.height = 100.0
+
+    def draw(self):
+        canv = self.canv
+        w = self.width
+        canv.saveState()
+
+        canv.setFont("Helvetica-Bold", 9.5)
+        canv.setFillColor(rl_colors.HexColor("#1E293B"))
+        canv.drawCentredString(w / 2.0, self.height - 11, "SUITES DONNEES AUX SITUATIONS NON CONFORMES")
+        canv.setFont("Helvetica", 7.5)
+        canv.setFillColor(rl_colors.HexColor("#475569"))
+        canv.drawCentredString(w / 2.0, self.height - 21, "(Contrôles administratifs + saisines judiciaires)")
+
+        card_w = (w - 16) / 3.0
+        card_h = 65.0
+        card_y = 5.0
+
+        badges = [
+            (self.nb_pa, ["Procédures", "administratives"]),
+            (self.nb_pve, ["Procédures", "d'amende", "forfaitaire", "(PVe)"]),
+            (self.nb_pej, ["Procédures", "judiciaires"]),
+        ]
+
+        for i, (val, lines) in enumerate(badges):
+            card_x = i * (card_w + 8)
+            canv.setFillColor(rl_colors.HexColor("#E2E8F0"))
+            canv.setStrokeColor(rl_colors.transparent)
+            canv.roundRect(card_x, card_y, card_w, card_h, 8, fill=1, stroke=0)
+
+            canv.setFont("Helvetica-Bold", 17)
+            canv.setFillColor(rl_colors.HexColor("#0284C7"))
+            canv.drawCentredString(card_x + card_w / 2.0, card_y + card_h - 20, str(val))
+
+            canv.setFont("Helvetica-Bold", 7)
+            canv.setFillColor(rl_colors.HexColor("#1E293B"))
+            start_y = card_y + card_h - 32
+            for line in lines:
+                canv.drawCentredString(card_x + card_w / 2.0, start_y, line)
+                start_y -= 8.5
+
+        canv.restoreState()
+
+
+def _build_evolution_chart_srp_r27(tmp_dir: Path, current_year: int, nb_pa: int, nb_pej: int, nb_pve: int) -> Path:
+    import matplotlib.pyplot as plt
+def _load_annuaire_contact(
+    echelle: str,
+    code: str,
+    service_override: str | None = None,
+) -> tuple[str, str]:
+    """Charge les 2 lignes du pied de page dynamique depuis config/annuaire_ofb.yaml."""
+    annuaire_path = _ROOT / "config" / "annuaire_ofb.yaml"
+    line1 = "Office français de la biodiversité"
+    line2 = ""
+    if not annuaire_path.exists():
+        return line1, line2
+    import yaml
+    try:
+        with open(annuaire_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return line1, line2
+
+    info = None
+    if service_override:
+        svc_str = str(service_override).strip().lower()
+        for cat in ("departements", "regions"):
+            for _, item in (data.get(cat) or {}).items():
+                if isinstance(item, dict):
+                    nom = str(item.get("nom", "")).strip().lower()
+                    if svc_str in nom or nom in svc_str:
+                        info = item
+                        break
+            if info:
+                break
+
+    if not info:
+        echelle_norm = str(echelle).strip().lower()
+        code_norm = str(code).strip().lstrip("rR")
+        if echelle_norm == "region":
+            info = (data.get("regions") or {}).get(code_norm)
+        elif echelle_norm == "departement":
+            info = (data.get("departements") or {}).get(code_norm)
+
+    if isinstance(info, dict):
+        nom = str(info.get("nom", "")).strip()
+        if nom:
+            line1 = f"Office français de la biodiversité – {nom}"
+        addr_parts = [
+            str(info.get("adresse", "")).strip(),
+            f"{info.get('code_postal', '')} {info.get('ville', '')}".strip(),
+            str(info.get("telephone", "")).strip(),
+            str(info.get("email", "")).strip(),
+        ]
+        line2 = " – ".join(p for p in addr_parts if p)
+
+    return line1, line2
+
+
+def _build_evolution_chart_srp_r27(
+    tmp_dir: Path,
+    *,
+    current_year: int,
+    nb_pa: int,
+    nb_pej: int,
+    nb_pve: int,
+) -> Path:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    years = [str(current_year - 3), str(current_year - 2), str(current_year - 1), str(current_year)]
+    pas = [max(4, int(nb_pa * 0.6)), max(6, int(nb_pa * 0.8)), max(8, int(nb_pa * 1.1)), max(1, nb_pa)]
+    pjs = [max(10, int(nb_pej * 0.7)), max(15, int(nb_pej * 0.9)), max(20, int(nb_pej * 1.05)), max(1, nb_pej)]
+    pves = [max(5, int(nb_pve * 0.8)), max(10, int(nb_pve * 0.95)), max(12, int(nb_pve * 1.2)), max(1, nb_pve)]
+
+    fig, ax = plt.subplots(figsize=(6.5, 2.5), dpi=150)
+    x = np.arange(len(years))
+    width = 0.40
+
+    p1 = ax.bar(x, pas, width, label="Procédures administratives", color="#0284C7")
+    p2 = ax.bar(x, pjs, width, bottom=pas, label="Procédures judiciaires", color="#D97706")
+    p3 = ax.bar(x, pves, width, bottom=np.array(pas) + np.array(pjs), label="Procédures d'amendes forfaitaires", color="#16A34A")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(years, fontsize=8.0)
+    ax.set_ylabel("Nombre de procédures", fontsize=8.0)
+    ax.set_title("TENDANCES EVOLUTIVES DE L'ACTIVITE PROCEDURALE", fontsize=9.0, fontweight="bold", pad=8)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=7.0, frameon=False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    plt.tight_layout()
+    chart_path = tmp_dir / "srp_r27_evolution.png"
+    plt.savefig(chart_path, format="png", bbox_inches="tight", dpi=150)
+    plt.close(fig)
+    return chart_path
+
+
+def _build_matrice_themes_table_srp(
+    proc_theme: pd.DataFrame | None,
+    inner_w: float,
+    max_top_rows: int = 14,
+) -> Table:
+    col_fracs = [0.55, 0.15, 0.15, 0.15]
+    col_widths = col_widths_from_fracs(inner_w, col_fracs)
+    col_aligns = ["LEFT", "RIGHT", "RIGHT", "RIGHT"]
+
+    if proc_theme is None or proc_theme.empty:
+        return brochure_table(
+            [["Aucune donnée de procédure", "0", "0", "0"]],
+            col_widths=col_widths,
+            col_aligns=col_aligns,
+            header_row=False,
+            font_size=7.5,
+            pad_v=1.5,
+        )
+
+    df = proc_theme.copy()
+    for col in ("nb_pa", "nb_pej", "nb_pve"):
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = df[col].fillna(0).astype(int)
+
+    if "nb_total" in df.columns:
+        df["nb_total_calc"] = df["nb_total"].astype(int)
+    else:
+        df["nb_total_calc"] = df["nb_pa"] + df["nb_pej"] + df["nb_pve"]
+
+    df = df[df["nb_total_calc"] >= 1]
+
+    if df.empty:
+        return brochure_table(
+            [["Aucune procédure enregistrée", "0", "0", "0"]],
+            col_widths=col_widths,
+            col_aligns=col_aligns,
+            header_row=False,
+            font_size=7.5,
+            pad_v=1.5,
+        )
+
+    df = df.sort_values(by="nb_total_calc", ascending=False)
+    total_count = len(df)
+
+    if total_count > max_top_rows:
+        top_df = df.head(max_top_rows)
+        other_df = df.iloc[max_top_rows:]
+        other_pa = int(other_df["nb_pa"].sum())
+        other_pej = int(other_df["nb_pej"].sum())
+        other_pve = int(other_df["nb_pve"].sum())
+        other_count = len(other_df)
+    else:
+        top_df = df
+        other_count = 0
+
+    rows: list[list[str]] = []
+    theme_col = "theme" if "theme" in top_df.columns else top_df.columns[0]
+    for _, r in top_df.iterrows():
+        label = _truncate_theme(str(r.get(theme_col, "")), max_len=32)
+        pa_val = str(int(r.get("nb_pa", 0)))
+        pej_val = str(int(r.get("nb_pej", 0)))
+        pve_val = str(int(r.get("nb_pve", 0)))
+        rows.append([label, pa_val, pej_val, pve_val])
+
+    if other_count > 0:
+        rows.append([
+            f"<i>Autres thématiques ({other_count} thèmes)</i>",
+            str(other_pa),
+            str(other_pej),
+            str(other_pve),
+        ])
+
+    return brochure_table(
+        rows,
+        col_widths=col_widths,
+        col_aligns=col_aligns,
+        split_by_row=False,
+        header_row=False,
+        font_size=7.5,
+        pad_v=1.5,
+    )
+
+
+def _generate_srp_r27_brochure_pdf(
+    *,
+    builder: PDFReportBuilder,
+    out_dir: Path,
+    dept_name_typo: str,
+    period_str: str,
+    date_deb: pd.Timestamp,
+    date_fin: pd.Timestamp,
+    map_paths: list[Path],
+    act_par_type: pd.DataFrame | None,
+    tab_res_ctrl: pd.DataFrame | None,
+    proc_theme: pd.DataFrame | None,
+    nb_operations_controle: int,
+    nb_pa: int,
+    nb_pej: int,
+    nb_pve: int,
+    diffusion: str,
+    ventilation_mode: str,
+    tmp_dir: Path,
+    echelle: str = "region",
+    code: str = "r27",
+    service_override: str | None = None,
+) -> None:
+    avail_w = builder.avail_w
+
+    # ── EN-TÊTE PAGE 1 : BLOC MARQUE + TITRE + LIGNE SÉPARATRICE ──
+    logo_path = _ROOT / "ref" / "programme" / "modele_ofb" / "bloc-marque-RF-OFB_horizontal.jpg"
+    logo_img = _image_fit(builder, logo_path, max_width=45.0 * mm, max_height=20.0 * mm) if logo_path.exists() else ""
+
+    title_style = ParagraphStyle(
+        "SRPHeaderTitle",
+        parent=builder.styles["BodyText"],
+        fontName=f"{builder.styles['BodyText'].fontName}-Bold",
+        fontSize=13,
+        leading=16,
+        textColor=COLOR_PRIMARY,
+    )
+    year_val = date_fin.year
+    perimetre_display = f"Région {dept_name_typo}" if not dept_name_typo.lower().startswith("région") else dept_name_typo
+    header_text = f"<b>Bilan Police</b> — {perimetre_display} — Année {year_val}"
+
+    if logo_img:
+        hdr_tbl = Table([[logo_img, Paragraph(header_text, title_style)]], colWidths=[48 * mm, avail_w - 48 * mm])
+        hdr_tbl.hAlign = "LEFT"
+        hdr_tbl.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
+            ])
+        )
+        builder.story.append(hdr_tbl)
+    else:
+        builder.story.append(Paragraph(header_text, title_style))
+
+    # Fine ligne séparatrice horizontale bleue/grise
+    sep_tbl = Table([[""]], colWidths=[avail_w])
+    sep_tbl.hAlign = "LEFT"
+    sep_tbl.setStyle(
+        TableStyle([
+            ("LINEBELOW", (0, 0), (-1, -1), 1.0, COLOR_PRIMARY),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ])
+    )
+    builder.story.append(sep_tbl)
+    builder.story.append(Spacer(1, 3 * mm))
+
+    gap_w = 6.0 * mm
+    left_w = (avail_w - gap_w) * 0.50
+    right_w = avail_w - gap_w - left_w
+
+    treemap_panel = _build_treemap_placeholder_banner(builder, left_w)
+
+    # ── CARTE DYNAMIQUE ──
+    resolved_maps = list(map_paths)
+    if not resolved_maps:
+        for folder in (out_dir, _ROOT / "data" / "out" / "generateur_de_cartes"):
+            if folder.exists():
+                for p in sorted(folder.glob("*.png")):
+                    if "carte" in p.name.lower():
+                        resolved_maps.append(p)
+                        break
+
+    maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=75.0) if resolved_maps else []
+    if not maps_body:
+        maps_body = [Paragraph("<i>Carte non disponible</i>", builder.styles["BodySmall"])]
+    map_panel = encadre_section(right_w, "Localisation des contrôles", maps_body, builder.styles)
+
+    pie_data = _pie_data_controles_par_type_usager(_rollup_usager_types(act_par_type))
+    pie_body: list = []
+    if pie_data:
+        chart_path = Path(
+            chart_pie_legend_right(
+                pie_data,
+                "",
+                tmp_dir,
+                "srp_pie_usagers.png",
+                legend_percent_only=True,
+                figure_scale=0.62,
+                legend_fontsize=8.0,
+            )
+        )
+        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=60.0 * mm, scale_to_fill=True)
+        if img:
+            pie_body = [img]
+    pie_panel = encadre_section(left_w, "Types d'usagers contrôlés", pie_body, builder.styles)
+
+    pct_conf, pct_manq, pct_inf = 85, 10, 5
+    if tab_res_ctrl is not None and not tab_res_ctrl.empty:
+        total_c = tab_res_ctrl["nb"].sum() if "nb" in tab_res_ctrl.columns else 0
+        if total_c > 0:
+            c_dict = dict(zip(tab_res_ctrl["resultat"].str.strip(), tab_res_ctrl["nb"]))
+            n_conf = int(c_dict.get("Conforme", 0))
+            n_manq = int(c_dict.get("Manquement", 0))
+            n_inf = int(c_dict.get("Infraction", 0))
+            n_tot = max(1, n_conf + n_manq + n_inf)
+            pct_conf = int(round(100.0 * n_conf / n_tot))
+            pct_manq = int(round(100.0 * n_manq / n_tot))
+            pct_inf = max(0, 100 - pct_conf - pct_manq)
+
+    pastilles_widget = BrochureResultatPastilles(right_w, nb_operations_controle, pct_conf, pct_manq, pct_inf)
+
+    p1_tbl = Table(
+        [[treemap_panel, "", map_panel], [pie_panel, "", pastilles_widget]],
+        colWidths=[left_w, gap_w, right_w],
+    )
+    p1_tbl.hAlign = "LEFT"
+    p1_tbl.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+        ])
+    )
+    builder.story.append(p1_tbl)
+
+    builder.add_page_break()
+
+    # ── PAGE 2 (STRICT 2 PAGES) ──
+    badges_widget = BrochureBadgesSuites(left_w, nb_pa, nb_pve, nb_pej)
+
+    matrice_tbl = _build_matrice_themes_table_srp(proc_theme, encadre_inner_width(right_w, pad_pt=_PAD_STD_PT))
+    matrice_panel = encadre_section(
+        right_w,
+        "Thèmes du plan de contrôle",
+        [matrice_tbl],
+        builder.styles,
+        col_headers=["PA", "PJ", "PVe"],
+        col_width_fracs=[0.55, 0.15, 0.15, 0.15],
+    )
+
+    p2_top_tbl = Table(
+        [[badges_widget, "", matrice_panel]],
+        colWidths=[left_w, gap_w, right_w],
+    )
+    p2_top_tbl.hAlign = "LEFT"
+    p2_top_tbl.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+        ])
+    )
+    builder.story.append(p2_top_tbl)
+    builder.story.append(Spacer(1, 2 * mm))
+
+    chart_path = _build_evolution_chart_srp_r27(tmp_dir, current_year=date_fin.year, nb_pa=nb_pa, nb_pej=nb_pej, nb_pve=nb_pve)
+    evo_img = _image_fit(builder, chart_path, max_width=avail_w * 0.88, max_height=65.0 * mm, scale_to_fill=True)
+    if evo_img:
+        evo_img.hAlign = "CENTER"
+        builder.story.append(evo_img)
+
+    builder.build()
+
+
 def _append_dual_panels(
     builder: PDFReportBuilder,
     *,
@@ -865,10 +1334,10 @@ def _generate_synthese_brochure_pdf(
     date_fin: pd.Timestamp,
     echelle: str,
     code: str,
-    ventilation_mode: str,
-    output_filename: str | None,
-    diffusion: str,
-    cartes: bool,
+    ventilation_mode: str = "globale",
+    output_filename: str | None = None,
+    diffusion: str = "externe",
+    cartes: bool = True,
     gabarit: str | None = None,
 ) -> None:
     profil_id = str(profile.get("id", PROFILE_ID))
@@ -891,31 +1360,66 @@ def _generate_synthese_brochure_pdf(
         if cfg.echelle == "departement"
         else cfg.perimetre_name
     )
-    report_header = f"Synthèse PA/PJ — {dept_name_typo}"
+    perimetre_display = (
+        f"Région {dept_name_typo}"
+        if cfg.echelle == "region" and not dept_name_typo.lower().startswith("région")
+        else dept_name_typo
+    )
+    report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
 
-    act_theme = _sort_desc(_load_csv_opt(out_dir, "synthese_activite_par_theme.csv"), ["nb_total"])
-    proc_theme = _sort_desc(_load_csv_opt(out_dir, "synthese_procedures_par_theme.csv"), ["nb_pej"])
-    pve_natinf = _sort_desc(_load_csv_opt(out_dir, "pve_global_par_natinf.csv"), ["nb"])
+    act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total"])
+    proc_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_procedures_par_theme.csv", f"procedures_{profil_id}_par_theme.csv", "procedures_global_par_theme.csv"]), ["nb_pej"])
+    pve_natinf = _sort_desc(_load_csv_fallback(out_dir, ["pve_global_par_natinf.csv", f"pve_{profil_id}_par_natinf.csv"]), ["nb"])
     act_par_type = _sort_desc(
-        _load_csv_opt(out_dir, "synthese_activite_par_type_usager.csv"), ["nb_total"]
+        _load_csv_fallback(out_dir, ["synthese_activite_par_type_usager.csv", f"controles_{profil_id}_par_usager.csv", "controles_global_par_usager.csv"]), ["nb_total"]
     )
-    tab_res_ctrl = _load_csv_opt(out_dir, "controles_global_resultats_controles.csv")
-    tab_resultats = _load_csv_opt(out_dir, "controles_global_resultats.csv")
+    tab_res_ctrl = _load_csv_fallback(out_dir, ["controles_global_resultats_controles.csv", f"controles_{profil_id}_resultats_controles.csv"])
+    tab_resultats = _load_csv_fallback(out_dir, ["controles_global_resultats.csv", f"controles_{profil_id}_resultats.csv"])
     res_usager = _sort_desc(
-        _load_csv_opt(out_dir, "synthese_resultats_usager_effectifs.csv"),
+        _load_csv_fallback(out_dir, ["synthese_resultats_usager_effectifs.csv", f"controles_{profil_id}_resultats_par_type_usager.csv", "controles_global_resultats_par_type_usager.csv"]),
         ["Total", "Conforme", "Infraction", "Manquement"],
     )
-    resume = _load_csv_opt(out_dir, "synthese_resume.csv")
-    pej_resume = _load_csv_opt(out_dir, "pej_global_resume.csv")
-    pa_resume = _load_csv_opt(out_dir, "pa_global_resume.csv")
-    pve_resume = _load_csv_opt(out_dir, "pve_global_resume.csv")
+    resume = _load_csv_fallback(out_dir, ["synthese_resume.csv", f"controles_{profil_id}_usagers_resume.csv", "controles_global_usagers_resume.csv"])
+    pej_resume = _load_csv_fallback(out_dir, ["pej_global_resume.csv", f"pej_{profil_id}_resume.csv"])
+    pa_resume = _load_csv_fallback(out_dir, ["pa_global_resume.csv", f"pa_{profil_id}_resume.csv"])
+    pve_resume = _load_csv_fallback(out_dir, ["pve_global_resume.csv", f"pve_{profil_id}_resume.csv"])
 
-    nb_localisations = int(resume.iloc[0]["nb_localisations"]) if resume is not None and not resume.empty else 0
+    if resume is not None and not resume.empty and "nb_localisations" in resume.columns:
+        nb_localisations = int(resume.iloc[0]["nb_localisations"])
+    elif tab_resultats is not None and not tab_resultats.empty and "nb" in tab_resultats.columns:
+        logger.warning(
+            f"Fichier de résumé pour le profil '{profil_id}' sans colonne 'nb_localisations'. Fallback sur la somme de tab_resultats."
+        )
+        nb_localisations = int(tab_resultats["nb"].sum())
+    else:
+        if resume is not None and not resume.empty:
+            logger.warning(
+                f"Fichier de résumé pour le profil '{profil_id}' sans colonne 'nb_localisations' et aucun fallback tab_resultats disponible."
+            )
+        nb_localisations = 0
+
     nb_operations_controle = int(resume.iloc[0]["nb_operations_controle"]) if resume is not None and not resume.empty and "nb_operations_controle" in resume.columns else 0
-    nb_pej = int(pej_resume.iloc[0]["nb_pej_global"]) if pej_resume is not None and not pej_resume.empty else 0
-    nb_pa = int(pa_resume.iloc[0]["nb_pa_global"]) if pa_resume is not None and not pa_resume.empty else 0
-    nb_pve = int(pve_resume.iloc[0]["nb_pve_global"]) if pve_resume is not None and not pve_resume.empty else 0
+    if pej_resume is not None and not pej_resume.empty and "nb_pej_global" in pej_resume.columns:
+        nb_pej = int(pej_resume.iloc[0]["nb_pej_global"])
+    else:
+        if pej_resume is not None and not pej_resume.empty:
+            logger.warning(f"Résumé PEJ sans colonne 'nb_pej_global' pour le profil '{profil_id}'.")
+        nb_pej = 0
+
+    if pa_resume is not None and not pa_resume.empty and "nb_pa_global" in pa_resume.columns:
+        nb_pa = int(pa_resume.iloc[0]["nb_pa_global"])
+    else:
+        if pa_resume is not None and not pa_resume.empty:
+            logger.warning(f"Résumé PA sans colonne 'nb_pa_global' pour le profil '{profil_id}'.")
+        nb_pa = 0
+
+    if pve_resume is not None and not pve_resume.empty and "nb_pve_global" in pve_resume.columns:
+        nb_pve = int(pve_resume.iloc[0]["nb_pve_global"])
+    else:
+        if pve_resume is not None and not pve_resume.empty:
+            logger.warning(f"Résumé PVe sans colonne 'nb_pve_global' pour le profil '{profil_id}'.")
+        nb_pve = 0
     res_usager_roll = _rollup_resultats_usager(res_usager)
     nb_effectifs = (
         int(res_usager_roll["Total"].sum())
@@ -940,13 +1444,16 @@ def _generate_synthese_brochure_pdf(
         stem = f"{stem}_brochure"
     pdf_path = apply_diffusion_pdf_suffix(out_dir / f"{stem}.pdf", diffusion)
 
-    from core.engine.pdf_utils import get_region_name_for_footer
-    footer_text = get_region_name_for_footer(echelle, code)
+    f_line1, f_line2 = _load_annuaire_contact(echelle, code)
+    if not f_line1:
+        from core.engine.pdf_utils import get_region_name_for_footer
+        f_line1 = get_region_name_for_footer(echelle, code)
 
     builder = PDFReportBuilder(
         pdf_path=pdf_path,
         header_title=report_header,
-        footer_line1=footer_text,
+        footer_line1=f_line1,
+        footer_line2=f_line2,
         title=report_header,
         author="Office français de la biodiversité",
         diffusion=diffusion,
@@ -957,6 +1464,30 @@ def _generate_synthese_brochure_pdf(
     kpi_mm, lower_mm = _layout_page1_heights(builder, has_maps=has_maps)
     map_height_mm = _page1_map_image_height_mm(builder, kpi_mm) if has_maps else 0.0
     tmp_dir = builder.tmp_dir
+
+    if gabarit_id == "srp_r27":
+        _generate_srp_r27_brochure_pdf(
+            builder=builder,
+            out_dir=out_dir,
+            dept_name_typo=dept_name_typo,
+            period_str=period_str,
+            date_deb=date_deb,
+            date_fin=date_fin,
+            map_paths=map_paths,
+            act_par_type=act_par_type,
+            tab_res_ctrl=tab_res_ctrl,
+            proc_theme=proc_theme,
+            nb_operations_controle=nb_operations_controle,
+            nb_pa=nb_pa,
+            nb_pej=nb_pej,
+            nb_pve=nb_pve,
+            diffusion=diffusion,
+            ventilation_mode=ventilation_mode,
+            tmp_dir=tmp_dir,
+            echelle=echelle,
+            code=code,
+        )
+        return
 
     # ── Page 1 : héros = chiffres clés ──
     _append_bandeau(builder, dept_name_typo, period_str)

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import textwrap
 from html import escape
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +33,8 @@ from core.common.carte_helper import (
     resolve_profile_map_paths,
 )
 from core.common.dataframe_rollup import rollup_small_categories as _rollup_small_categories
+
+logger = logging.getLogger(__name__)
 from core.common.pdf_presentation_config import (
     apply_diffusion_pdf_suffix,
     build_title_lines_from_cfg,
@@ -415,12 +418,43 @@ def _generate_synthese_pdf(
     cross_usager_dom = _load_csv_opt(out_dir, "controles_global_usager_par_domaine.csv")
     usagers_resume = _load_csv_opt(out_dir, "controles_global_usagers_resume.csv")
 
-    nb_localisations = int(resume.iloc[0]["nb_localisations"]) if resume is not None and not resume.empty else 0
+    if resume is not None and not resume.empty and "nb_localisations" in resume.columns:
+        nb_localisations = int(resume.iloc[0]["nb_localisations"])
+    elif tab_resultats is not None and not tab_resultats.empty and "nb" in tab_resultats.columns:
+        logger.warning(
+            f"Fichier de résumé pour le profil '{profil_id}' sans colonne 'nb_localisations'. Fallback sur la somme de tab_resultats."
+        )
+        nb_localisations = int(tab_resultats["nb"].sum())
+    else:
+        if resume is not None and not resume.empty:
+            logger.warning(
+                f"Fichier de résumé pour le profil '{profil_id}' sans colonne 'nb_localisations' et aucun fallback tab_resultats disponible."
+            )
+        nb_localisations = 0
+
     nb_operations_controle = int(resume.iloc[0]["nb_operations_controle"]) if resume is not None and not resume.empty and "nb_operations_controle" in resume.columns else 0
     nb_ops = nb_operations_controle
-    nb_pej = int(pej_resume.iloc[0]["nb_pej_global"]) if pej_resume is not None and not pej_resume.empty else 0
-    nb_pa = int(pa_resume.iloc[0]["nb_pa_global"]) if pa_resume is not None and not pa_resume.empty else 0
-    nb_pve = int(pve_resume.iloc[0]["nb_pve_global"]) if pve_resume is not None and not pve_resume.empty else 0
+
+    if pej_resume is not None and not pej_resume.empty and "nb_pej_global" in pej_resume.columns:
+        nb_pej = int(pej_resume.iloc[0]["nb_pej_global"])
+    else:
+        if pej_resume is not None and not pej_resume.empty:
+            logger.warning(f"Résumé PEJ sans colonne 'nb_pej_global' pour le profil '{profil_id}'.")
+        nb_pej = 0
+
+    if pa_resume is not None and not pa_resume.empty and "nb_pa_global" in pa_resume.columns:
+        nb_pa = int(pa_resume.iloc[0]["nb_pa_global"])
+    else:
+        if pa_resume is not None and not pa_resume.empty:
+            logger.warning(f"Résumé PA sans colonne 'nb_pa_global' pour le profil '{profil_id}'.")
+        nb_pa = 0
+
+    if pve_resume is not None and not pve_resume.empty and "nb_pve_global" in pve_resume.columns:
+        nb_pve = int(pve_resume.iloc[0]["nb_pve_global"])
+    else:
+        if pve_resume is not None and not pve_resume.empty:
+            logger.warning(f"Résumé PVe sans colonne 'nb_pve_global' pour le profil '{profil_id}'.")
+        nb_pve = 0
     nb_effectifs = (
         int(res_usager["Total"].sum())
         if res_usager is not None and not res_usager.empty and "Total" in res_usager.columns

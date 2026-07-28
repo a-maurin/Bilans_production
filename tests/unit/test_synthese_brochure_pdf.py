@@ -193,3 +193,26 @@ def test_detailed_pdf_highlights_control_definition_and_section_2_reminder() -> 
     assert "Dans ce document, le terme contrôle renvoie exclusivement" in detailed_text
     assert "aboutir à trois types de résultats" in detailed_text
     assert "Comme indiqué dans la notice méthodologique" in detailed_text
+
+
+def test_brochure_pdf_fallback_without_synthese_resume(tmp_path: Path) -> None:
+    """Vérifie que la brochure ne plante pas avec KeyError quand synthese_resume.csv est absent."""
+    import pandas as pd
+    from core.engine.generation_pdf_synthese_brochure import generate_synthese_brochure_pdf_report
+
+    # Créer un résumé d'usagers sans la colonne 'nb_localisations'
+    (tmp_path / "controles_global_usagers_resume.csv").write_text("nb_localisations_multi_usagers\n2\n", encoding="utf-8")
+    (tmp_path / "controles_global_resultats.csv").write_text("resultat;nb;taux\nConforme;10;100.0\n", encoding="utf-8")
+
+    # L'appel ne doit pas lever KeyError: 'nb_localisations'
+    generate_synthese_brochure_pdf_report(
+        tmp_path,
+        date_deb="2026-01-01",
+        date_fin="2026-07-27",
+        dept_code="r27",
+        profile={"id": "global"},
+        diffusion="interne",
+        cartes=False,
+    )
+    pdf_path = tmp_path / "global_brochure_int.pdf"
+    assert pdf_path.is_file()

@@ -263,6 +263,27 @@ def _generate_pdf_content(
     resolved_presentation_cfg = resolve_pdf_presentation_config(
         _ROOT, scope=scope, profile_id=profile_id, diffusion=diffusion, gabarit_id=gabarit_id
     )
+    layout_mode = str((resolved_presentation_cfg or {}).get("layout_mode", "standard")).strip()
+    if layout_mode in ("brochure", "brochure_custom") or gabarit_id == "srp_r27":
+        from core.engine.generation_pdf_synthese_brochure import (
+            generate_synthese_brochure_pdf_report,
+        )
+        generate_synthese_brochure_pdf_report(
+            out_dir,
+            profile=profile,
+            date_deb=date_deb,
+            date_fin=date_fin,
+            echelle=echelle,
+            code=code,
+            ventilation_mode=ventilation_mode,
+            chart_preset=chart_preset,
+            output_filename=output_filename,
+            diffusion=diffusion,
+            cartes=cartes,
+            gabarit=gabarit_id,
+        )
+        return
+
     presentation_cfg = (
         resolved_presentation_cfg.get("effective", {}) if isinstance(resolved_presentation_cfg, dict) else {}
     )

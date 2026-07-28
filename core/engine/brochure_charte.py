@@ -87,11 +87,13 @@ def brochure_table(
     header_font_size: float | None = None,
     split_by_row: bool = False,
     header_row: bool = True,
+    font_size: float | None = None,
+    pad_v: float | None = None,
 ):
     """Tableau brochure : pas de grille ni zébrage (l'encadré arrondi porte la forme)."""
     from core.common.pdf_utils import ofb_table
 
-    return ofb_table(
+    tbl = ofb_table(
         data_rows,
         col_widths=col_widths,
         col_aligns=col_aligns,
@@ -101,6 +103,13 @@ def brochure_table(
         zebra_rows=False,
         header_row=header_row,
     )
+    cmds = []
+    if pad_v is not None:
+        cmds.append(("TOPPADDING", (0, 0), (-1, -1), pad_v))
+        cmds.append(("BOTTOMPADDING", (0, 0), (-1, -1), pad_v))
+    if cmds:
+        tbl.setStyle(TableStyle(cmds))
+    return tbl
 
 
 def apply_brochure_mpl_style() -> None:

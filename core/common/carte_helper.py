@@ -359,6 +359,7 @@ def generate_maps(
     target_dir: Path | None = None,
     diffusion: str = "interne",
     items_a_masquer: Optional[List[str]] = None,
+    is_brochure: bool = False,
 ) -> List[Path]:
     """
     Try to generate maps via QGIS. Returns list of generated map paths.
@@ -435,7 +436,13 @@ def generate_maps(
 
     generated = []
     for pid in profile_ids:
-        m = resolve_map_png_path(pid, bilan_profiles=bilan_profiles, target_dir=target_dir)
+        m = resolve_map_png_path(
+            pid,
+            bilan_profiles=bilan_profiles,
+            target_dir=target_dir,
+            is_brochure=is_brochure,
+            items_a_masquer=items_a_masquer,
+        )
         if m and is_map_valid_for_dept(m, carto_dept):
             generated.append(m)
             marker = read_map_dept_marker(m) or "n/a"
@@ -555,6 +562,7 @@ def ensure_maps_for_profiles(
             target_dir=target_dir,
             diffusion=diffusion,
             items_a_masquer=items_a_masquer,
+            is_brochure=is_brochure,
         )
 
     # Retourne l'ensemble des cartes trouvées / générées, sans doublons
@@ -567,7 +575,13 @@ def ensure_maps_for_profiles(
 
     resolved_ids: set[str] = set()
     for pid in unique_ids:
-        m = resolve_map_png_path(pid, bilan_profiles=bilan_profiles, target_dir=target_dir)
+        m = resolve_map_png_path(
+            pid,
+            bilan_profiles=bilan_profiles,
+            target_dir=target_dir,
+            is_brochure=is_brochure,
+            items_a_masquer=items_a_masquer,
+        )
         if m and is_map_valid_for_dept(m, carto_dept):
             resolved_ids.add(pid)
     unresolved = [p for p in unique_ids if p not in resolved_ids]

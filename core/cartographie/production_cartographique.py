@@ -2100,8 +2100,14 @@ def export_layout(
             if isinstance(item, QgsLayoutItemMap):
                 try:
                     from qgis.core import QgsLayoutPoint, QgsLayoutSize
-                    item.attemptMove(QgsLayoutPoint(0, 0))
-                    item.attemptResize(QgsLayoutSize(240, 208))
+                    item.attemptMove(QgsLayoutPoint(1, 1))
+                    item.attemptResize(QgsLayoutSize(295, 208))
+                except Exception:
+                    pass
+            elif isinstance(item, QgsLayoutItemScaleBar):
+                try:
+                    from qgis.core import QgsLayoutPoint
+                    item.attemptMove(QgsLayoutPoint(5, 190))
                 except Exception:
                     pass
 
@@ -2835,6 +2841,8 @@ def run_export(
                     if not legend_data:
                         logger.warning("  Aucune donnée de légende à dessiner pour %s", png_path.name)
                     _draw_legend_on_image(png_path, legend_data)
+                    if items_a_masquer or getattr(prof, "items_masques", None):
+                        _crop_and_format_brochure_map(png_path, target_aspect_ratio=95.0 / 75.0, padding_px=10)
                     logger.info("  Légende dessinée sur %s", png_path.name)
                 except Exception as e:
                     logger.error("  Erreur de dessin de légende sur %s : %s", png_path.name, e)
@@ -3252,11 +3260,11 @@ def _draw_legend_on_image(image_path, legend_data):
 
     img_w, img_h = img.size
 
-    # Positionnement de la légende le plus à droite possible
+    # Positionnement de la légende dans la zone droite de la carte
+    start_x = int(img_w * 0.62)
     right_margin = 15
-    start_x = img_w - total_w - right_margin
-    if start_x < int(img_w * 0.45):
-        start_x = int(img_w * 0.45)
+    if start_x + total_w > img_w - right_margin:
+        start_x = img_w - total_w - right_margin
     
     # Marge haute optimale
     margin_top = int(img_h * (10 / 210))
@@ -3325,6 +3333,58 @@ def _draw_legend_on_image(image_path, legend_data):
         img.save(image_path)
     except Exception as e:
         logger.error("Erreur de sauvegarde de la légende sur %s : %s", image_path.name, e)
+
+def _crop_and_format_brochure_map(
+    image_path: Path,
+    target_aspect_ratio: float = 95.0 / 75.0,
+    padding_px: int = 10,
+) -> None:
+    """Rogne et formate l'image carte brochure pour épouser exactement le ratio du cadre PDF (95mm x 75mm).
+    Place la légende à l'extrême droite du cadre sans espace blanc résiduel à droite.
+    """
+    try:
+        from PIL import Image, ImageChops
+        img = Image.open(image_path).convert("RGBA")
+        img_rgb = img.convert("RGB")
+        bg = Image.new("RGB", img_rgb.size, (255, 255, 255))
+        diff = ImageChops.difference(img_rgb, bg)
+        bbox = diff.getbbox()
+        if not bbox:
+            return
+            
+        w_orig, h_orig = img.size
+        left = max(0, bbox[0] - padding_px)
+        top = max(0, bbox[1] - padding_px)
+        right = min(w_orig, bbox[2] + padding_px)
+        bottom = min(h_orig, bbox[3] + padding_px)
+        
+        content_w = right - left
+        content_h = bottom - top
+        
+        current_ratio = content_w / float(content_h) if content_h > 0 else target_aspect_ratio
+        
+        if current_ratio < target_aspect_ratio:
+            target_w = int(content_h * target_aspect_ratio)
+            right = left + target_w
+            if right > w_orig:
+                right = w_orig
+                left = max(0, right - target_w)
+        else:
+            target_h = int(content_w / target_aspect_ratio)
+            diff_h = target_h - content_h
+            top = max(0, top - diff_h // 2)
+            bottom = top + target_h
+            if bottom > h_orig:
+                bottom = h_orig
+                top = max(0, bottom - target_h)
+                
+        cropped = img.crop((left, top, right, bottom))
+        final_img = Image.new("RGB", cropped.size, (255, 255, 255))
+        final_img.paste(cropped, mask=cropped.split()[3] if cropped.mode == "RGBA" else None)
+        final_img.save(image_path)
+        logger.info("Image %s formatée au ratio cadre PDF (%s) : %s", image_path.name, target_aspect_ratio, final_img.size)
+    except Exception as exc:
+        logger.debug("Formatage ratio cadre PDF ignoré : %s", exc)
 
 
 if __name__ == "__main__":

@@ -358,7 +358,9 @@ def _load_profiles_from_param() -> Optional[tuple[Dict[str, "ProfileConfig"], st
             sources=pdata.get("sources", {}),
             natinf_pve=n_pve,
             natinf_pj=n_pj,
+            items_masques=carto_cfg.get("items_masques", pdata.get("items_masques", [])),
         )
+
 
 
     # Chargement des profils définis explicitement dans les YAML (config/profils_cartes.yaml)
@@ -402,6 +404,7 @@ def _load_profiles_from_param() -> Optional[tuple[Dict[str, "ProfileConfig"], st
             sources=yaml_pdata.get("sources", {}),
             natinf_pve=n_pve,
             natinf_pj=n_pj,
+            items_masques=yaml_pdata.get("items_masques", []),
         )
 
     logger.info("Profils cartographiques fusionnés : %s", list(result.keys()))
@@ -1874,6 +1877,7 @@ def export_layout(
     legend_labels_map: Optional[Dict[str, str]] = None,
     dept_code: Optional[str] = None,
     layers_to_render: Optional[list] = None,
+    items_a_masquer: Optional[list] = None,
 ) -> bool:
     """Exporte le layout du profil vers un fichier image."""
     from config_cartes import ProfileConfig, CONFIG
@@ -1907,7 +1911,14 @@ def export_layout(
     subtitle_text = ""
     title_id, subtitle_id = resolve_title_ids(prof, layout_defaults_root)
 
-    from qgis.core import QgsLayoutItemScaleBar, QgsUnitTypes
+    from qgis.core import (
+        QgsLayoutItemMap,
+        QgsLayoutItemLabel,
+        QgsLayoutItemScaleBar,
+        QgsLayoutItemPicture,
+        QgsLayoutItemShape,
+        QgsUnitTypes,
+    )
 
     for item in layout.items():
         if isinstance(item, QgsLayoutItemMap):
@@ -2033,7 +2044,11 @@ def export_layout(
         texte_sources = f"Sources : {liste_sources}<br>Auteur : {auteur} &mdash; Date de r&eacute;alisation : [% format_date(now(), 'dd/MM/yyyy') %]"
         
         taille_police = style_cfg.get("taille_police", 9.5)
-        couleur_texte = style_cfg.get("couleur_texte", "white")
+        check_items_hide = items_a_masquer or getattr(prof, "items_masques", None) or []
+        if any(k in check_items_hide for k in ("bandeau_source", "bandeaux")):
+            couleur_texte = "#2C3E50"
+        else:
+            couleur_texte = style_cfg.get("couleur_texte", "white")
         famille_police = style_cfg.get("famille_police", "sans-serif")
         
         try:
@@ -2062,21 +2077,39 @@ def export_layout(
         logger.warning("==> ITEM SOURCES INTROUVABLE DANS LE LAYOUT !")
 
     _apply_legend_labels(layout, prof, legend_labels_map=legend_labels_map)
+
+    check_hide = items_a_masquer or getattr(prof, "items_masques", None) or []
+    hide_logos_check = any(k in check_hide for k in ("logo_ofb_bas_droite", "bandeau_logos_ofb", "logos", "logo"))
+
     # Bandeau logos République française + OFB en haut de la carte
-    try:
-        _ensure_logo_bandeau(layout, prof)
-    except Exception as e:
-        logger.exception("Erreur bandeau logo (export continué): %s", e)
+    if not hide_logos_check and not any(k in check_hide for k in ("bandeau_logos_ofb", "logo_bandeau")):
+        try:
+            _ensure_logo_bandeau(layout, prof)
+        except Exception as e:
+            logger.exception("Erreur bandeau logo (export continué): %s", e)
     # Logo RF-OFB horizontal en bas à droite
-    try:
-        _ensure_logo_ofb_bas_droite(layout, prof)
-    except Exception as e:
-        logger.exception("Erreur logo bas droite (export continué): %s", e)
+    if not hide_logos_check and not any(k in check_hide for k in ("logo_ofb_bas_droite", "logo_bas_droite")):
+        try:
+            _ensure_logo_ofb_bas_droite(layout, prof)
+        except Exception as e:
+            logger.exception("Erreur logo bas droite (export continué): %s", e)
+
+    is_brochure_mode_active = bool(items_a_masquer or getattr(prof, "items_masques", None))
+    if is_brochure_mode_active:
+        for item in layout.items():
+            if isinstance(item, QgsLayoutItemMap):
+                try:
+                    from qgis.core import QgsLayoutPoint, QgsLayoutSize
+                    item.attemptMove(QgsLayoutPoint(0, 0))
+                    item.attemptResize(QgsLayoutSize(240, 208))
+                except Exception:
+                    pass
 
     if dept_code:
         try:
             emprise_id = getattr(prof, "emprise", "departement") or "departement"
-            apply_map_extent(layout, dept_code, pochoir_id=emprise_id)
+            margin = 0.01 if is_brochure_mode_active else 0.05
+            apply_map_extent(layout, dept_code, pochoir_id=emprise_id, margin_ratio=margin)
         except Exception as e:
             logger.exception("Erreur ajustement emprise carte (export continué): %s", e)
 
@@ -2114,30 +2147,107 @@ def export_layout(
         except OSError:
             pass
 
-    exporter = QgsLayoutExporter(layout)
-    res = exporter.exportToImage(str(export_path), settings)
+    # Masquage/suppression dynamique d'éléments du layout (Lot 1 & 2)
+    to_hide = items_a_masquer
+    if to_hide is None:
+        to_hide = getattr(prof, "items_masques", None) or []
 
-    if res == QgsLayoutExporter.Success:
-        try:
-            if final_path.exists():
-                final_path.unlink()
-            export_path.replace(final_path)
-        except OSError as exc:
-            logger.error(
-                "Export réussi mais remplacement du fichier impossible (%s) : %s",
-                final_path,
-                exc,
-            )
-            return False
-        logger.info("Carte exportée pour le profil '%s' → %s", prof.id, final_path)
-        return True
-    if export_path.exists():
-        try:
-            export_path.unlink()
-        except OSError:
-            pass
-    logger.error("Échec de l'export du layout '%s' vers %s", prof.layout_name, final_path)
-    return False
+    removed_items = []
+    if to_hide:
+        hide_logos = any(k in to_hide for k in ("logo_ofb_bas_droite", "bandeau_logos_ofb", "logos", "logo"))
+        hide_bandeaux = any(k in to_hide for k in ("bandeaux", "bandeau"))
+        hide_bandeau_titre = hide_bandeaux or any(k in to_hide for k in ("bandeau_titre", "bandeau_haut", "titre_principal"))
+        hide_bandeau_source = hide_bandeaux or any(k in to_hide for k in ("bandeau_source", "bandeau_bas"))
+        hide_titles = any(k in to_hide for k in ("titre_principal", "sous_titre", "titre", "titres"))
+        hide_sources = "sources" in to_hide or "source" in to_hide
+
+        for item in list(layout.items()):
+            try:
+                item_id = item.id() if hasattr(item, "id") else ""
+            except Exception:
+                item_id = ""
+
+            item_y = None
+            try:
+                if hasattr(item, "pos"):
+                    item_y = item.pos().y()
+                elif hasattr(item, "pagePositionWithUnits"):
+                    item_y = item.pagePositionWithUnits().y()
+            except Exception:
+                pass
+
+            should_hide = False
+            if item_id and item_id in to_hide:
+                should_hide = True
+            elif hide_logos and isinstance(item, QgsLayoutItemPicture):
+                is_north = (item_id == "fleche_du_nord")
+                if not is_north and hasattr(item, "picturePath"):
+                    pic_p = str(item.picturePath() or "").lower()
+                    if "north" in pic_p or "fleche" in pic_p:
+                        is_north = True
+                if not is_north:
+                    should_hide = True
+            elif hide_bandeau_titre and isinstance(item, QgsLayoutItemShape):
+                if item_id in ("bandeau_titre", "bandeau_haut") or (item_id and "titre" in item_id.lower()) or (item_y is not None and item_y < 25.0):
+                    should_hide = True
+            elif hide_bandeau_source and isinstance(item, QgsLayoutItemShape):
+                if item_id in ("bandeau_source", "bandeau_bas") or (item_id and "source" in item_id.lower()) or (item_y is not None and item_y > 170.0):
+                    should_hide = True
+            elif hide_titles and isinstance(item, QgsLayoutItemLabel):
+                if item_id in ("titre_principal", "title_main", "sous_titre", "title_sub") or (item_id and "titre" in item_id.lower()) or (item_y is not None and item_y < 25.0):
+                    should_hide = True
+            elif hide_sources and isinstance(item, QgsLayoutItemLabel):
+                if item_id in ("sources", "source") or (item_id and "source" in item_id.lower()) or (item_y is not None and item_y > 170.0):
+                    should_hide = True
+
+            if should_hide:
+                try:
+                    if hasattr(item, "setVisibility"):
+                        item.setVisibility(False)
+                    if hasattr(layout, "removeLayoutItem"):
+                        layout.removeLayoutItem(item)
+                    elif hasattr(layout, "removeItem"):
+                        layout.removeItem(item)
+                    removed_items.append(item)
+                    logger.info("Élément masqué et retiré du layout : id='%s', type=%s, y=%s", item_id, type(item).__name__, item_y)
+                except Exception as exc:
+                    logger.warning("Impossible de masquer/retirer l'élément '%s' : %s", item_id, exc)
+
+    try:
+        exporter = QgsLayoutExporter(layout)
+        res = exporter.exportToImage(str(export_path), settings)
+
+        if res == QgsLayoutExporter.Success:
+            try:
+                if final_path.exists():
+                    final_path.unlink()
+                export_path.replace(final_path)
+            except OSError as exc:
+                logger.error(
+                    "Export réussi mais remplacement du fichier impossible (%s) : %s",
+                    final_path,
+                    exc,
+                )
+                return False
+            logger.info("Carte exportée pour le profil '%s' → %s", prof.id, final_path)
+            return True
+        if export_path.exists():
+            try:
+                export_path.unlink()
+            except OSError:
+                pass
+        logger.error("Échec de l'export du layout '%s' vers %s", prof.layout_name, final_path)
+        return False
+    finally:
+        for item in removed_items:
+            try:
+                if hasattr(layout, "addLayoutItem"):
+                    layout.addLayoutItem(item)
+                elif hasattr(layout, "addItem"):
+                    layout.addItem(item)
+            except Exception as exc:
+                logger.debug("Impossible de ré-insérer l'élément dans le layout : %s", exc)
+
 
 
 def run_interactive_wizard(profile_ids: List[str]) -> None:
@@ -2338,6 +2448,7 @@ def run_export(
     *,
     qgis_overrides: Optional[Dict[str, dict]] = None,
     diffusion: str = "interne",
+    items_a_masquer: Optional[List[str]] = None,
 ) -> None:
     """Génère les cartes en mode non interactif à partir de la config."""
     CONFIG = get_effective_config()
@@ -2698,7 +2809,13 @@ def run_export(
             
             layers_to_render = pochoir_layers + other_layers + context_layers + basemap_layers
 
-            out_path = out_dir / prof.output_filename
+            filename = prof.output_filename
+            if items_a_masquer or getattr(prof, "items_masques", None):
+                stem = Path(filename).stem
+                ext = Path(filename).suffix or ".png"
+                if not stem.endswith("_brochure"):
+                    filename = f"{stem}_brochure{ext}"
+            out_path = out_dir / filename
 
             exported = export_layout(
                 prof,
@@ -2708,6 +2825,7 @@ def run_export(
                 legend_labels_map=legend_labels_map or None,
                 dept_code=effective_dept,
                 layers_to_render=layers_to_render,
+                items_a_masquer=items_a_masquer,
             )
 
             png_path = out_path.with_suffix(".png")
@@ -3134,24 +3252,18 @@ def _draw_legend_on_image(image_path, legend_data):
 
     img_w, img_h = img.size
 
-    # La carte prend 232mm sur 297mm de largeur totale
-    # La colonne de droite commence à img_w * (232 / 297)
-    col_start = int(img_w * (232 / 297))
-    col_center = col_start + (img_w - col_start) // 2
+    # Positionnement de la légende le plus à droite possible
+    right_margin = 15
+    start_x = img_w - total_w - right_margin
+    if start_x < int(img_w * 0.45):
+        start_x = int(img_w * 0.45)
     
-    # Centrer la légende sur cet axe et s'assurer qu'elle ne dépasse pas le bord droit
-    start_x = col_center - (total_w // 2)
-    right_margin = 30
-    if start_x + total_w > img_w - right_margin:
-        start_x = img_w - total_w - right_margin
-    
-    # Marge haute sous le bandeau bleu du haut (10mm)
-    margin_top = int(img_h * (20 / 210))  # environ 20mm pour laisser de la place
+    # Marge haute optimale
+    margin_top = int(img_h * (10 / 210))
     start_y = margin_top
     
-    # Si la légende descend trop bas (sous le logo)
-    if start_y + total_h > img_h - int(img_h * (30 / 210)):
-        start_y = max(margin_top, img_h - total_h - int(img_h * (30 / 210)))
+    if start_y + total_h > img_h - int(img_h * (15 / 210)):
+        start_y = max(margin_top, img_h - total_h - int(img_h * (15 / 210)))
 
     overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
     overlay_draw = ImageDraw.Draw(overlay)

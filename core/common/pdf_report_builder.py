@@ -159,7 +159,10 @@ class PDFReportBuilder:
         content_only: bool = False,
         pagesize: tuple[float, float] | None = None,
         margin_bottom: float | None = None,
+        skip_first_page_header: bool = False,
     ):
+        self.content_only = content_only
+        self.skip_first_page_header = skip_first_page_header
         self.pdf_path = Path(pdf_path)
         self.pdf_path.parent.mkdir(parents=True, exist_ok=True)
         self._pagesize = pagesize if pagesize is not None else A4
@@ -494,21 +497,23 @@ class PDFReportBuilder:
         canvas.saveState()
         self._draw_content_page_watermark(canvas)
         self._draw_content_page_footer_deco(canvas)
-        canvas.setStrokeColor(rl_colors.HexColor(COLOR_PRIMARY))
-        canvas.setLineWidth(2)
-        y_rule = getattr(self, "_header_rule_y", self._page_h - 12 * mm)
-        canvas.line(MARGIN_LEFT, y_rule, self._page_w - MARGIN_RIGHT, y_rule)
-        header_lines = [ln.strip() for ln in str(self.header_title).splitlines() if ln.strip()]
-        if not header_lines:
-            header_lines = [""]
-        font_size = 7 if len(header_lines) > 1 else 8
-        line_step = 3.2 * mm
-        canvas.setFont(f"{FONT_FAMILY}-Bold", font_size)
-        canvas.setFillColor(rl_colors.HexColor(COLOR_PRIMARY))
-        y_text = y_rule + 1.5 * mm
-        for line in header_lines[:3]:
-            canvas.drawString(MARGIN_LEFT, y_text, line)
-            y_text += line_step
+        if not (getattr(self, "skip_first_page_header", False) and doc.page == 1):
+            canvas.setStrokeColor(rl_colors.HexColor(COLOR_PRIMARY))
+            canvas.setLineWidth(2)
+            y_rule = getattr(self, "_header_rule_y", self._page_h - 12 * mm)
+            canvas.line(MARGIN_LEFT, y_rule, self._page_w - MARGIN_RIGHT, y_rule)
+            header_lines = [ln.strip() for ln in str(self.header_title).splitlines() if ln.strip()]
+            if not header_lines:
+                header_lines = [""]
+            font_size = 7 if len(header_lines) > 1 else 8
+            line_step = 3.2 * mm
+            canvas.setFont(f"{FONT_FAMILY}-Bold", font_size)
+            canvas.setFillColor(rl_colors.HexColor(COLOR_PRIMARY))
+            y_text = y_rule + 1.5 * mm
+            for line in header_lines[:3]:
+                canvas.drawString(MARGIN_LEFT, y_text, line)
+                y_text += line_step
+
 
         y_foot = 8 * mm
         canvas.setFont(f"{FONT_FAMILY}", 7)

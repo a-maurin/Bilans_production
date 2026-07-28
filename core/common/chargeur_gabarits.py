@@ -172,3 +172,34 @@ def resolve_gabarit_for_service(
             match_region_only = g["gabarit_id"]
 
     return match_region_service or match_region_only
+
+
+def resolve_items_masques_carte(
+    profil_data: dict[str, Any] | None = None,
+    gabarit_data: dict[str, Any] | None = None,
+    *,
+    is_brochure: bool = False,
+) -> list[str]:
+    """
+    Résout la liste des identifiants d'éléments de la carte à masquer selon la hiérarchie :
+    1. Gabarit (cartographie.items_masques / cartographie.items_masques_brochure)
+    2. Profil bilan (cartographie.items_masques_brochure / cartographie.items_masques)
+    """
+    g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
+    if isinstance(g_carto, dict):
+        res = g_carto.get("items_masques_brochure", g_carto.get("items_masques"))
+        if isinstance(res, list):
+            return [str(x) for x in res]
+
+    p_carto = (profil_data or {}).get("cartographie", {}) if isinstance(profil_data, dict) else {}
+    if isinstance(p_carto, dict):
+        if is_brochure and "items_masques_brochure" in p_carto:
+            res = p_carto.get("items_masques_brochure")
+            if isinstance(res, list):
+                return [str(x) for x in res]
+        res = p_carto.get("items_masques_defaut", p_carto.get("items_masques", []))
+        if isinstance(res, list):
+            return [str(x) for x in res]
+
+    return []
+

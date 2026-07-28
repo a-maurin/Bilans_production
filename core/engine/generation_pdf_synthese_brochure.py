@@ -124,9 +124,17 @@ def _truncate_theme(label: str, max_len: int = 34) -> str:
 
 
 def _rollup_usager_types(df: pd.DataFrame | None) -> pd.DataFrame | None:
-    if df is None or df.empty or "nb_total" not in df.columns:
+    if df is None or df.empty:
         return df
     work = df.copy()
+    if "nb_total" not in work.columns:
+        if "nb" in work.columns:
+            work["nb_total"] = work["nb"]
+        elif "nb_effectifs" in work.columns:
+            pej_hors = work["nb_pej_hors_controle"] if "nb_pej_hors_controle" in work.columns else 0
+            work["nb_total"] = work["nb_effectifs"] + pej_hors
+        else:
+            return work
     work["nb_total"] = work["nb_total"].astype(float)
     total = float(work["nb_total"].sum())
     if total <= 0:
@@ -826,6 +834,7 @@ def _generate_srp_r27_brochure_pdf(
     echelle: str = "region",
     code: str = "r27",
     service_override: str | None = None,
+    tab_resultats: pd.DataFrame | None = None,
 ) -> None:
     avail_w = builder.avail_w
 
@@ -882,20 +891,30 @@ def _generate_srp_r27_brochure_pdf(
 
     treemap_panel = _build_treemap_placeholder_banner(builder, left_w)
 
-    # ── CARTE DYNAMIQUE ──
-    resolved_maps = list(map_paths)
+    # ── CARTE DYNAMIQUE (FILTRAGE STRICT SUR LA CARTE DES RÉSULTATS) ──
+    res_maps = [p for p in map_paths if "resultats" in p.name.lower()]
+    resolved_maps = res_maps if res_maps else list(map_paths[:1])
     if not resolved_maps:
         for folder in (out_dir, _ROOT / "data" / "out" / "generateur_de_cartes"):
             if folder.exists():
-                for p in sorted(folder.glob("*.png")):
+                for p in sorted(folder.glob("*brochure*.png")):
                     if "carte" in p.name.lower():
                         resolved_maps.append(p)
                         break
+                if not resolved_maps:
+                    for p in sorted(folder.glob("*resultats*.png")):
+                        resolved_maps.append(p)
+                        break
+                if not resolved_maps:
+                    for p in sorted(folder.glob("*.png")):
+                        if "carte" in p.name.lower():
+                            resolved_maps.append(p)
+                            break
 
     maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=75.0) if resolved_maps else []
     if not maps_body:
         maps_body = [Paragraph("<i>Carte non disponible</i>", builder.styles["BodySmall"])]
-    map_panel = encadre_section(right_w, "Localisation des contrôles", maps_body, builder.styles)
+    map_panel = encadre_section(right_w, "Résultats des contrôles", maps_body, builder.styles)
 
     pie_data = _pie_data_controles_par_type_usager(_rollup_usager_types(act_par_type))
     pie_body: list = []
@@ -914,20 +933,22 @@ def _generate_srp_r27_brochure_pdf(
         img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=60.0 * mm, scale_to_fill=True)
         if img:
             pie_body = [img]
+    if not pie_body:
+        pie_body = [Paragraph("<i>Données non disponibles</i>", builder.styles["BodySmall"])]
     pie_panel = encadre_section(left_w, "Types d'usagers contrôlés", pie_body, builder.styles)
 
     pct_conf, pct_manq, pct_inf = 85, 10, 5
-    if tab_res_ctrl is not None and not tab_res_ctrl.empty:
-        total_c = tab_res_ctrl["nb"].sum() if "nb" in tab_res_ctrl.columns else 0
-        if total_c > 0:
-            c_dict = dict(zip(tab_res_ctrl["resultat"].str.strip(), tab_res_ctrl["nb"]))
-            n_conf = int(c_dict.get("Conforme", 0))
-            n_manq = int(c_dict.get("Manquement", 0))
-            n_inf = int(c_dict.get("Infraction", 0))
-            n_tot = max(1, n_conf + n_manq + n_inf)
-            pct_conf = int(round(100.0 * n_conf / n_tot))
-            pct_manq = int(round(100.0 * n_manq / n_tot))
-            pct_inf = max(0, 100 - pct_conf - pct_manq)
+    res_df = tab_resultats if tab_resultats is not None and not tab_resultats.empty else tab_res_ctrl
+    if res_df is not None and not res_df.empty and "nb" in res_df.columns and "resultat" in res_df.columns:
+        clean_res = res_df["resultat"].astype(str).str.strip().str.replace(r"^Dont\s+", "", regex=True).str.strip()
+        c_dict = dict(zip(clean_res, res_df["nb"]))
+        n_conf = int(c_dict.get("Conforme", 0))
+        n_manq = int(c_dict.get("Manquement", 0))
+        n_inf = int(c_dict.get("Infraction", 0))
+        n_tot = max(1, n_conf + n_manq + n_inf)
+        pct_conf = int(round(100.0 * n_conf / n_tot))
+        pct_manq = int(round(100.0 * n_manq / n_tot))
+        pct_inf = max(0, 100 - pct_conf - pct_manq)
 
     pastilles_widget = BrochureResultatPastilles(right_w, nb_operations_controle, pct_conf, pct_manq, pct_inf)
 
@@ -1368,11 +1389,32 @@ def _generate_synthese_brochure_pdf(
     report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
 
-    act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total"])
-    proc_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_procedures_par_theme.csv", f"procedures_{profil_id}_par_theme.csv", "procedures_global_par_theme.csv"]), ["nb_pej"])
+    act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total", "nb"])
+    proc_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_procedures_par_theme.csv", f"procedures_{profil_id}_par_theme.csv", "procedures_global_par_theme.csv"]), ["nb_pej", "nb_pa", "nb_pve"])
+    if proc_theme is None or proc_theme.empty:
+        pej_t = _load_csv_fallback(out_dir, [f"pej_{profil_id}_par_theme.csv", "pej_global_par_theme.csv"])
+        pa_t = _load_csv_fallback(out_dir, [f"pa_{profil_id}_par_theme.csv", "pa_global_par_theme.csv"])
+        if pej_t is not None or pa_t is not None:
+            frames = []
+            if pej_t is not None and not pej_t.empty and "theme" in pej_t.columns:
+                frames.append(pej_t)
+            if pa_t is not None and not pa_t.empty and "theme" in pa_t.columns:
+                frames.append(pa_t)
+            if frames:
+                merged = frames[0]
+                for f in frames[1:]:
+                    merged = pd.merge(merged, f, on="theme", how="outer")
+                for c in ("nb_pej", "nb_pa", "nb_pve"):
+                    if c not in merged.columns:
+                        merged[c] = 0
+                    else:
+                        merged[c] = merged[c].fillna(0).astype(int)
+                merged["nb_total"] = merged["nb_pej"] + merged["nb_pa"] + merged["nb_pve"]
+                proc_theme = _sort_desc(merged, ["nb_total", "nb_pej", "nb_pa", "nb_pve"])
+
     pve_natinf = _sort_desc(_load_csv_fallback(out_dir, ["pve_global_par_natinf.csv", f"pve_{profil_id}_par_natinf.csv"]), ["nb"])
     act_par_type = _sort_desc(
-        _load_csv_fallback(out_dir, ["synthese_activite_par_type_usager.csv", f"controles_{profil_id}_par_usager.csv", "controles_global_par_usager.csv"]), ["nb_total"]
+        _load_csv_fallback(out_dir, ["synthese_activite_par_type_usager.csv", f"controles_{profil_id}_par_usager.csv", "controles_global_par_usager.csv"]), ["nb_total", "nb"]
     )
     tab_res_ctrl = _load_csv_fallback(out_dir, ["controles_global_resultats_controles.csv", f"controles_{profil_id}_resultats_controles.csv"])
     tab_resultats = _load_csv_fallback(out_dir, ["controles_global_resultats.csv", f"controles_{profil_id}_resultats.csv"])
@@ -1400,6 +1442,8 @@ def _generate_synthese_brochure_pdf(
         nb_localisations = 0
 
     nb_operations_controle = int(resume.iloc[0]["nb_operations_controle"]) if resume is not None and not resume.empty and "nb_operations_controle" in resume.columns else 0
+    if nb_operations_controle == 0:
+        nb_operations_controle = nb_localisations
     if pej_resume is not None and not pej_resume.empty and "nb_pej_global" in pej_resume.columns:
         nb_pej = int(pej_resume.iloc[0]["nb_pej_global"])
     else:
@@ -1430,12 +1474,36 @@ def _generate_synthese_brochure_pdf(
 
     map_paths: list[Path] = []
     if cartes:
+        from core.chemins_projet import get_cartes_dir
         map_id = str(profile.get("_map_id") or profil_id)
-        c_proc = out_dir / f"carte_{map_id}_procedures.png"
-        c_res = out_dir / f"carte_{map_id}_resultats.png"
-        for p in (c_res, c_proc):
-            if p.exists():
-                map_paths.append(p)
+        cartes_dir = get_cartes_dir()
+
+        res_brochure_candidates = [
+            out_dir / f"carte_{map_id}_resultats_brochure.png",
+            cartes_dir / f"carte_{map_id}_resultats_brochure.png",
+            out_dir / f"carte_{map_id}_domaines_brochure.png",
+            cartes_dir / f"carte_{map_id}_domaines_brochure.png",
+            out_dir / f"carte_{map_id}_brochure.png",
+            cartes_dir / f"carte_{map_id}_brochure.png",
+        ]
+        found_brochure = next((p for p in res_brochure_candidates if p.exists()), None)
+        if not found_brochure:
+            brochure_globs = list(out_dir.glob(f"carte_{map_id}_*_brochure.png")) + list(cartes_dir.glob(f"carte_{map_id}_*_brochure.png"))
+            if brochure_globs:
+                found_brochure = brochure_globs[0]
+
+        if found_brochure:
+            map_paths.append(found_brochure)
+        else:
+            res_std_candidates = [
+                out_dir / f"carte_{map_id}_resultats.png",
+                cartes_dir / f"carte_{map_id}_resultats.png",
+                out_dir / f"carte_{map_id}.png",
+                cartes_dir / f"carte_{map_id}.png",
+            ]
+            found_std = next((p for p in res_std_candidates if p.exists()), None)
+            if found_std:
+                map_paths.append(found_std)
     has_maps = bool(map_paths)
 
     base_name = output_filename or f"{profil_id}.pdf"
@@ -1460,6 +1528,7 @@ def _generate_synthese_brochure_pdf(
         content_only=True,
         pagesize=BROCHURE_PAGE_SIZE,
         margin_bottom=10 * mm,
+        skip_first_page_header=True,
     )
     kpi_mm, lower_mm = _layout_page1_heights(builder, has_maps=has_maps)
     map_height_mm = _page1_map_image_height_mm(builder, kpi_mm) if has_maps else 0.0
@@ -1486,6 +1555,7 @@ def _generate_synthese_brochure_pdf(
             tmp_dir=tmp_dir,
             echelle=echelle,
             code=code,
+            tab_resultats=tab_resultats,
         )
         return
 
@@ -1703,6 +1773,9 @@ def _generate_synthese_brochure_pdf(
         )
         if img:
             result_chart_body = [img]
+
+    if not pie_body:
+        pie_body = [Paragraph("<i>Données non disponibles</i>", builder.styles["BodySmall"])]
 
     pie_panel = encadre_section(
         pie_w,

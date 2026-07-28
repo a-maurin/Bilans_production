@@ -216,3 +216,69 @@ def test_brochure_pdf_fallback_without_synthese_resume(tmp_path: Path) -> None:
     )
     pdf_path = tmp_path / "global_brochure_int.pdf"
     assert pdf_path.is_file()
+
+
+def test_usager_types_fallback_with_nb_column() -> None:
+    """Vérifie que les fonctions usager gèrent correctement la colonne 'nb' sans 'nb_total'."""
+    import pandas as pd
+    from core.engine.generation_pdf_synthese_brochure import _rollup_usager_types
+    from core.engine.generation_pdf_synthese import _pie_data_controles_par_type_usager
+
+    df_nb = pd.DataFrame([
+        {"type_usager": "Particulier", "nb": 100},
+        {"type_usager": "Agriculteur", "nb": 50},
+    ])
+
+    rolled = _rollup_usager_types(df_nb)
+    assert rolled is not None
+    assert "nb_total" in rolled.columns
+
+    pie_data = _pie_data_controles_par_type_usager(df_nb)
+    assert pie_data != {}
+    assert "Particulier" in pie_data or any("Particulier" in k for k in pie_data.keys())
+    assert sum(pie_data.values()) == 150
+
+
+def test_profile_config_items_masques() -> None:
+    """Vérifie la gestion du champ items_masques sur ProfileConfig."""
+    from core.cartographie.config_cartes_model import ProfileConfig
+
+    prof = ProfileConfig(
+        id="test_brochure",
+        title="Test Brochure",
+        layout_name="test_layout",
+        output_filename="carte_test.png",
+        items_masques=["titre_principal", "bandeau_logos_ofb"],
+    )
+    assert prof.items_masques == ["titre_principal", "bandeau_logos_ofb"]
+
+
+def test_resolve_items_masques_carte_hierarchy() -> None:
+    """Vérifie la hiérarchie de résolution des items masqués (Gabarit > Profil Brochure > Profil Défaut)."""
+    from core.common.chargeur_gabarits import resolve_items_masques_carte
+
+    profil_data = {
+        "cartographie": {
+            "items_masques_defaut": ["logo_defaut"],
+            "items_masques_brochure": ["titre_profil", "logo_profil"],
+        }
+    }
+    gabarit_data = {
+        "cartographie": {
+            "items_masques_brochure": ["titre_gabarit", "logo_gabarit"],
+        }
+    }
+
+    # 1. Mode standard (hors brochure) -> items_masques_defaut du profil
+    res_std = resolve_items_masques_carte(profil_data, gabarit_data, is_brochure=False)
+    assert res_std == ["logo_defaut"]
+
+    # 2. Mode brochure avec gabarit -> la liste du gabarit prévaut
+    res_gab = resolve_items_masques_carte(profil_data, gabarit_data, is_brochure=True)
+    assert res_gab == ["titre_gabarit", "logo_gabarit"]
+
+    # 3. Mode brochure sans gabarit -> la liste brochure du profil prévaut
+    res_prof_brochure = resolve_items_masques_carte(profil_data, None, is_brochure=True)
+    assert res_prof_brochure == ["titre_profil", "logo_profil"]
+
+

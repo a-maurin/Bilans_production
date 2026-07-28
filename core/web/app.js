@@ -38,8 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputProfil = document.getElementById('profil');
     const btnToggleProfils = document.getElementById('btn-toggle-profils');
     const profilsDropdown = document.getElementById('profils-dropdown');
+    const selectGabarit = document.getElementById('gabarit');
 
     let profilesList = [];
+    let gabaritsList = [];
     
     fetch('/api/profils')
         .then(res => res.json())
@@ -50,6 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error('Erreur chargement profils:', err));
 
+    fetch('/api/gabarits')
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                gabaritsList = data;
+                renderGabaritsOptions();
+            }
+        })
+        .catch(err => console.error('Erreur chargement gabarits:', err));
+
     fetch('/api/version')
         .then(res => res.json())
         .then(data => {
@@ -59,6 +71,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         })
         .catch(err => console.error('Erreur chargement version:', err));
+
+    function renderGabaritsOptions() {
+        if (!selectGabarit) return;
+        const currentVal = selectGabarit.value;
+        const selectedProfil = inputProfil ? inputProfil.value.trim() : '';
+
+        selectGabarit.innerHTML = '<option value="">Automatique (par profil)</option>';
+        gabaritsList.forEach(g => {
+            if (g.profils_compatibles && Array.isArray(g.profils_compatibles) && g.profils_compatibles.length > 0) {
+                if (selectedProfil && !g.profils_compatibles.includes(selectedProfil)) {
+                    return;
+                }
+            }
+            const opt = document.createElement('option');
+            opt.value = g.gabarit_id;
+            opt.textContent = g.label ? `${g.label} (${g.gabarit_id})` : g.gabarit_id;
+            if (g.gabarit_id === currentVal) {
+                opt.selected = true;
+            }
+            selectGabarit.appendChild(opt);
+        });
+    }
 
     function renderDropdown(filterText = '') {
         profilsDropdown.innerHTML = '';
@@ -83,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
             opt.addEventListener('click', () => {
                 inputProfil.value = p.value;
                 profilsDropdown.classList.add('hidden');
+                renderGabaritsOptions();
             });
             profilsDropdown.appendChild(opt);
         });
@@ -105,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inputProfil.addEventListener('input', () => {
         renderDropdown(inputProfil.value);
         profilsDropdown.classList.remove('hidden');
+        renderGabaritsOptions();
     });
 
     // Show all when input is focused/clicked
@@ -603,7 +639,8 @@ document.addEventListener('DOMContentLoaded', () => {
             pnf: document.getElementById('pnf').checked,
             brochure: document.getElementById('brochure').checked,
             diffusion: document.getElementById('diffusion').value,
-            preset: document.getElementById('preset').value
+            preset: document.getElementById('preset').value,
+            gabarit: selectGabarit && selectGabarit.value ? selectGabarit.value : null
         };
 
         // Call backend API

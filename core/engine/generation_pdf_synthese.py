@@ -242,11 +242,14 @@ def _build_pve_natinf_table_rows(
 
 def _pie_data_controles_par_type_usager(df: pd.DataFrame | None) -> dict[str, int]:
     """Données camembert § 3 : effectifs d'usagers contrôlés + saisines PEJ hors contrôle."""
-    if df is None or df.empty or "nb_total" not in df.columns:
+    if df is None or df.empty:
+        return {}
+    col = "nb_total" if "nb_total" in df.columns else ("nb" if "nb" in df.columns else ("nb_effectifs" if "nb_effectifs" in df.columns else None))
+    if col is None:
         return {}
     out: dict[str, int] = {}
     for _, row in df.iterrows():
-        total = int(row.get("nb_total", 0) or 0)
+        total = int(row.get(col, 0) or 0)
         if total > 0:
             out[_display_type_usager(row["type_usager"])] = total
     return out

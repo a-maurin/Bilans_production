@@ -24,6 +24,7 @@ cartographie:
     - id: global_procedures
       label: "Procédures"
       fichier: carte_global_procedures.png
+
 aggregation:
   adapter: run_profile_aggregations
 pdf:

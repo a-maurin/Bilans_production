@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from core.chemins_projet import PROJECT_ROOT, get_cartes_dir
+from core.common.chargeur_gabarits import resolve_items_masques_carte
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,8 @@ def resolve_map_png_path(
     *,
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
+    is_brochure: bool = False,
+    items_a_masquer: list[str] | None = None,
 ) -> Optional[Path]:
     """Chemin PNG d'une carte (catalogue bilan ou conventions carte_{id}.png)."""
     pid = str(profile_id).strip()
@@ -93,6 +96,30 @@ def resolve_map_png_path(
         pass
 
     from core.common.cartographie_config import parse_cartography_catalog
+
+    if is_brochure or items_a_masquer:
+        for prof in (bilan_profiles or {}).values():
+            if not isinstance(prof, dict):
+                continue
+            for entry in parse_cartography_catalog(prof):
+                if str(entry.get("id", "")).strip() == pid:
+                    file_name = str(entry.get("fichier", "")).strip()
+                    stem = Path(file_name).stem
+                    ext = Path(file_name).suffix or ".png"
+                    brochure_file = f"{stem}_brochure{ext}" if not stem.endswith("_brochure") else file_name
+                    if target_dir and (target_dir / brochure_file).exists():
+                        return target_dir / brochure_file
+                    cand = get_cartes_dir() / brochure_file
+                    if cand.exists():
+                        return cand
+
+        brochure_legacy_names = [f"carte_{pid}_resultats_brochure.png", f"carte_{pid}_domaines_brochure.png", f"carte_{pid}_brochure.png"]
+        for b_name in brochure_legacy_names:
+            if target_dir and (target_dir / b_name).exists():
+                return target_dir / b_name
+            if (get_cartes_dir() / b_name).exists():
+                return get_cartes_dir() / b_name
+        return None
 
     for prof in (bilan_profiles or {}).values():
         if not isinstance(prof, dict):
@@ -331,6 +358,7 @@ def generate_maps(
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
     diffusion: str = "interne",
+    items_a_masquer: Optional[List[str]] = None,
 ) -> List[Path]:
     """
     Try to generate maps via QGIS. Returns list of generated map paths.
@@ -368,6 +396,7 @@ def generate_maps(
                     dept_code=carto_dept,
                     qgis_overrides=qgis_overrides,
                     diffusion=diffusion,
+                    items_a_masquer=items_a_masquer,
                 )
                 if target_dir and "CARTO_OUTPUT_DIR" in os.environ:
                     del os.environ["CARTO_OUTPUT_DIR"]
@@ -448,6 +477,9 @@ def ensure_maps_for_profiles(
     target_dir: Path | None = None,
     diffusion: str = "interne",
     force_regen: bool = False,
+    items_a_masquer: Optional[List[str]] = None,
+    is_brochure: bool = False,
+    gabarit_data: dict[str, Any] | None = None,
 ) -> List[Path]:
     """
     Ensure that maps exist for a list of cartographic profiles.
@@ -459,6 +491,12 @@ def ensure_maps_for_profiles(
     """
     if not profile_ids:
         return []
+
+    if items_a_masquer is None:
+        primary_profile = None
+        if bilan_profiles and isinstance(bilan_profiles, dict):
+            primary_profile = next(iter(bilan_profiles.values()), None)
+        items_a_masquer = resolve_items_masques_carte(primary_profile, gabarit_data, is_brochure=is_brochure)
 
     # Normalisation / dédoublonnage des identifiants de profils
     unique_ids: List[str] = []
@@ -482,7 +520,13 @@ def ensure_maps_for_profiles(
     existing: List[Path] = []
     missing: List[str] = []
     for pid in unique_ids:
-        m = resolve_map_png_path(pid, bilan_profiles=bilan_profiles, target_dir=target_dir)
+        m = resolve_map_png_path(
+            pid,
+            bilan_profiles=bilan_profiles,
+            target_dir=target_dir,
+            is_brochure=is_brochure,
+            items_a_masquer=items_a_masquer,
+        )
         if m and is_map_valid_for_dept(m, carto_dept) and not force_regen:
             existing.append(m)
         elif m:
@@ -510,6 +554,7 @@ def ensure_maps_for_profiles(
             bilan_profiles=bilan_profiles,
             target_dir=target_dir,
             diffusion=diffusion,
+            items_a_masquer=items_a_masquer,
         )
 
     # Retourne l'ensemble des cartes trouvées / générées, sans doublons

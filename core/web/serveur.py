@@ -450,6 +450,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     cmd.extend(["--diffusion", str(params["diffusion"])])
                 if params.get("preset"):
                     cmd.extend(["--preset", str(params["preset"])])
+                if params.get("gabarit"):
+                    cmd.extend(["--gabarit", str(params["gabarit"])])
 
                 # Options oui/non (cartes, pnf, brochure)
                 if params.get("cartes") is True:

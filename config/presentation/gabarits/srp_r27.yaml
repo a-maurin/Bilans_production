@@ -21,3 +21,15 @@ sections:
     - sec4
     - sec3
     - sec6
+
+cartographie:
+  items_masques_brochure:
+    - titre_principal
+    - sous_titre
+    - bandeau_titre
+    - bandeau_logos_ofb
+    - logo_ofb_bas_droite
+    - bandeau_source
+
+
+

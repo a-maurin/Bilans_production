@@ -52,7 +52,7 @@ regions:
     nom: "Direction régionale Centre-Val de Loire"
   "27":
     nom: "Direction régionale Bourgogne-Franche-Comté"
-    adresse: "57 rue de Muhouse"
+    adresse: "57 rue de Mulhouse"
     code_postal: "21000"
     ville: "Dijon"
     email: "dr.bfc@ofb.gouv.fr"

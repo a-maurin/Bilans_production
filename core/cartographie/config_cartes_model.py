@@ -152,6 +152,8 @@ class ProfileConfig:
     layout_defaults_ref: Optional[str] = None
     # Textes dynamiques injectés dans la mise en page (ex: {"id_bandeau": "Bilan {departement}"})
     extra_texts: Dict[str, str] = field(default_factory=dict)
+    # Identifiants des éléments du layout à masquer lors de l'export
+    items_masques: List[str] = field(default_factory=list)
 
 
 @dataclass

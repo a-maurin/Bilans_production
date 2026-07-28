@@ -225,6 +225,7 @@ def analyse_controles_global(point: pd.DataFrame, out_dir: Path) -> Tuple[pd.Dat
         agg_usager = agg_effectifs_usagers(pt, "point_ctrl", "type_usager")
         total_effectifs = int(agg_usager["nb"].sum()) if not agg_usager.empty else 0
         agg_usager["taux"] = agg_usager["nb"] / float(total_effectifs or 1)
+        agg_usager["nb_total"] = agg_usager["nb"]
         agg_usager.to_csv(out_dir / "controles_global_par_usager.csv", sep=";", index=False)
 
         res_type_usager = agg_resultat_counts_par_type_usager(pt)
@@ -246,7 +247,7 @@ def analyse_controles_global(point: pd.DataFrame, out_dir: Path) -> Tuple[pd.Dat
             out_dir / "controles_global_usagers_resume.csv", sep=";", index=False
         )
     else:
-        pd.DataFrame(columns=["type_usager", "nb", "taux"]).to_csv(
+        pd.DataFrame(columns=["type_usager", "nb", "nb_total", "taux"]).to_csv(
             out_dir / "controles_global_par_usager.csv", sep=";", index=False
         )
         pd.DataFrame(

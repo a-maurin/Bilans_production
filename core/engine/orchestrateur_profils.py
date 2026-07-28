@@ -701,6 +701,14 @@ def _run_global_profile_via_yaml(
     if resolved_opts.get("cartes", False) and map_profiles:
         print("[3/5] Préparation des cartes de localisation...")
         try:
+            gabarit_id_opt = options.get("gabarit")
+            from core.common.chargeur_gabarits import load_gabarit
+            g_data = load_gabarit(gabarit_id_opt) if gabarit_id_opt else None
+            is_brochure_mode = (
+                bool(options.get("brochure"))
+                or (g_data and g_data.get("layout") in ("brochure", "brochure_custom"))
+                or gabarit_id_opt == "srp_r27"
+            )
             ensure_maps_for_profiles(
                 map_profiles,
                 date_deb=date_deb,
@@ -710,6 +718,8 @@ def _run_global_profile_via_yaml(
                 target_dir=out_dir,
                 diffusion=str(resolved_opts.get("diffusion", "interne")),
                 force_regen=True,
+                is_brochure=is_brochure_mode,
+                gabarit_data=g_data,
             )
         except Exception as e:
             logger = logging.getLogger("ofbilan.engine")
@@ -835,6 +845,15 @@ def _finalize_cartes_selection(
     if selection:
         profil_id = str(profile.get("id", "")).strip()
         bilan_key = profil_id or "global"
+        gabarit_id_opt = (cli_options or {}).get("gabarit") or resolved_opts.get("gabarit")
+        from core.common.chargeur_gabarits import load_gabarit
+        g_data = load_gabarit(gabarit_id_opt) if gabarit_id_opt else None
+        is_brochure_mode = (
+            bool((cli_options or {}).get("brochure"))
+            or bool(resolved_opts.get("brochure"))
+            or (g_data and g_data.get("layout") in ("brochure", "brochure_custom"))
+            or gabarit_id_opt == "srp_r27"
+        )
         ensure_maps_for_profiles(
             selection,
             date_deb=date_deb,
@@ -844,6 +863,8 @@ def _finalize_cartes_selection(
             target_dir=target_dir,
             diffusion=str(resolved_opts.get("diffusion", "interne")),
             force_regen=True,
+            is_brochure=is_brochure_mode,
+            gabarit_data=g_data,
         )
     return resolved_opts
 

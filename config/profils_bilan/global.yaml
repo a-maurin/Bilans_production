@@ -1,3 +1,17 @@
+# ========================================================================================
+# PROFIL DE BILAN GLOBAL (`global.yaml`)
+# ========================================================================================
+# Ce fichier définit la configuration du rapport principal "Bilan Global" qui agrège l'ensemble
+# des données de police environnementale (tous domaines et thématiques confondus).
+#
+# Clés et fonctionnalités pour les non-spécialistes :
+#   - `id` / `pipeline` : identifiant unique ("global") exécutant le pipeline complet d'agrégation.
+#   - `capabilities` : `combine: false` et `mix_batch: false` car le bilan global est autonome.
+#   - `cartographie.catalog` : définit les 4 cartes thématiques générées (Domaines, Contrôles, Usagers, Procédures).
+#   - `periode_analyse.ventilation` : ventilation temporelle automatique (`auto`) selon la durée choisie.
+#   - `options.cartes_selection` : permet à l'utilisateur de cocher les cartes à inclure dans le PDF.
+# ========================================================================================
+
 id: global
 label: Bilan global
 title_label: Bilan global

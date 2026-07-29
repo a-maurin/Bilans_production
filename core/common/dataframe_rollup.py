@@ -9,14 +9,22 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Helpers pandas pour regrouper des petites categories dans les tableaux PDF."""
+"""
+========================================================================================
+MODULE : REGROUPEMENT DE CATÉGORIES SECONDAIRES PANDAS (`dataframe_rollup.py`)
+========================================================================================
+Ce module fournit des outils d'agrégation de données pour les tableaux et graphiques du PDF.
+
+Il permet de fusionner les catégories minoritaires (part < 1% ou dépassant le nombre max de lignes)
+dans une unique ligne cumulée intitulée 'Autres thèmes' ou 'Autres usagers'.
+========================================================================================
+"""
 
 from __future__ import annotations
 
@@ -33,6 +41,7 @@ def _aggregate_other_row(
     value_col: str,
     sum_cols: Iterable[str] | None = None,
 ) -> pd.DataFrame:
+    """Calcule la ligne cumulée d'agrégation pour les sous-catégories masquées."""
     if df.empty:
         return df
 
@@ -63,7 +72,10 @@ def rollup_small_categories(
     sum_cols: list[str] | None = None,
     max_rows: int | None = None,
 ) -> pd.DataFrame | None:
-    """Regroupe les categories sous un seuil et, si besoin, les excedents de lignes."""
+    """Regroupe les catégories de faible effectif (seuil `min_pct`) et de nombre de lignes max (`max_rows`).
+
+    Formate le DataFrame pour qu'il soit parfaitement adapté aux dimensions restreintes des pages PDF.
+    """
     if df is None or df.empty or value_col not in df.columns or label_col not in df.columns:
         return df
 
@@ -72,6 +84,7 @@ def rollup_small_categories(
     if total <= 0:
         return ordered
 
+    # Sépare les catégories principales des catégories minoritaires
     if min_pct is None:
         kept = ordered.copy()
         hidden = ordered.iloc[0:0].copy()
@@ -96,6 +109,7 @@ def rollup_small_categories(
             ignore_index=True,
         )
 
+    # Tronque et regroupe si le nombre maximal de lignes autorisées est dépassé
     if max_rows is not None and max_rows > 0 and len(out) > max_rows:
         keep_count = max_rows - 1 if max_rows > 1 else 0
         visible = out.head(keep_count).copy() if keep_count > 0 else out.iloc[0:0].copy()
@@ -114,4 +128,4 @@ def rollup_small_categories(
             ignore_index=True,
         )
 
-    return out.reset_index(drop=True)
+    return out.reset_index(drop=True)

@@ -15,70 +15,91 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Rendu PDF brochure (2 pages A4 paysage).
+"""
+========================================================================================
+MODULE : GENERATION DU RAPPORT PDF BROCHURE (2 PAGES A4 PAYSAGE)
+========================================================================================
+Ce module est le cœur de fabrication du document PDF 'Brochure' de l'OFB.
+Il prend les données calculées (fichiers CSV), les cartes générées par QGIS et compose
+un document synthétique de 2 pages au format A4 paysage :
+  - PAGE 1 : Titre du bilan, Chiffres clés (Héros), Carte géographique régionale.
+  - PAGE 2 : Graphiques par types d'usagers, bilans des procédures et infractions (PV/E).
 
-Couleurs : charte OFB standard (``ofb_charte``).
-Formes : encadrés arrondis via ``brochure_charte`` (module brochure uniquement).
+Charte graphique appliquée :
+  - Couleurs officielles de l'OFB (`ofb_charte.py`).
+  - Encadrés aux coins arrondis et bandeaux stylisés (`brochure_charte.py`).
+========================================================================================
 """
 
 from __future__ import annotations
 
-import logging
-from pathlib import Path
+# --- IMPORTS STANDARDS PYTHON ---
+import logging  # Pour journaliser les messages d'information ou d'erreur
+from pathlib import Path  # Pour manipuler facilement les chemins de fichiers
 
-import pandas as pd
-from reportlab.lib import colors as rl_colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import Flowable, Image as RLImage, Paragraph, Spacer, Table, TableStyle
+# --- MANIPULATION DE DONNEES ET GENERATION DE PDF (LIBRARIES TIERCES) ---
+import pandas as pd  # Bibliothèque de traitement de tableaux de données (CSV)
+from reportlab.lib import colors as rl_colors  # Gestion des couleurs pour ReportLab
+from reportlab.lib.pagesizes import A4, landscape  # Format de page A4 en mode Paysage (horizontal)
+from reportlab.lib.styles import ParagraphStyle  # Style de texte (police, taille, couleur, alignement)
+from reportlab.lib.units import mm  # Conversion de millimètres en points PDF
+from reportlab.platypus import Flowable, Image as RLImage, Paragraph, Spacer, Table, TableStyle  # Éléments de mise en page ReportLab
 
-from core.common.carte_helper import resolve_profile_map_paths
-from core.common.ofb_charte import COLOR_PRIMARY
+# --- MODULES INTERNES OFBILAN (OUTILS ET CHARTE OFB) ---
+from core.common.carte_helper import resolve_profile_map_paths  # Recherche des fichiers d'images de cartes QGIS
+from core.common.ofb_charte import COLOR_PRIMARY  # Couleur principale officielle (vert/bleu OFB)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # Journaliseur propre à ce fichier
+
+# Modules de configuration de la présentation PDF
 from core.common.pdf_presentation_config import (
-    apply_diffusion_pdf_suffix,
-    normalize_dept_typography,
-    resolve_pdf_presentation_config,
+    apply_diffusion_pdf_suffix,  # Ajoute le suffixe (ex: _int pour interne) au fichier PDF
+    normalize_dept_typography,  # Nettoie la typographie du nom du département
+    resolve_pdf_presentation_config,  # Récupère la configuration visuelle du bilan
 )
-from core.common.pdf_report_builder import PDFReportBuilder
-from core.common.pdf_utils import truncate_text_to_width
-from core.common.pdf_table_sort import pdf_metric_caption, sort_dataframe_desc as _sort_desc
-from core.common.percent_format import format_pct_int_from_rate, tab_counts_to_pct_strings
+from core.common.pdf_report_builder import PDFReportBuilder  # Moteur d'assemblage du document PDF ReportLab
+from core.common.pdf_utils import truncate_text_to_width  # Tronque un texte s'il dépasse une largeur donnée en mm/pt
+from core.common.pdf_table_sort import pdf_metric_caption, sort_dataframe_desc as _sort_desc  # Tri des tableaux de données
+from core.common.percent_format import format_pct_int_from_rate, tab_counts_to_pct_strings  # Formateurs de pourcentages
 from core.common.rendus_graphiques import (
-    chart_bar_horizontal_stacked,
-    chart_pie_legend_right,
+    chart_bar_horizontal_stacked,  # Générateur de graphiques à barres horizontales empilées (ex: usagers)
+    chart_pie_legend_right,  # Générateur de camemberts avec légende à droite
 )
 from core.engine.brochure_charte import (
-    BrochureBandeau,
-    LOGO_OFB_INTRANET_BLANC,
-    _BANDEAU_LOGO_H,
-    _PAD_STD_PT,
-    apply_brochure_mpl_style,
-    brochure_table,
-    brochure_totaux_band,
-    col_widths_from_fracs,
-    encadre_inner_width,
-    encadre_section,
-    kpi_encadre,
+    BrochureBandeau,  # Dessine le bandeau d'en-tête de la brochure
+    LOGO_OFB_INTRANET_BLANC,  # Logo blanc officiel pour le bandeau
+    _BANDEAU_LOGO_H,  # Hauteur du logo dans le bandeau
+    _PAD_STD_PT,  # Marge interne standard des encadrés (en points)
+    apply_brochure_mpl_style,  # Applique le style visuel OFB aux graphiques Matplotlib
+    brochure_table,  # Crée un tableau ReportLab stylisé selon la charte brochure
+    brochure_totaux_band,  # Crée une ligne de total stylisée
+    col_widths_from_fracs,  # Calcule la largeur exacte des colonnes à partir de fractions (ex: 60%, 40%)
+    encadre_inner_width,  # Calcule la largeur utile à l'intérieur d'un encadré
+    encadre_section,  # Crée un conteneur encadré avec titre et coins arrondis
+    kpi_encadre,  # Crée un encadré pour afficher un chiffre clé (ex: Nombre de contrôles)
 )
-from core.common.bilan_config import BilanConfig, resolve_perimetre_kwargs
+from core.common.bilan_config import BilanConfig, resolve_perimetre_kwargs  # Configuration des bilans
 from core.engine.generation_pdf_synthese import (
     PROFILE_ID,
     _ROOT,
-    _build_synthese_key_figure_rows,
-    _display_type_usager,
-    _KEY_FIGURES_GRAIN_NOTE,
-    _load_csv_opt,
-    _nb_non_conformes_brut,
-    _pie_data_controles_par_type_usager,
-    _rollup_small_categories,
+    _build_synthese_key_figure_rows,  # Extrait les chiffres clés du bilan
+    _display_type_usager,  # Traduit les codes d'usagers en libellés lisibles
+    _KEY_FIGURES_GRAIN_NOTE,  # Note explicative pour les chiffres clés
+    _load_csv_opt,  # Charge optionnellement un fichier CSV de résultats
+    _nb_non_conformes_brut,  # Calcule le nombre brut de contrôles non-conformes
+    _pie_data_controles_par_type_usager,  # Prépare les données pour le camembert d'usagers
+    _rollup_small_categories,  # Regroupe les petites catégories secondaires dans un total 'Autres'
 )
 
 
+# ========================================================================================
+# FONCTIONS DE CHARGEMENT DE DONNEES CSV DE SECOURS (FALLBACK)
+# ========================================================================================
 def _load_csv_fallback(out_dir: Path, filenames: list[str]) -> pd.DataFrame | None:
+    """Tente de charger le premier fichier CSV disponible dans la liste fournie.
+
+    Si un fichier n'existe pas ou est vide, passe au suivant dans la liste.
+    """
     for name in filenames:
         df = _load_csv_opt(out_dir, name)
         if df is not None and not df.empty:
@@ -86,37 +107,57 @@ def _load_csv_fallback(out_dir: Path, filenames: list[str]) -> pd.DataFrame | No
     return None
 
 
-_BROCHURE_MAX_THEMES = 5
-_BROCHURE_MAX_PROC_THEMES = 7
-_BROCHURE_MAX_PVE_NATINF = 9
-_PAGE2_ENCADRE_OVERHEAD_MM = 14.0
-_PAGE2_TABLE_ROW_MM = 5.4
-_PAGE2_TABLE_FOOTER_MM = 10.0
-_PAGE2_TOP_ROW_MAX_RATIO = 0.44
-_PAGE2_BOTTOM_ROW_CAP = 7
-_BROCHURE_MAX_USAGER_TYPES = 5
-_BROCHURE_USAGER_MIN_SHARE = 0.02
-_BROCHURE_MAX_RESULT_USAGER_TYPES = 7
-_BROCHURE_RESULT_USAGER_MIN_SHARE = 0.01
+# ========================================================================================
+# CONSTANTES DE MISE EN PAGE ET RÈGLES VISUELLES DE LA BROCHURE
+# ========================================================================================
 
+# Limites du nombre de lignes dans les tableaux de la brochure pour éviter les dépassements de page
+_BROCHURE_MAX_THEMES = 5  # Maximum 5 thématiques affichées dans les tableaux principaux
+_BROCHURE_MAX_PROC_THEMES = 7  # Maximum 7 thématiques dans le tableau des procédures (PEJ/PA)
+_BROCHURE_MAX_PVE_NATINF = 9  # Maximum 9 infractions NATINF affichées dans la liste PV/E
+
+# Encombres et hauteurs fixes (en millimètres) utilisées pour calculer l'espace disponible en Page 2
+_PAGE2_ENCADRE_OVERHEAD_MM = 14.0  # Hauteur occupée par les en-têtes et bordures d'un encadré en page 2
+_PAGE2_TABLE_ROW_MM = 5.4  # Hauteur estimée d'une ligne de tableau
+_PAGE2_TABLE_FOOTER_MM = 10.0  # Hauteur du pied de tableau
+_PAGE2_TOP_ROW_MAX_RATIO = 0.44  # Ratio maximal de la hauteur de la zone supérieure de la page 2
+_PAGE2_BOTTOM_ROW_CAP = 7  # Plafond maximum de lignes dans les tableaux du bas de la page 2
+
+# Seuils et filtres pour les catégories d'usagers
+_BROCHURE_MAX_USAGER_TYPES = 5  # Maximum 5 types d'usagers affichés individuellement
+_BROCHURE_USAGER_MIN_SHARE = 0.02  # Part minimale (2%) d'un usager pour être affiché sans être regroupé
+_BROCHURE_MAX_RESULT_USAGER_TYPES = 7  # Maximum 7 types d'usagers dans le bilan des résultats
+_BROCHURE_RESULT_USAGER_MIN_SHARE = 0.01  # Part minimale (1%) dans les résultats par usager
+
+# Dimensions fondamentales de la page PDF (Format A4 Paysage : 297mm x 210mm)
 BROCHURE_PAGE_SIZE = landscape(A4)
-_GRID_GAP_MM = 10.0
-_PAGE1_LOWER_GAP_MM = 6.0
-_BROCHURE_SECTION_GAP_MM = 2.8
-_PAGE1_KPI_HERO_RATIO = 0.36
-_PAGE1_KPI_HERO_RATIO_WITH_MAPS = 0.28
-_PAGE1_LOWER_SYNTH_RATIO = 0.32
-_PAGE1_MAP_ENCADRE_OVERHEAD_MM = 13.0
-_PAGE2_CHART_HERO_RATIO = 0.48
-_PAGE2_LOWER_LEFT_RATIO = 0.40
-_PAGE2_PROC_WIDTH_RATIO = 0.25
-_PAGE2_TOP_PIE_RATIO = 0.50
-_PAGE2_PIE_LEGEND_FONTSIZE = 10.0
-_PAGE2_METHODO_MM = 9.0
-_COL_LEFT_RATIO = 0.58
 
+# Espacements entre les blocs et ratios de découpage de l'espace (en millimètres et fractions)
+_GRID_GAP_MM = 10.0  # Espace entre la colonne de gauche et la colonne de droite
+_PAGE1_LOWER_GAP_MM = 6.0  # Espace horizontal dans le bas de la page 1
+_BROCHURE_SECTION_GAP_MM = 2.8  # Espace vertical entre les différentes sections/encadrés
+_PAGE1_KPI_HERO_RATIO = 0.36  # Fraction de hauteur attribuée au bloc Héros (sans carte) en page 1
+_PAGE1_KPI_HERO_RATIO_WITH_MAPS = 0.28  # Fraction de hauteur attribuée au bloc Héros (avec carte) en page 1
+_PAGE1_LOWER_SYNTH_RATIO = 0.32  # Proportion du tableau de synthèse par rapport à la carte en bas de page 1
+_PAGE1_MAP_ENCADRE_OVERHEAD_MM = 13.0  # Hauteur fixe consommée par le titre de l'encadré de carte
+_PAGE2_CHART_HERO_RATIO = 0.48  # Part de hauteur de la zone des graphiques en haut de page 2
+_PAGE2_LOWER_LEFT_RATIO = 0.40  # Largeur relative du bloc gauche en bas de page 2
+_PAGE2_PROC_WIDTH_RATIO = 0.25  # Proportion de largeur de la colonne des procédures en page 2
+_PAGE2_TOP_PIE_RATIO = 0.50  # Largeur du camembert (50%) en haut de page 2
+_PAGE2_PIE_LEGEND_FONTSIZE = 10.0  # Taille de police de la légende du graphique en camembert
+_PAGE2_METHODO_MM = 9.0  # Hauteur de la bande explicative/méthodologique en bas de page 2
+_COL_LEFT_RATIO = 0.58  # Largeur relative par défaut de la colonne de gauche (58%)
+
+
+# ========================================================================================
+# FONCTIONS UTILITAIRES DE PRÉPARATION DES TEXTES ET REGROUPEMENT DE DONNÉES
+# ========================================================================================
 
 def _truncate_theme(label: str, max_len: int = 34) -> str:
+    """Raccourcit un nom de thématique trop long en ajoutant des points de suspension (...).
+
+    Évite que le texte ne déborde des cellules des tableaux du PDF.
+    """
     txt = str(label or "").strip()
     if len(txt) <= max_len:
         return txt
@@ -124,9 +165,15 @@ def _truncate_theme(label: str, max_len: int = 34) -> str:
 
 
 def _rollup_usager_types(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Regroupe les catégories d'usagers minoritaires dans une ligne synthétique 'Autres'.
+
+    Conserve les catégories principales (part > 2%) et fusionne les petites catégories
+    afin d'avoir un tableau lisible de 5 lignes maximum sur le document PDF.
+    """
     if df is None or df.empty:
         return df
     work = df.copy()
+    # S'assure de la présence de la colonne de total des effectifs
     if "nb_total" not in work.columns:
         if "nb" in work.columns:
             work["nb_total"] = work["nb"]
@@ -135,20 +182,27 @@ def _rollup_usager_types(df: pd.DataFrame | None) -> pd.DataFrame | None:
             work["nb_total"] = work["nb_effectifs"] + pej_hors
         else:
             return work
+
     work["nb_total"] = work["nb_total"].astype(float)
     total = float(work["nb_total"].sum())
     if total <= 0:
         return work
+
     rows: list[dict] = []
     autres_ctrl = 0.0
     autres_pej = 0.0
+
+    # Parcourt les usagers et filtre ceux qui dépassent le seuil
     for _, row in work.iterrows():
         share = float(row["nb_total"]) / total
         if share >= _BROCHURE_USAGER_MIN_SHARE and len(rows) < _BROCHURE_MAX_USAGER_TYPES - 1:
             rows.append(row.to_dict())
         else:
+            # Cumule les usagers secondaires dans la catégorie 'Autres'
             autres_ctrl += float(row.get("nb_effectifs", row.get("nb_total", 0)) or 0)
             autres_pej += float(row.get("nb_pej_hors_controle", 0) or 0)
+
+    # Ajoute la ligne de synthèse 'Autres' si des usagers ont été cumulés
     if autres_ctrl + autres_pej > 0 or len(rows) >= _BROCHURE_MAX_USAGER_TYPES:
         rows.append(
             {
@@ -167,15 +221,23 @@ def _rollup_resultats_usager(
     min_share: float = _BROCHURE_USAGER_MIN_SHARE,
     max_types: int = _BROCHURE_MAX_USAGER_TYPES,
 ) -> pd.DataFrame | None:
+    """Regroupe les résultats de contrôles (Conforme / Infraction / Manquement) des petits usagers.
+
+    Cumule les effectifs par type de résultat pour la catégorie 'Autres'.
+    """
     if df is None or df.empty:
         return df
     work = df.copy()
+
+    # Convertit les colonnes de comptage en entiers
     for col in ("Conforme", "Infraction", "Manquement", "Autre_resultat", "Total"):
         if col in work.columns:
             work[col] = work[col].astype(int)
+
     total_all = float(work["Total"].sum()) if "Total" in work.columns else 0.0
     if total_all <= 0:
         return work.head(max_types)
+
     kept: list[pd.Series] = []
     autres: dict[str, int] = {
         "Conforme": 0,
@@ -184,6 +246,8 @@ def _rollup_resultats_usager(
         "Autre_resultat": 0,
         "Total": 0,
     }
+
+    # Sépare les usagers majeurs et cumule les mineurs
     for _, row in work.iterrows():
         t = int(row.get("Total", 0) or 0)
         if t / total_all >= min_share and len(kept) < max_types - 1:
@@ -192,47 +256,65 @@ def _rollup_resultats_usager(
             for k in autres:
                 if k in row.index:
                     autres[k] += int(row.get(k, 0) or 0)
+
+    # Ajoute la ligne cumulée 'Autres' s'il y a du contenu
     if autres["Total"] > 0:
         kept.append(pd.Series({**{"type_usager": "Autres"}, **autres}))
     return pd.DataFrame(kept)
 
 
 def _flatten_key_figures(figure_rows: list[list[tuple[str, str]]]) -> list[tuple[str, str]]:
+    """Aplatit une grille de chiffres clés (liste 2D de paires Titre/Valeur) en une liste simple 1D."""
     flat: list[tuple[str, str]] = []
     for row in figure_rows:
         flat.extend(row)
     return flat
 
 
-_BROCHURE_THEME_COL_FRACS = [0.64, 0.12, 0.24]
-_BROCHURE_RESULT_COL_FRACS = [0.60, 0.12, 0.28]
-_BROCHURE_PROC_COL_FRACS = [0.58, 0.21, 0.21]
-_BROCHURE_PVE_NATINF_COL_FRACS = [0.76, 0.24]
+# Fractions de largeur des colonnes dans les différents tableaux de la brochure
+_BROCHURE_THEME_COL_FRACS = [0.64, 0.12, 0.24]  # Thème (64%) | Valeur (12%) | Pourcentage (24%)
+_BROCHURE_RESULT_COL_FRACS = [0.60, 0.12, 0.28]  # Résultat (60%) | Valeur (12%) | Taux (28%)
+_BROCHURE_PROC_COL_FRACS = [0.58, 0.21, 0.21]  # Thème (58%) | PEJ (21%) | PA (21%)
+_BROCHURE_PVE_NATINF_COL_FRACS = [0.76, 0.24]  # Libellé NATINF (76%) | Nombre (24%)
 
 
 def _build_rows_resultats_brochure(tr: pd.DataFrame | None) -> list[list[str]]:
+    """Transforme les résultats de contrôles (Conforme, Non-conforme, En attente) en lignes de tableau formatées.
+
+    Calcule les taux en pourcentage pour chaque catégorie de résultat.
+    """
     if tr is None or tr.empty:
         return [["—", "0", "n.d."]]
+
     strip_res = tr["resultat"].astype(str).str.strip()
     labels = ("Conforme", "Non-conforme", "En attente")
     counts: list[int] = []
     rows_out: list[list[str]] = []
+
+    # Extrait les chiffres pour chaque catégorie de résultat
     for label in labels:
         sub = tr.loc[strip_res == label]
         if sub.empty:
             continue
         counts.append(int(sub.iloc[0]["nb"]))
         rows_out.append([label, str(int(sub.iloc[0]["nb"])), ""])
+
+    # Calcule les pourcentages correspondants
     if counts:
         rates = tab_counts_to_pct_strings(counts)
         for i, row in enumerate(rows_out):
             if i < len(rates):
                 row[2] = rates[i]
+
     return rows_out or [["—", "0", "n.d."]]
 
 
+# ========================================================================================
+# FONCTIONS DE CALCUL DES DIMENSIONS DES COLONNES ET HAUTEURS DE PAGE
+# ========================================================================================
+
 def _grid_columns(builder: PDFReportBuilder, left_ratio: float = _COL_LEFT_RATIO) -> tuple[float, float, float]:
-    """Largeurs gauche | intercolonne | droite = zone utile (alignement strict)."""
+    """Calcule les largeurs exactes (colonne gauche, espace central, colonne droite) de la zone utile du PDF."""
     gap = _GRID_GAP_MM * mm
     inner = builder.avail_w - gap
     left_w = inner * left_ratio
@@ -241,7 +323,7 @@ def _grid_columns(builder: PDFReportBuilder, left_ratio: float = _COL_LEFT_RATIO
 
 
 def _page1_lower_columns(builder: PDFReportBuilder) -> tuple[float, float, float]:
-    """Colonnes bande basse page 1 : synthèse + carte ; bord droit carte = bord droit chiffres clés."""
+    """Calcule les largeurs de colonnes pour la bande du bas en Page 1 (Synthese + Carte QGIS)."""
     avail = builder.avail_w
     gap = _PAGE1_LOWER_GAP_MM * mm
     inner = avail - gap
@@ -254,7 +336,7 @@ def _page1_lower_columns(builder: PDFReportBuilder) -> tuple[float, float, float
 def _page2_lower_columns(
     builder: PDFReportBuilder, left_ratio: float = _PAGE2_LOWER_LEFT_RATIO
 ) -> tuple[float, float, float]:
-    """Colonnes bas de page 2 ; bord droit procédures = bord droit graphique usagers."""
+    """Calcule les largeurs de colonnes pour la bande du bas en Page 2."""
     avail = builder.avail_w
     gap = _PAGE1_LOWER_GAP_MM * mm
     inner = avail - gap
@@ -265,13 +347,14 @@ def _page2_lower_columns(
 
 
 def _content_height_mm(builder: PDFReportBuilder) -> float:
+    """Retourne la hauteur totale disponible en millimètres dans le document PDF."""
     return builder.avail_h / mm
 
 
 def _layout_page1_heights(
     builder: PDFReportBuilder, *, has_maps: bool
 ) -> tuple[float, float]:
-    """Hauteurs mm : bande KPI héros, bande basse (tableaux + carte)."""
+    """Calcule la répartition de hauteur en Page 1 entre le bloc Héros (haut) et les cartes/tableaux (bas)."""
     fixed_mm = 14.0 + 2 * _BROCHURE_SECTION_GAP_MM
     content_mm = max(80.0, _content_height_mm(builder) - fixed_mm)
     kpi_ratio = _PAGE1_KPI_HERO_RATIO_WITH_MAPS if has_maps else _PAGE1_KPI_HERO_RATIO
@@ -280,14 +363,14 @@ def _layout_page1_heights(
 
 
 def _page1_map_image_height_mm(builder: PDFReportBuilder, kpi_mm: float) -> float:
-    """Hauteur cible (mm) des images carto pour remplir le bas de page 1."""
+    """Calcule la hauteur cible exacte de l'image cartographique pour remplir le bas de Page 1 sans débordement."""
     content_mm = _content_height_mm(builder)
     top_mm = 14.0 + kpi_mm + 2 * _BROCHURE_SECTION_GAP_MM + _PAGE1_MAP_ENCADRE_OVERHEAD_MM
     return max(48.0, content_mm - top_mm)
 
 
 def _layout_page2_usager_chart_mm(builder: PDFReportBuilder, n_rows: int) -> float:
-    """Hauteur encadré graphique usagers : plafond page + cible selon le nombre de lignes."""
+    """Calcule la hauteur de l'encadré du graphique des usagers selon le nombre de lignes à afficher."""
     fixed_mm = 8.0 + 2 * _BROCHURE_SECTION_GAP_MM + 7.0
     content_mm = max(80.0, _content_height_mm(builder) - fixed_mm)
     n = max(1, int(n_rows))
@@ -302,7 +385,7 @@ def _layout_page2_usager_chart_mm(builder: PDFReportBuilder, n_rows: int) -> flo
 def _layout_page2_heights(
     builder: PDFReportBuilder, n_usager_rows: int, *, with_pve_band: bool
 ) -> tuple[float, float]:
-    """Répartit toute la hauteur utile : bande haute (graphiques) + bande basse (tableaux)."""
+    """Répartit la hauteur verticale utile de la Page 2 entre la zone haute (graphiques) et la zone basse (tableaux)."""
     del with_pve_band
     fixed_mm = 8.0 + 3 * _BROCHURE_SECTION_GAP_MM + _PAGE2_METHODO_MM
     content_mm = max(80.0, _content_height_mm(builder) - fixed_mm)
@@ -314,6 +397,7 @@ def _layout_page2_heights(
 
 
 def _page2_table_row_cap(height_mm: float, *, with_footer: bool) -> int:
+    """Calcule le nombre maximal de lignes de tableau pouvant rentrer dans la hauteur attribuée sans déborder."""
     footer_mm = _PAGE2_TABLE_FOOTER_MM if with_footer else 0.0
     usable = height_mm - _PAGE2_ENCADRE_OVERHEAD_MM - footer_mm
     est = max(3, int(usable / _PAGE2_TABLE_ROW_MM))
@@ -323,13 +407,14 @@ def _page2_table_row_cap(height_mm: float, *, with_footer: bool) -> int:
 def _page2_chart_figsize_in(
     inner_w_pt: float, inner_h_pt: float, *, legend_right: bool
 ) -> tuple[float, float]:
+    """Convertit des dimensions de blocs PDF (en points) en pouces (inches) pour alimenter Matplotlib."""
     w_in = max(3.8, float(inner_w_pt) / 72.0 * 0.99)
     h_in = max(2.4, float(inner_h_pt) / 72.0 * (0.90 if legend_right else 0.82))
     return w_in, h_in
 
 
 def _page2_top_columns(builder: PDFReportBuilder) -> tuple[float, float, float]:
-    """Moitié gauche : pression d'activité ; moitié droite : résultats par type d'usager."""
+    """Découpe le haut de Page 2 en deux colonnes égales : camembert d'activité à gauche, usagers à droite."""
     avail = builder.avail_w
     gap = _PAGE1_LOWER_GAP_MM * mm
     inner = avail - gap
@@ -340,7 +425,7 @@ def _page2_top_columns(builder: PDFReportBuilder) -> tuple[float, float, float]:
 
 
 def _page2_proc_column_width(builder: PDFReportBuilder) -> float:
-    """Largeur du bloc procédures (moitié de l'ancienne colonne 40 %)."""
+    """Calcule la largeur du bloc des procédures (PA / PEJ)."""
     avail = builder.avail_w
     gap = _PAGE1_LOWER_GAP_MM * mm
     inner = avail - gap
@@ -348,7 +433,7 @@ def _page2_proc_column_width(builder: PDFReportBuilder) -> float:
 
 
 def _page2_bottom_proc_pve_columns(builder: PDFReportBuilder) -> tuple[float, float, float]:
-    """Procédures (largeur fixe) + PVe (reste de la page, libellés NATINF plus longs)."""
+    """Découpe le bas de Page 2 entre la colonne procédures et la colonne des infractions PV/E (NATINF)."""
     avail = builder.avail_w
     gap = _PAGE1_LOWER_GAP_MM * mm
     proc_w = _page2_proc_column_width(builder)
@@ -358,11 +443,13 @@ def _page2_bottom_proc_pve_columns(builder: PDFReportBuilder) -> tuple[float, fl
 
 
 def _brochure_usager_figure_scale(n_rows: int) -> float:
+    """Ajuste l'échelle d'affichage du graphique d'usagers en fonction du nombre de lignes."""
     n = max(1, int(n_rows))
     return min(0.52, max(0.32, 0.30 + 0.028 * n))
 
 
 def _format_pve_natinf_label(row: pd.Series) -> str:
+    """Formate le libellé d'une infraction NATINF (ex: '2548 – Chasse sans permis')."""
     libelle = row.get("libelle_natinf") or row.get("LIBELLE_NATINF") or ""
     code = str(row.get("numero_natinf") or row.get("natinf") or "").strip()
     if libelle:
@@ -370,9 +457,14 @@ def _format_pve_natinf_label(row: pd.Series) -> str:
     return code or "—"
 
 
+# ========================================================================================
+# FONCTIONS DE CONSTRUCTION DES TABLEAUX STYLISÉS DE LA BROCHURE
+# ========================================================================================
+
 def _build_pve_natinf_table_brochure(
     pve_natinf: pd.DataFrame | None, inner_w: float, *, max_rows: int
 ) -> Table:
+    """Génère le tableau des infractions PV/E les plus fréquentes (Codes NATINF et volumes)."""
     col_widths = col_widths_from_fracs(inner_w, _BROCHURE_PVE_NATINF_COL_FRACS)
     label_w = col_widths[0]
     cap = max(1, min(int(max_rows), _BROCHURE_MAX_PVE_NATINF))
@@ -399,7 +491,7 @@ def _build_pve_natinf_table_brochure(
 def _build_procedures_table_brochure(
     proc_theme: pd.DataFrame | None, inner_w: float, *, max_rows: int
 ) -> Table:
-    """PEJ et PA par thème OSCEAN (les PVe sont dans un bloc dédié, cf. § 4 du rapport détaillé)."""
+    """Génère le tableau synthétique des procédures administratives (PA) et judiciaires (PEJ) par thème."""
     cap = max(1, min(int(max_rows), _BROCHURE_MAX_PROC_THEMES))
     rows: list[list[str]] = []
     if proc_theme is not None and not proc_theme.empty:
@@ -429,6 +521,7 @@ def _build_themes_table_brochure(
     *,
     total_value: int,
 ) -> Table:
+    """Génère un tableau par thématiques avec les valeurs brutes et les pourcentages calculés."""
     rows: list[list[str]] = []
     for lb, v, pct in zip(labels, values, _theme_pct_strings_brochure(values, total_value=total_value)):
         rows.append([_truncate_theme(lb, 30), str(int(v)), pct])
@@ -442,6 +535,7 @@ def _build_themes_table_brochure(
 
 
 def _theme_pct_strings_brochure(values: list[int], *, total_value: int) -> list[str]:
+    """Formate une liste de valeurs numériques en chaînes de pourcentages (ex: '25 %')."""
     return [
         format_pct_int_from_rate((int(value) / int(total_value)) if total_value > 0 else None)
         for value in values
@@ -449,6 +543,7 @@ def _theme_pct_strings_brochure(values: list[int], *, total_value: int) -> list[
 
 
 def _build_treemap_placeholder_banner(builder: PDFReportBuilder, outer_w: float):
+    """Crée un encadré d'attente (placeholder) pour le futur graphique de temps passé par thématique."""
     inner_w = encadre_inner_width(outer_w, pad_pt=_PAD_STD_PT)
     p_style = ParagraphStyle(
         "BrochureTreemapPlaceholder",
@@ -485,6 +580,7 @@ def _build_matrice_themes_table(
     proc_theme: pd.DataFrame | None,
     inner_w: float,
 ) -> Table:
+    """Construit la matrice croisée montrant la ventilation PA / PJ / PVe pour chaque thématique du plan de contrôle."""
     if proc_theme is None or proc_theme.empty:
         return brochure_table(
             [["Thématiques du plan de contrôle", "PA", "PJ", "PVe"], ["Aucune donnée de procédure", "0", "0", "0"]],
@@ -539,7 +635,17 @@ def _build_matrice_themes_table(
     )
 
 
+# ========================================================================================
+# CLASSES DE DESSIN VECTORIEL SUR MESURE (FLOWABLES REPORTLAB)
+# ========================================================================================
+
 class BrochureResultatPastilles(Flowable):
+    """Élément graphique vectoriel affichant 3 pastilles colorées pour les taux de conformité.
+
+    - Vert : Conformes (%)
+    - Violet : Manquements (%)
+    - Rouge : Infractions (%)
+    """
     def __init__(self, width: float, n_ops: int, pct_conf: int, pct_manq: int, pct_inf: int):
         super().__init__()
         self.width = float(width)
@@ -550,6 +656,7 @@ class BrochureResultatPastilles(Flowable):
         self.height = 85.0
 
     def draw(self):
+        """Dessine les cercles et textes vectoriels directement sur le canevas PDF."""
         canv = self.canv
         w = self.width
         canv.saveState()
@@ -585,6 +692,7 @@ class BrochureResultatPastilles(Flowable):
 
 
 class BrochureBadgesSuites(Flowable):
+    """Élément graphique vectoriel affichant les badges rectangulaires des suites administratives et judiciaires."""
     def __init__(self, width: float, nb_pa: int, nb_pve: int, nb_pej: int):
         super().__init__()
         self.width = float(width)
@@ -594,9 +702,11 @@ class BrochureBadgesSuites(Flowable):
         self.height = 100.0
 
     def draw(self):
+        """Dessine les badges de comptage des procédures."""
         canv = self.canv
         w = self.width
         canv.saveState()
+
 
         canv.setFont("Helvetica-Bold", 9.5)
         canv.setFillColor(rl_colors.HexColor("#1E293B"))
@@ -605,26 +715,31 @@ class BrochureBadgesSuites(Flowable):
         canv.setFillColor(rl_colors.HexColor("#475569"))
         canv.drawCentredString(w / 2.0, self.height - 21, "(Contrôles administratifs + saisines judiciaires)")
 
+        # Calcul de la largeur de chaque badge (3 badges répartis équitablement)
         card_w = (w - 16) / 3.0
         card_h = 65.0
         card_y = 5.0
 
+        # Données des 3 types de suites aux contrôles
         badges = [
             (self.nb_pa, ["Procédures", "administratives"]),
             (self.nb_pve, ["Procédures", "d'amende", "forfaitaire", "(PVe)"]),
             (self.nb_pej, ["Procédures", "judiciaires"]),
         ]
 
+        # Dessine chaque rectange de badge avec la valeur en gros et le libellé en dessous
         for i, (val, lines) in enumerate(badges):
             card_x = i * (card_w + 8)
             canv.setFillColor(rl_colors.HexColor("#E2E8F0"))
             canv.setStrokeColor(rl_colors.transparent)
             canv.roundRect(card_x, card_y, card_w, card_h, 8, fill=1, stroke=0)
 
+            # Nombre de procédures (valeur numérique mise en avant en bleu)
             canv.setFont("Helvetica-Bold", 17)
             canv.setFillColor(rl_colors.HexColor("#0284C7"))
             canv.drawCentredString(card_x + card_w / 2.0, card_y + card_h - 20, str(val))
 
+            # Texte de description (libellé)
             canv.setFont("Helvetica-Bold", 7)
             canv.setFillColor(rl_colors.HexColor("#1E293B"))
             start_y = card_y + card_h - 32
@@ -635,19 +750,27 @@ class BrochureBadgesSuites(Flowable):
         canv.restoreState()
 
 
-def _build_evolution_chart_srp_r27(tmp_dir: Path, current_year: int, nb_pa: int, nb_pej: int, nb_pve: int) -> Path:
-    import matplotlib.pyplot as plt
+# ========================================================================================
+# RECHERCHE ET CHARGEMENT DES COORDONNÉES ET CONTACTS DE L'ANNUAIRE OFB
+# ========================================================================================
+
 def _load_annuaire_contact(
     echelle: str,
     code: str,
     service_override: str | None = None,
 ) -> tuple[str, str]:
-    """Charge les 2 lignes du pied de page dynamique depuis config/annuaire_ofb.yaml."""
+    """Recherche dans l'annuaire YAML ('config/annuaire_ofb.yaml') les coordonnées du service concerné.
+
+    Retourne 2 lignes de texte formatées pour figurer dans le pied de page du PDF :
+      - Ligne 1 : Nom de la structure OFB (ex: 'Office français de la biodiversité – Service départemental 27')
+      - Ligne 2 : Adresse postale, téléphone et email de contact.
+    """
     annuaire_path = _ROOT / "config" / "annuaire_ofb.yaml"
     line1 = "Office français de la biodiversité"
     line2 = ""
     if not annuaire_path.exists():
         return line1, line2
+
     import yaml
     try:
         with open(annuaire_path, "r", encoding="utf-8") as f:
@@ -656,6 +779,7 @@ def _load_annuaire_contact(
         return line1, line2
 
     info = None
+    # Priorité au service surchargé manuellement si précisé
     if service_override:
         svc_str = str(service_override).strip().lower()
         for cat in ("departements", "regions"):
@@ -668,6 +792,7 @@ def _load_annuaire_contact(
             if info:
                 break
 
+    # Recherche standard selon l'échelle (Région ou Département) et le code territoire
     if not info:
         echelle_norm = str(echelle).strip().lower()
         code_norm = str(code).strip().lstrip("rR")
@@ -676,6 +801,7 @@ def _load_annuaire_contact(
         elif echelle_norm == "departement":
             info = (data.get("departements") or {}).get(code_norm)
 
+    # Assemblage des 2 lignes de texte si le service est trouvé dans l'annuaire
     if isinstance(info, dict):
         nom = str(info.get("nom", "")).strip()
         if nom:
@@ -691,6 +817,10 @@ def _load_annuaire_contact(
     return line1, line2
 
 
+# ========================================================================================
+# GÉNÉRATION DES GRAPHIQUES MATPLOTLIB (ÉVOLUTION MULTIANNUELLE)
+# ========================================================================================
+
 def _build_evolution_chart_srp_r27(
     tmp_dir: Path,
     *,
@@ -699,9 +829,17 @@ def _build_evolution_chart_srp_r27(
     nb_pej: int,
     nb_pve: int,
 ) -> Path:
+    """Génère un graphique à barres empilées de l'évolution sur 4 ans pour le gabarit SRP R27.
+
+    Crée une image PNG temporaire insérée ensuite dans la Page 2 du document PDF.
+    """
     import matplotlib.pyplot as plt
     import numpy as np
+
+    # Années représentées (ex: 2023, 2024, 2025, 2026)
     years = [str(current_year - 3), str(current_year - 2), str(current_year - 1), str(current_year)]
+
+    # Simulation/reconstitution des séries historiques pour la démonstration graphique
     pas = [max(4, int(nb_pa * 0.6)), max(6, int(nb_pa * 0.8)), max(8, int(nb_pa * 1.1)), max(1, nb_pa)]
     pjs = [max(10, int(nb_pej * 0.7)), max(15, int(nb_pej * 0.9)), max(20, int(nb_pej * 1.05)), max(1, nb_pej)]
     pves = [max(5, int(nb_pve * 0.8)), max(10, int(nb_pve * 0.95)), max(12, int(nb_pve * 1.2)), max(1, nb_pve)]
@@ -710,10 +848,14 @@ def _build_evolution_chart_srp_r27(
     x = np.arange(len(years))
     width = 0.40
 
+    # Étage 1 : Procédures administratives (Bleu)
     p1 = ax.bar(x, pas, width, label="Procédures administratives", color="#0284C7")
+    # Étage 2 : Procédures judiciaires (Orange)
     p2 = ax.bar(x, pjs, width, bottom=pas, label="Procédures judiciaires", color="#D97706")
+    # Étage 3 : Amendes forfaitaires / PVe (Vert)
     p3 = ax.bar(x, pves, width, bottom=np.array(pas) + np.array(pjs), label="Procédures d'amendes forfaitaires", color="#16A34A")
 
+    # Personnalisation des axes et de la légende
     ax.set_xticks(x)
     ax.set_xticklabels(years, fontsize=8.0)
     ax.set_ylabel("Nombre de procédures", fontsize=8.0)
@@ -722,17 +864,27 @@ def _build_evolution_chart_srp_r27(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     plt.tight_layout()
+
+    # Enregistrement du fichier PNG temporaire
     chart_path = tmp_dir / "srp_r27_evolution.png"
     plt.savefig(chart_path, format="png", bbox_inches="tight", dpi=150)
     plt.close(fig)
     return chart_path
 
 
+# ========================================================================================
+# CONSTRUCTION SPÉCIFIQUE DU TABLEAU DES THÉMATIQUES POUR LE GABARIT SRP
+# ========================================================================================
+
 def _build_matrice_themes_table_srp(
     proc_theme: pd.DataFrame | None,
     inner_w: float,
     max_top_rows: int = 14,
 ) -> Table:
+    """Construit le tableau détaillé des thématiques pour le gabarit SRP R27.
+
+    Si le nombre de thématiques dépasse 14, regroupe les thèmes restants dans une ligne 'Autres thématiques'.
+    """
     col_fracs = [0.55, 0.15, 0.15, 0.15]
     col_widths = col_widths_from_fracs(inner_w, col_fracs)
     col_aligns = ["LEFT", "RIGHT", "RIGHT", "RIGHT"]
@@ -770,9 +922,11 @@ def _build_matrice_themes_table_srp(
             pad_v=1.5,
         )
 
+    # Tri par volume décroissant de procédures
     df = df.sort_values(by="nb_total_calc", ascending=False)
     total_count = len(df)
 
+    # Sépare les N premières thématiques et fusionne la fin si nécessaire
     if total_count > max_top_rows:
         top_df = df.head(max_top_rows)
         other_df = df.iloc[max_top_rows:]
@@ -793,6 +947,7 @@ def _build_matrice_themes_table_srp(
         pve_val = str(int(r.get("nb_pve", 0)))
         rows.append([label, pa_val, pej_val, pve_val])
 
+    # Ajout de la ligne cumulée 'Autres thématiques'
     if other_count > 0:
         rows.append([
             f"<i>Autres thématiques ({other_count} thèmes)</i>",
@@ -811,6 +966,10 @@ def _build_matrice_themes_table_srp(
         pad_v=1.5,
     )
 
+
+# ========================================================================================
+# GENERATEUR COMPLET DE BROCHURE GABARIT SRP R27
+# ========================================================================================
 
 def _generate_srp_r27_brochure_pdf(
     *,
@@ -836,6 +995,12 @@ def _generate_srp_r27_brochure_pdf(
     service_override: str | None = None,
     tab_resultats: pd.DataFrame | None = None,
 ) -> None:
+    """Génère la brochure PDF spécifique au gabarit SRP R27 (Services Régionaux de Police).
+
+    Assemble les éléments suivants sur exactement 2 pages A4 paysage :
+      - Page 1 : Titre institutionnel, Carte QGIS régionale, Répartition des usagers et Pastilles de résultats.
+      - Page 2 : Badges des suites, Matrice par thématique et Graphique d'évolution pluriannuelle.
+    """
     avail_w = builder.avail_w
 
     # ── EN-TÊTE PAGE 1 : BLOC MARQUE + TITRE + LIGNE SÉPARATRICE ──
@@ -854,6 +1019,7 @@ def _generate_srp_r27_brochure_pdf(
     perimetre_display = f"Région {dept_name_typo}" if not dept_name_typo.lower().startswith("région") else dept_name_typo
     header_text = f"<b>Bilan Police</b> — {perimetre_display} — Année {year_val}"
 
+    # Construction du tableau d'en-tête (Logo République/OFB à gauche + Titre à droite)
     if logo_img:
         hdr_tbl = Table([[logo_img, Paragraph(header_text, title_style)]], colWidths=[48 * mm, avail_w - 48 * mm])
         hdr_tbl.hAlign = "LEFT"
@@ -885,8 +1051,9 @@ def _generate_srp_r27_brochure_pdf(
     builder.story.append(sep_tbl)
     builder.story.append(Spacer(1, 3 * mm))
 
+    # ── CALCUL DES COLONNES DE PAGE 1 ──
     gap_w = 6.0 * mm
-    left_w = (avail_w - gap_w) * 0.50
+    left_w = (avail_w - gap_w) * 0.45
     right_w = avail_w - gap_w - left_w
 
     treemap_panel = _build_treemap_placeholder_banner(builder, left_w)
@@ -911,11 +1078,12 @@ def _generate_srp_r27_brochure_pdf(
                             resolved_maps.append(p)
                             break
 
-    maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=75.0) if resolved_maps else []
+    maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=68.0) if resolved_maps else []
     if not maps_body:
         maps_body = [Paragraph("<i>Carte non disponible</i>", builder.styles["BodySmall"])]
     map_panel = encadre_section(right_w, "Résultats des contrôles", maps_body, builder.styles)
 
+    # ── GRAPHIQUE CAMEMBERT TYPES USAGERS ──
     pie_data = _pie_data_controles_par_type_usager(_rollup_usager_types(act_par_type))
     pie_body: list = []
     if pie_data:
@@ -930,13 +1098,14 @@ def _generate_srp_r27_brochure_pdf(
                 legend_fontsize=8.0,
             )
         )
-        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=60.0 * mm, scale_to_fill=True)
+        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=45.0 * mm, scale_to_fill=True)
         if img:
             pie_body = [img]
     if not pie_body:
         pie_body = [Paragraph("<i>Données non disponibles</i>", builder.styles["BodySmall"])]
     pie_panel = encadre_section(left_w, "Types d'usagers contrôlés", pie_body, builder.styles)
 
+    # ── CALCUL ET AFFICHAGE DES PASTILLES DE RESULTATS ──
     pct_conf, pct_manq, pct_inf = 85, 10, 5
     res_df = tab_resultats if tab_resultats is not None and not tab_resultats.empty else tab_res_ctrl
     if res_df is not None and not res_df.empty and "nb" in res_df.columns and "resultat" in res_df.columns:
@@ -952,6 +1121,7 @@ def _generate_srp_r27_brochure_pdf(
 
     pastilles_widget = BrochureResultatPastilles(right_w, nb_operations_controle, pct_conf, pct_manq, pct_inf)
 
+    # Assemblage de la grille 2x2 de la Page 1
     p1_tbl = Table(
         [[treemap_panel, "", map_panel], [pie_panel, "", pastilles_widget]],
         colWidths=[left_w, gap_w, right_w],
@@ -968,6 +1138,7 @@ def _generate_srp_r27_brochure_pdf(
     )
     builder.story.append(p1_tbl)
 
+    # Saut de page strict vers la Page 2
     builder.add_page_break()
 
     # ── PAGE 2 (STRICT 2 PAGES) ──
@@ -983,6 +1154,7 @@ def _generate_srp_r27_brochure_pdf(
         col_width_fracs=[0.55, 0.15, 0.15, 0.15],
     )
 
+    # Grille du haut de la Page 2 (Badges à gauche + Matrice thématique à droite)
     p2_top_tbl = Table(
         [[badges_widget, "", matrice_panel]],
         colWidths=[left_w, gap_w, right_w],
@@ -1000,6 +1172,7 @@ def _generate_srp_r27_brochure_pdf(
     builder.story.append(p2_top_tbl)
     builder.story.append(Spacer(1, 2 * mm))
 
+    # Graphique Matplotlib d'évolution centré en bas de la Page 2
     chart_path = _build_evolution_chart_srp_r27(tmp_dir, current_year=date_fin.year, nb_pa=nb_pa, nb_pej=nb_pej, nb_pve=nb_pve)
     evo_img = _image_fit(builder, chart_path, max_width=avail_w * 0.88, max_height=65.0 * mm, scale_to_fill=True)
     if evo_img:
@@ -1009,6 +1182,10 @@ def _generate_srp_r27_brochure_pdf(
     builder.build()
 
 
+# ========================================================================================
+# FONCTIONS AUXILIAIRES D'ASSEMBLAGE EN TABLEAU REPORTLAB (GRID HELPERS)
+# ========================================================================================
+
 def _append_dual_panels(
     builder: PDFReportBuilder,
     *,
@@ -1016,6 +1193,7 @@ def _append_dual_panels(
     right_panel,
     left_ratio: float = _COL_LEFT_RATIO,
 ) -> None:
+    """Ajoute deux blocs côte à côte (gauche et droite) dans le flux d'histoire du PDF."""
     left_w, gap_w, right_w = _grid_columns(builder, left_ratio)
     row = Table([[left_panel, "", right_panel]], colWidths=[left_w, gap_w, right_w])
     row.hAlign = "LEFT"
@@ -1040,7 +1218,7 @@ def _append_page2_lower_band(
     right_panel,
     left_ratio: float = _PAGE2_LOWER_LEFT_RATIO,
 ) -> None:
-    """Bande basse page 2 alignée sur la largeur utile (comme le bloc usagers)."""
+    """Ajoute la bande basse de la page 2 alignée sur les marges de la zone utile."""
     left_w, gap_w, right_w = _page2_lower_columns(builder, left_ratio)
     left_panel.hAlign = "LEFT"
     right_panel.hAlign = "LEFT"
@@ -1065,6 +1243,7 @@ def _append_page2_row(
     panels: list,
     col_widths: list[float],
 ) -> None:
+    """Ajoute une ligne générique de N panneaux côte à côte séparés par des marges."""
     cells = []
     for i, panel in enumerate(panels):
         if i > 0:
@@ -1084,15 +1263,17 @@ def _append_page2_row(
             ]
         )
     )
+
     builder.story.append(row)
 
 
 def _append_spacer(builder: PDFReportBuilder, mm_h: float = 1.5) -> None:
+    """Ajoute un espacement vertical (Spacer ReportLab) de quelques millimètres entre les blocs."""
     builder.story.append(Spacer(1, mm_h * mm))
 
 
 def _append_bandeau(builder: PDFReportBuilder, dept: str, period: str) -> None:
-    """Bandeau bleu OFB à coins arrondis."""
+    """Génère le bandeau bleu officiel OFB à coins arrondis en haut de la Page 1 de la brochure."""
     title_style = ParagraphStyle(
         "BrochureBandeauTitle",
         parent=builder.styles["BodyText"],
@@ -1122,6 +1303,7 @@ def _append_kpi_strip(
     *,
     hero: bool = False,
 ) -> None:
+    """Construit et insère la bande horizontale de chiffres clés (KPIs) en haut du document."""
     kpi = kpi_encadre(builder.avail_w, figures, builder.styles, hero=hero)
     kpi.hAlign = "LEFT"
     builder.story.append(kpi)
@@ -1136,6 +1318,10 @@ def _image_fit(
     scale_to_fill: bool = False,
     prioritize_width: bool = False,
 ) -> RLImage | str:
+    """Ajuste et redimensionne une image (PNG/JPG) pour qu'elle rentre parfaitement dans un encadré PDF.
+
+    Garantit que le ratio hauteur/largeur est conservé sans déformer l'image ni déborder des marges.
+    """
     if not path.exists():
         return ""
     ratio = builder._image_aspect_ratio(path)
@@ -1172,11 +1358,14 @@ def _build_maps_body(
     inner_w: float,
     max_height_mm: float,
 ) -> list:
+    """Insère 1 ou 2 images de cartes QGIS côte à côte à l'intérieur du panneau de cartographie."""
     existing = [p for p in paths if p.exists()]
     if not existing:
         return []
     max_h = max_height_mm * mm
     gap = _PAGE1_LOWER_GAP_MM * mm
+
+    # Si une seule carte est disponible, l'occupe sur toute la largeur utile du panneau
     if len(existing) == 1:
         img = _image_fit(
             builder,
@@ -1186,6 +1375,8 @@ def _build_maps_body(
             scale_to_fill=True,
         )
         return [img] if img else []
+
+    # Si 2 cartes sont présentes, découpe l'espace en 2 colonnes égales
     col_w = (inner_w - gap) / 2.0
     imgs = [
         _image_fit(
@@ -1222,7 +1413,7 @@ def _append_page1_lower_band(
     map_height_mm: float,
     has_maps: bool,
 ) -> None:
-    """Bande basse page 1 : synthèse (gauche) + cartographie secondaire (droite)."""
+    """Positionne la bande du bas en Page 1 : récapitulatif thématique à gauche et cartes QGIS à droite."""
     if has_maps:
         left_w, gap_w, right_w = _page1_lower_columns(builder)
         map_h_mm = max(map_height_mm, lower_mm * 0.88)
@@ -1270,12 +1461,15 @@ def _append_page1_lower_band(
             )
             builder.story.append(row)
             return
+
+    # Disposition par défaut si aucune carte n'est disponible
     for panel in (left_panel, right_panel):
         panel.hAlign = "LEFT"
     _append_dual_panels(builder, left_panel=left_panel, right_panel=right_panel)
 
 
 def _append_methodology_footer(builder: PDFReportBuilder, html: str) -> None:
+    """Ajoute en très petites lettres au bas de la page le texte d'avertissement et de méthodologie."""
     ps = ParagraphStyle(
         "BrochureMethodoFooter",
         parent=builder.styles["BodySmall"],
@@ -1295,6 +1489,7 @@ def _brochure_methodology_html(
     ventilation_mode: str,
     diffusion: str,
 ) -> str:
+    """Formate les mentions de méthodologie au format HTML (dates, sources de données, niveau de diffusion)."""
     diff = "externe" if str(diffusion).strip().lower() in ("externe", "external", "ext") else "interne"
     return (
         "<i><b>Méthodologie.</b> Sources OSCEAN (points de contrôle, PEJ, PA) et PVe OFB — "
@@ -1306,6 +1501,10 @@ def _brochure_methodology_html(
         "<b>Réalisation :</b> service départemental de la Côte d'Or.</i>"
     )
 
+
+# ========================================================================================
+# POINT D'ENTRÉE PUBLIC : GENERATION DE LA BROCHURE PDF
+# ========================================================================================
 
 def generate_synthese_brochure_pdf_report(
     out_dir: Path,
@@ -1324,6 +1523,10 @@ def generate_synthese_brochure_pdf_report(
     brochure: bool = True,
     gabarit: str | None = None,
 ) -> None:
+    """Point d'entrée principal appelé par le plugin QGIS ou le script CLI batch.
+
+    Convertit les arguments textes/dates et relaie l'exécution vers la fonction interne d'assemblage.
+    """
     del chart_preset, brochure
     apply_brochure_mpl_style()
     profile = profile or {"id": PROFILE_ID}
@@ -1347,6 +1550,10 @@ def generate_synthese_brochure_pdf_report(
     )
 
 
+# ========================================================================================
+# FONCTION INTERNE : ORCHESTRATION ET ASSEMBLAGE FINAL DE LA BROCHURE
+# ========================================================================================
+
 def _generate_synthese_brochure_pdf(
     out_dir: Path,
     *,
@@ -1361,6 +1568,13 @@ def _generate_synthese_brochure_pdf(
     cartes: bool = True,
     gabarit: str | None = None,
 ) -> None:
+    """Fonction principale d'orchestration de la brochure 2 pages A4 paysage.
+
+    1. Charge les fichiers CSV de synthèse générés précédemment.
+    2. Recherche les cartes d'activité QGIS disponibles.
+    3. Calcule les métriques globales (contrôles, usagers, infractions, procédures).
+    4. Compose et enregistre le document PDF via ReportLab.
+    """
     profil_id = str(profile.get("id", PROFILE_ID))
     scope = str(profile.get("presentation_scope", "global")).strip() or "global"
     resolved = resolve_pdf_presentation_config(
@@ -1369,6 +1583,7 @@ def _generate_synthese_brochure_pdf(
     presentation_cfg = resolved.get("effective", {}) if isinstance(resolved, dict) else {}
     gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit
 
+    # Récupération de la configuration du territoire et du nom affiché
     cfg = BilanConfig.from_strings(
         str(date_deb.date()),
         str(date_fin.date()),
@@ -1389,6 +1604,7 @@ def _generate_synthese_brochure_pdf(
     report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
 
+    # Chargement des tableaux de données CSV avec mécanismes de secours si absents
     act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total", "nb"])
     proc_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_procedures_par_theme.csv", f"procedures_{profil_id}_par_theme.csv", "procedures_global_par_theme.csv"]), ["nb_pej", "nb_pa", "nb_pve"])
     if proc_theme is None or proc_theme.empty:
@@ -1418,6 +1634,7 @@ def _generate_synthese_brochure_pdf(
     )
     tab_res_ctrl = _load_csv_fallback(out_dir, ["controles_global_resultats_controles.csv", f"controles_{profil_id}_resultats_controles.csv"])
     tab_resultats = _load_csv_fallback(out_dir, ["controles_global_resultats.csv", f"controles_{profil_id}_resultats.csv"])
+
     res_usager = _sort_desc(
         _load_csv_fallback(out_dir, ["synthese_resultats_usager_effectifs.csv", f"controles_{profil_id}_resultats_par_type_usager.csv", "controles_global_resultats_par_type_usager.csv"]),
         ["Total", "Conforme", "Infraction", "Manquement"],
@@ -1427,6 +1644,7 @@ def _generate_synthese_brochure_pdf(
     pa_resume = _load_csv_fallback(out_dir, ["pa_global_resume.csv", f"pa_{profil_id}_resume.csv"])
     pve_resume = _load_csv_fallback(out_dir, ["pve_global_resume.csv", f"pve_{profil_id}_resume.csv"])
 
+    # Calcul des totaux de synthèse pour la page de garde
     if resume is not None and not resume.empty and "nb_localisations" in resume.columns:
         nb_localisations = int(resume.iloc[0]["nb_localisations"])
     elif tab_resultats is not None and not tab_resultats.empty and "nb" in tab_resultats.columns:
@@ -1441,9 +1659,11 @@ def _generate_synthese_brochure_pdf(
             )
         nb_localisations = 0
 
+    # Extraction des nombres globaux d'opérations et de procédures (PA / PEJ / PVe)
     nb_operations_controle = int(resume.iloc[0]["nb_operations_controle"]) if resume is not None and not resume.empty and "nb_operations_controle" in resume.columns else 0
     if nb_operations_controle == 0:
         nb_operations_controle = nb_localisations
+
     if pej_resume is not None and not pej_resume.empty and "nb_pej_global" in pej_resume.columns:
         nb_pej = int(pej_resume.iloc[0]["nb_pej_global"])
     else:
@@ -1464,6 +1684,8 @@ def _generate_synthese_brochure_pdf(
         if pve_resume is not None and not pve_resume.empty:
             logger.warning(f"Résumé PVe sans colonne 'nb_pve_global' pour le profil '{profil_id}'.")
         nb_pve = 0
+
+    # Préparation du tableau des usagers et calcul des non-conformités
     res_usager_roll = _rollup_resultats_usager(res_usager)
     nb_effectifs = (
         int(res_usager_roll["Total"].sum())
@@ -1472,12 +1694,14 @@ def _generate_synthese_brochure_pdf(
     )
     nb_nc = _nb_non_conformes_brut(tab_resultats) if nb_localisations > 0 else 0
 
+    # ── RECHERCHE ET SELECTION DES IMAGES DE CARTES QGIS ──
     map_paths: list[Path] = []
     if cartes:
         from core.chemins_projet import get_cartes_dir
         map_id = str(profile.get("_map_id") or profil_id)
         cartes_dir = get_cartes_dir()
 
+        # Liste des noms de fichiers de cartes possibles par ordre de priorité
         res_brochure_candidates = [
             out_dir / f"carte_{map_id}_resultats_brochure.png",
             cartes_dir / f"carte_{map_id}_resultats_brochure.png",
@@ -1504,19 +1728,23 @@ def _generate_synthese_brochure_pdf(
             found_std = next((p for p in res_std_candidates if p.exists()), None)
             if found_std:
                 map_paths.append(found_std)
+
     has_maps = bool(map_paths)
 
+    # ── INITIALISATION DU FICHIER PDF ET DU MOTEUR REPORTLAB ──
     base_name = output_filename or f"{profil_id}.pdf"
     stem = Path(base_name).stem
     if not stem.endswith("_brochure"):
         stem = f"{stem}_brochure"
     pdf_path = apply_diffusion_pdf_suffix(out_dir / f"{stem}.pdf", diffusion)
 
+    # Coordonnées du service pour le bas de page
     f_line1, f_line2 = _load_annuaire_contact(echelle, code)
     if not f_line1:
         from core.engine.pdf_utils import get_region_name_for_footer
         f_line1 = get_region_name_for_footer(echelle, code)
 
+    # Instanciation de l'assembleur PDF
     builder = PDFReportBuilder(
         pdf_path=pdf_path,
         header_title=report_header,
@@ -1534,6 +1762,7 @@ def _generate_synthese_brochure_pdf(
     map_height_mm = _page1_map_image_height_mm(builder, kpi_mm) if has_maps else 0.0
     tmp_dir = builder.tmp_dir
 
+    # Aiguillage spécifique pour le gabarit SRP R27
     if gabarit_id == "srp_r27":
         _generate_srp_r27_brochure_pdf(
             builder=builder,
@@ -1559,10 +1788,11 @@ def _generate_synthese_brochure_pdf(
         )
         return
 
-    # ── Page 1 : héros = chiffres clés ──
+    # ── CONSTRUCTION DE LA PAGE 1 (BROCHURE STANDARD) ──
     _append_bandeau(builder, dept_name_typo, period_str)
     _append_spacer(builder, _BROCHURE_SECTION_GAP_MM)
 
+    # Insère le bloc de chiffres clés (KPI Héros)
     kf_rows = _build_synthese_key_figure_rows(
         nb_effectifs=nb_effectifs,
         nb_operations_controle=nb_operations_controle,
@@ -1576,6 +1806,7 @@ def _generate_synthese_brochure_pdf(
     builder.add_paragraph(_KEY_FIGURES_GRAIN_NOTE)
     _append_spacer(builder, _BROCHURE_SECTION_GAP_MM)
 
+    # Répartition des colonnes de Page 1 selon présence de cartes
     if has_maps:
         themes_w, _, _map_w = _page1_lower_columns(builder)
         results_w = themes_w
@@ -1674,9 +1905,10 @@ def _generate_synthese_brochure_pdf(
             "(fichiers attendus dans data/out/generateur_de_cartes/).</i>",
         )
 
+    # Saut de page vers la Page 2
     builder.add_page_break()
 
-    # ── Page 2 : bande haute (pression | résultats) + bande basse (proc | PVe) ──
+    # ── CONSTRUCTION DE LA PAGE 2 (BROCHURE STANDARD) ──
     res_usager_plot = _rollup_resultats_usager(
         res_usager,
         min_share=_BROCHURE_RESULT_USAGER_MIN_SHARE,
@@ -1708,6 +1940,7 @@ def _generate_synthese_brochure_pdf(
         result_inner_w, top_img_h, legend_right=True
     )
 
+    # Camembert de répartition des usagers contrôlés (haut gauche)
     pie_body: list = []
     pie_data = _pie_data_controles_par_type_usager(_rollup_usager_types(act_par_type))
     if pie_data:
@@ -1732,6 +1965,7 @@ def _generate_synthese_brochure_pdf(
         if img:
             pie_body = [img]
 
+    # Graphique à barres horizontales des résultats par usager (haut droite)
     result_chart_body: list = []
     if res_usager_plot is not None and not res_usager_plot.empty:
         labels = [_truncate_theme(_display_type_usager(x), 20) for x in res_usager_plot["type_usager"]]
@@ -1802,6 +2036,7 @@ def _generate_synthese_brochure_pdf(
     _append_page2_row(builder, [pie_panel, result_panel], [pie_w, top_gap, result_w])
     _append_spacer(builder, _BROCHURE_SECTION_GAP_MM)
 
+    # Calcul du nombre maximal de lignes de tableaux pour le bas de Page 2
     bottom_row_cap = _page2_table_row_cap(bottom_p2_mm, with_footer=True)
     proc_row_cap = bottom_row_cap
     if proc_theme is not None and not proc_theme.empty:
@@ -1829,6 +2064,7 @@ def _generate_synthese_brochure_pdf(
             )
         )
 
+    # Panneau des procédures par thématique
     proc_panel = encadre_section(
         proc_w,
         pdf_metric_caption("Procédures par thème (principaux postes)", "proc"),
@@ -1838,6 +2074,8 @@ def _generate_synthese_brochure_pdf(
         col_headers=["PEJ", "PA"],
         col_width_fracs=_BROCHURE_PROC_COL_FRACS,
     )
+
+    # Panneau optionnel des amendes forfaitaires (PVe)
     if show_pve_band:
         inner_pve = encadre_inner_width(pve_w, pad_pt=_PAD_STD_PT)
         pve_body: list = [
@@ -1863,6 +2101,8 @@ def _generate_synthese_brochure_pdf(
         _append_page2_row(builder, [proc_panel, pve_panel], [proc_w, bottom_gap, pve_w])
     else:
         _append_page2_row(builder, [proc_panel], [proc_w])
+
+    # Insertion du pied de page méthodologique final
     _append_methodology_footer(
         builder,
         _brochure_methodology_html(
@@ -1873,4 +2113,5 @@ def _generate_synthese_brochure_pdf(
         ),
     )
 
-    builder.build()
+    # Génération effective du fichier PDF
+    builder.build()

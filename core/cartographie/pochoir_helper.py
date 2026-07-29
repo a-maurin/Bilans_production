@@ -15,12 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Pochoir cartographique : géométrie départementale depuis limites_admin_dep uniquement.
+========================================================================================
+MODULE : GESTION DES POCHOIRS ET ZONAGES SPATIAUX (`pochoir_helper.py`)
+========================================================================================
+Ce module fournit les outils de manipulation géographique pour extraire les contours
+administratifs (départements, régions) et appliquer le masque "pochoir" (stencil).
 
-Source obligatoire :
-  ref/programme/sig/limites_admin_dep/DEPARTEMENT_ADMIN_Express_200207.shp
+Principe pédagogique :
+  1. Chargement de la géométrie officielle depuis `DEPARTEMENT_ADMIN_Express_200207.shp`.
+  2. Filtrage par code INSEE départemental (ex: '21', '71', '25').
+  3. Construction du masque inverse permettant de griser/opacifier le territoire situé
+     en dehors du département d'analyse.
+========================================================================================
 """
 from __future__ import annotations
 

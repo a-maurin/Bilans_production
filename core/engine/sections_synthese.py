@@ -15,9 +15,21 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Fonctions de rendu des sections pour le profil synthèse globale."""
+"""
+========================================================================================
+MODULE : GENERATEUR DES SECTIONS PDF DE SYNTHESE (`sections_synthese.py`)
+========================================================================================
+Ce module regroupe les fonctions de rendu spécifiques au profil de synthèse globale d'activité.
 
+Sections traitées :
+  - Section 1 : Couverture et préambule synthétique.
+  - Section 2 : Activité globale de contrôle (synthèse des opérations et de la conformité).
+  - Section 3 : Activité des procédures administratives et judiciaires (PA / PEJ / PVe).
+  - Section 4 : Évolution temporelle et ventilations globales.
+  - Section 5 : Cartographie synthétique inter-domaines.
+  - Section 6 : Annexes institutionnelles.
+========================================================================================
+"""
 from pathlib import Path
 import pandas as pd
 from reportlab.platypus import Spacer, Paragraph

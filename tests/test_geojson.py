@@ -15,7 +15,14 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+TEST UNITAIRE : CONVERSION GEOJSON DE ZONAGES (`test_geojson.py`)
+========================================================================================
+Ce fichier de test vérifie la conversion des couches vectorielles SIG (ex: PNF / AOA)
+au format GeoJSON (reprojection Lambert 93 EPSG:2154 vers WGS84 EPSG:4326 pour Leaflet).
+========================================================================================
+"""
 import sys
 import json
 import traceback

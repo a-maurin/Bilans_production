@@ -1,3 +1,14 @@
+# ========================================================================================
+# CONFIGURATION ET SYMBOLOGIE DES CARTES QGIS (`profils_cartes.yaml`)
+# ========================================================================================
+# Ce fichier régit les paramètres de rendu cartographique pour chaque profil de carte.
+#
+# Rôles pédagogiques :
+#   - `symbology_source` : origine des styles (`yaml` ou `qgis`).
+#   - `layout_name` : nom du modèle de mise en page QGIS associé.
+#   - `layers` : surcharges de symbologies (légendes, palettes de couleurs, modes de rendu).
+# ========================================================================================
+
 symbology_source: "yaml"
 agrainage:
   title: "Bilan agrainage 2025-2026 — Agrainage illicite (NATINF 27742) — Côte-d'Or"

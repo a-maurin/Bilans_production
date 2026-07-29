@@ -15,14 +15,22 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Modèle de configuration des cartes bilans agrainage / chasse-agrainage.
+========================================================================================
+MODULE : MODELE DE DONNEES ET DATACLASSES CARTOGRAPHIQUES (`config_cartes_model.py`)
+========================================================================================
+Ce module contient l'ensemble des définitions de types et des structures de données
+(dataclasses Python) utilisées pour modéliser la cartographie dans OFBilan.
 
-Ce module définit les types et dataclasses partagés entre :
-- config_cartes.py (fichier de configuration effectif)
-- production_cartographique.py (génération / assistant interactif)
-- gui_config_cartes.py (interface graphique de configuration)
+Concepts clés expliqués aux débutants :
+  1. `LayerSymbologyConfig` : décrit l'apparence visuelle d'une couche SIG (couleur,
+     forme des marqueurs, filtres attributaires NATINF/mots-clés, règles de classification).
+  2. `ProfileConfig` : représente la configuration complète d'une carte thématique
+     (titre, sous-titre, emprise géographique, pochoir départemental/régional, layers).
+  3. `LayoutTemplateConfig` : définit l'emplacement exact en millimètres sur la page PDF
+     de la carte, de la légende, de la barre d'échelle et des logos OFB.
+  4. `GlobalConfig` : regroupe les chemins du projet QGIS, du fond de carte et des paramètres.
+========================================================================================
 """
 
 from dataclasses import dataclass, field

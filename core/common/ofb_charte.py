@@ -15,41 +15,52 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Charte graphique OFB : couleurs, polices, styles PDF, Spinner."""
+"""
+========================================================================================
+MODULE : CHARTE GRAPHIQUE OFFICIELLE DE L'OFB (`ofb_charte.py`)
+========================================================================================
+Ce module définit la charte visuelle officielle appliquée à tous les rapports PDF générés.
+
+Contenu :
+  1. Palette de couleurs institutionnelles (Bleu OFB, Vert, Orangé, Rouge d'alerte).
+  2. Enregistrement des polices de caractères officielles (Marianne, Arial, LiberationSans).
+  3. Définition des marges, espaces et styles de textes ReportLab (Titres, Corps, Tableaux).
+  4. Classe d'animation visuelle 'Spinner' pour la console lors du traitement batch.
+========================================================================================
+"""
 import os
 import sys
 import threading
 import time
 from pathlib import Path
 
-# Activation des séquences ANSI (VT100) sur Windows pour le spinner multi-lignes
+# --- ACTIVATION DES CODES COULEURS ET ANIMATIONS ANSI (VT100) SUR CONSOLE WINDOWS ---
 if sys.platform == "win32":
     import ctypes
     _STD_OUTPUT_HANDLE = -11
     _ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
 
     def _enable_windows_vt100() -> bool:
-        """Active le mode VT100 sur la console Windows. Retourne True si réussi."""
+        """Active le mode VT100/ANSI sur l'invite de commande Windows pour gérer le spinner."""
         try:
-            os.system("")  # Workaround connu pour activer ANSI sur Windows
+            os.system("")  # Déclenche l'activation ANSI de la console Windows
             handle = ctypes.windll.kernel32.GetStdHandle(_STD_OUTPUT_HANDLE)
             if handle is None or handle == -1:
                 return False
-            # Essayer d'abord de préserver le mode existant
             mode = ctypes.c_ulong()
             if ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
                 mode.value |= _ENABLE_VIRTUAL_TERMINAL_PROCESSING
                 return ctypes.windll.kernel32.SetConsoleMode(handle, mode) != 0
-            # Fallback : forcer le mode 7 (VT100 + processed output)
             return ctypes.windll.kernel32.SetConsoleMode(handle, 7) != 0
         except Exception:
             return False
 else:
 
     def _enable_windows_vt100() -> bool:
-        return True  # Non-Windows : ANSI déjà supporté
+        return True  # Sur Linux/macOS, le terminal supporte nativement ANSI
 
+
+# --- IMPORTS DE LA BIBLIOTHÈQUE PDF REPORTLAB ---
 from reportlab.lib import colors as rl_colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -58,53 +69,59 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# ---------------------------------------------------------------------------
-# Charte graphique OFB
-# ---------------------------------------------------------------------------
-COLOR_PRIMARY = "#003A76"
-COLOR_SECONDARY = "#1E4E85"
-COLOR_GREY = "#333333"
-# Barres empilées horizontales : série « En attente » (aligné sur le gris foncé charte).
+
+# ========================================================================================
+# PALETTE DE COULEURS OFFICIELLES DE L'OFB
+# ========================================================================================
+
+COLOR_PRIMARY = "#003A76"  # Bleu roi officiel OFB (utilisé pour les titres et en-têtes)
+COLOR_SECONDARY = "#1E4E85"  # Bleu secondaire pour les sous-titres
+COLOR_GREY = "#333333"  # Gris foncé pour les textes généraux et valeurs neutres
+
+# Couleurs pour les tableaux ReportLab
 COLOR_CHART_AUTRE_RESULTAT = COLOR_GREY
-COLOR_TABLE_HEADER_BG = rl_colors.HexColor("#003A76")
-COLOR_TABLE_HEADER_FG = rl_colors.white
-COLOR_TABLE_ALT_ROW = rl_colors.HexColor("#F0F4F8")
-COLOR_TABLE_BORDER = rl_colors.HexColor("#CCCCCC")
-# Couleurs d'appoint utilisées par les encarts PDF.
+COLOR_TABLE_HEADER_BG = rl_colors.HexColor("#003A76")  # Fond bleu des en-têtes de tableaux
+COLOR_TABLE_HEADER_FG = rl_colors.white  # Texte blanc des en-têtes de tableaux
+COLOR_TABLE_ALT_ROW = rl_colors.HexColor("#F0F4F8")  # Couleur de fond alternée des lignes de tableau
+COLOR_TABLE_BORDER = rl_colors.HexColor("#CCCCCC")  # Bordures grises claires des tableaux
+
+# Couleurs pour les encadrés d'avertissement et d'information
 COLOR_NOTICE_BG = "#E8EEF4"
 COLOR_CALLOUT_BG = "#EAF2F8"
 
-# Couleurs pour les graphiques (camemberts, barres groupées) — aucune couleur en dur dans les scripts de bilan
-COLOR_CHART_1 = COLOR_PRIMARY  # bleu OFB
-COLOR_CHART_2 = "#53AB60"   # vert
-COLOR_CHART_3 = "#F4A261"   # orangé
-# Rouge pour les valeurs non conformes / infractions : rouge un peu adouci pour
-# rester lisible sans être agressif.
-COLOR_CHART_4 = "#D95C4A"   # rouge doux (moins vif que #E76F51)
-COLOR_CHART_5 = "#90BF83"   # vert clair
-COLOR_CHART_6 = "#4296CE"   # bleu clair
+# Palette de couleurs pour les camemberts et graphiques Matplotlib
+COLOR_CHART_1 = COLOR_PRIMARY  # Bleu principal
+COLOR_CHART_2 = "#53AB60"   # Vert écologie
+COLOR_CHART_3 = "#F4A261"   # Orangé d'attention
+COLOR_CHART_4 = "#D95C4A"   # Rouge doux d'infraction / non-conformité
+COLOR_CHART_5 = "#90BF83"   # Vert clair
+COLOR_CHART_6 = "#4296CE"   # Bleu ciel
 CHART_PIE_COLORS = [COLOR_CHART_1, COLOR_CHART_2, COLOR_CHART_3, COLOR_CHART_4, COLOR_CHART_5, COLOR_CHART_6]
 CHART_BAR_GROUPED_COLORS = [COLOR_CHART_1, COLOR_CHART_2, COLOR_CHART_3, COLOR_CHART_4]
 
-# Couleurs thématiques dédiées par domaine de contrôle
+# Couleurs thématiques par thématique/domaine d'intervention de l'OFB
 COLOR_MAP_DOMAINE = {
-    "Assurer la protection des espèces animales et végétales": "#E74C3C",
-    "Espaces protégés et protection des milieux et du cadre de vie": "#1E8449",
-    "Préservation des milieux aquatiques": "#008080",
-    "Gestion qualitative de la ressource en eau": "#2980B9",
-    "Gestion quantitative de l'eau": "#00B4D8",
-    "Sujets transversaux": "#D35400",
-    "Sécurité publique et Prévention des inondations": "#6C5CE7",
-    "Hors domaine": "#7F8C8D",
+    "Assurer la protection des espèces animales et végétales": "#E74C3C",  # Rouge
+    "Espaces protégés et protection des milieux et du cadre de vie": "#1E8449",  # Vert
+    "Préservation des milieux aquatiques": "#008080",  # Teal/Bleu vert
+    "Gestion qualitative de la ressource en eau": "#2980B9",  # Bleu
+    "Gestion quantitative de l'eau": "#00B4D8",  # Cyan
+    "Sujets transversaux": "#D35400",  # Marron/Orangé
+    "Sécurité publique et Prévention des inondations": "#6C5CE7",  # Violet
+    "Hors domaine": "#7F8C8D",  # Gris
 }
 
-PAGE_W, PAGE_H = A4
-# Marges latérales (moitié de l’ancien 17 mm) : zone utile du PDF plus large.
-MARGIN_LEFT = 7.0 * mm
-MARGIN_RIGHT = 7.0 * mm
-MARGIN_BOTTOM = 22 * mm
-# Marge supérieure pour pages intérieures
-MARGIN_TOP = 14 * mm
+# ========================================================================================
+# DIMENSIONS, MARGES ET ESPACEMENTS PAR DÉFAUT DU DOCUMENT PDF
+# ========================================================================================
+
+PAGE_W, PAGE_H = A4  # Dimensions A4 (210mm x 297mm)
+MARGIN_LEFT = 7.0 * mm  # Marge gauche optimisée
+MARGIN_RIGHT = 7.0 * mm  # Marge droite optimisée
+MARGIN_BOTTOM = 22 * mm  # Marge basse réservée au pied de page
+MARGIN_TOP = 14 * mm  # Marge haute réservée au bandeau de titre
+
+# Grille d'espacements verticaux standards
 SPACING_XXS = 0.5 * mm
 SPACING_XS = 1.0 * mm
 SPACING_S = 1.5 * mm
@@ -117,12 +134,7 @@ _HEADER_GAP_CONTENT = 4.5 * mm
 
 
 def header_layout_metrics(n_header_lines: int) -> tuple[float, float]:
-    """
-    Retourne (rule_y_from_top, margin_top) en points ReportLab.
-
-    Le trait d'en-tête est placé sous le bloc de texte ; le contenu commence
-    juste en dessous du trait (marge haute minimale).
-    """
+    """Calcule la hauteur occupée par l'en-tête de page selon le nombre de lignes affichées."""
     n = max(1, min(int(n_header_lines), 3))
     text_block_h = n * _HEADER_LINE_STEP
     rule_from_top = text_block_h + _HEADER_GAP_RULE
@@ -130,6 +142,7 @@ def header_layout_metrics(n_header_lines: int) -> tuple[float, float]:
     return rule_from_top, margin_top
 
 
+# Logo texte ASCII affiché lors du lancement dans la console
 ASCII_LOGO_OFB = r"""
   OOOOOOO   FFFFFFF   BBBBBBB 
   OOOOOOO   FFFFFFF   BBBBBBB 
@@ -146,23 +159,22 @@ ASCII_LOGO_OFB = r"""
 
 
 def print_ascii_logo_ofb() -> None:
-    """Affiche le logo OFB en ASCII dans la console."""
+    """Affiche le logo OFB en art ASCII dans la console au démarrage."""
     print(ASCII_LOGO_OFB)
 
 
 def _ref_img(name: str) -> Path:
-    """Chemin vers une image dans ref/programme/modele_ofb/word/media/."""
+    """Construit le chemin absolu vers une image de référence de la charte."""
     ref_dir = Path(__file__).resolve().parents[2] / "ref" / "programme"
     return ref_dir / "modele_ofb" / "word" / "media" / name
 
 
-# Médias charte OFB (ref/programme/modele_ofb/word/media/) — clés alignées sur defaults.charte.assets (YAML).
+# Images et filigranes officiels de la charte OFB
 IMG_BANNER = _ref_img("image5.jpg")
 IMG_TITLE_DECO = _ref_img("image6.jpeg")
 IMG_FILIGRANE = _ref_img("image3.jpeg")
 IMG_FILIGRANE_ALT = _ref_img("image4.png")
 
-# Alias historiques (rétro-compatibilité).
 IMG_LOGO_BANNER = IMG_BANNER
 IMG_TITLE_PAGE_DECO = IMG_TITLE_DECO
 IMG_FOOTER_DECO = IMG_FILIGRANE
@@ -183,7 +195,7 @@ def charte_asset_path(
     *,
     fallback: Path | None = None,
 ) -> Path:
-    """Résout un fichier média charte depuis la config YAML (nom relatif à word/media/)."""
+    """Résout le chemin d'une image de la charte à partir de la configuration YAML."""
     name = default_filename
     if isinstance(assets_cfg, dict):
         raw = assets_cfg.get(key)
@@ -197,58 +209,36 @@ def charte_asset_path(
     return path
 
 
-# ---------------------------------------------------------------------------
-# Enregistrement polices
-# ---------------------------------------------------------------------------
+# ========================================================================================
+# ENREGISTREMENT DES POLICES DE CARACTÈRES
+# ========================================================================================
+
 def _register_fonts() -> str:
-    """Enregistre les polices dans reportlab. Retourne le nom de famille."""
-    # Essayer d'abord la police Marianne (si disponible)
+    """Enregistre les polices (Marianne / Arial / LiberationSans) dans ReportLab.
+
+    Tente d'abord de charger la police officielle de l'État 'Marianne'.
+    En cas d'absence, bascule sur Arial (Windows) ou LiberationSans (Linux).
+    """
+    # 1. Recherche de la police officielle de l'État 'Marianne'
     marianne_dirs = [
         Path("/usr/share/fonts/truetype/marianne"),
         Path("/usr/share/fonts/opentype/marianne"),
         Path("/usr/local/share/fonts/marianne"),
         Path("~/.local/share/fonts/marianne").expanduser(),
     ]
-    
+
     for marianne_dir in marianne_dirs:
         if marianne_dir.exists():
-            # Look for the required font files
             regular_fonts = list(marianne_dir.glob("*Regular*"))
             bold_fonts = list(marianne_dir.glob("*Bold*"))
             italic_fonts = list(marianne_dir.glob("*Italic*"))
             bolditalic_fonts = list(marianne_dir.glob("*Bold*Italic*"))
-            
-            # Find the best matches
-            regular = None
-            bold = None
-            italic = None
-            bolditalic = None
-            
-            # Look for Regular font
-            for font in regular_fonts:
-                if "Regular" in font.name and not "Italic" in font.name:
-                    regular = font
-                    break
-            
-            # Look for Bold font (not italic)
-            for font in bold_fonts:
-                if "Bold" in font.name and "Italic" not in font.name and "ExtraBold" not in font.name and "Medium" not in font.name:
-                    bold = font
-                    break
-            
-            # Look for Italic font (not bold)
-            for font in italic_fonts:
-                if "Italic" in font.name and "Bold" not in font.name and "Regular" in font.name:
-                    italic = font
-                    break
-            
-            # Look for BoldItalic font
-            for font in bolditalic_fonts:
-                if "Bold" in font.name and "Italic" in font.name and "ExtraBold" not in font.name:
-                    bolditalic = font
-                    break
-            
-            # If we found all required fonts, register them
+
+            regular = next((f for f in regular_fonts if "Regular" in f.name and "Italic" not in f.name), None)
+            bold = next((f for f in bold_fonts if "Bold" in f.name and "Italic" not in f.name and "ExtraBold" not in f.name and "Medium" not in f.name), None)
+            italic = next((f for f in italic_fonts if "Italic" in f.name and "Bold" not in f.name and "Regular" in f.name), None)
+            bolditalic = next((f for f in bolditalic_fonts if "Bold" in f.name and "Italic" in f.name and "ExtraBold" not in f.name), None)
+
             if regular and bold and italic and bolditalic:
                 try:
                     pdfmetrics.registerFont(TTFont("Marianne", str(regular)))
@@ -265,9 +255,8 @@ def _register_fonts() -> str:
                     return "Marianne"
                 except Exception as e:
                     print(f"Erreur lors de l'enregistrement de la police Marianne: {e}")
-                    # Continue to fallback fonts
-    
-    # Essayer Arial sur Windows
+
+    # 2. Fallback sur Arial (sur systèmes Windows)
     if sys.platform == "win32":
         fonts_dir = Path(r"C:\Windows\Fonts")
         arial = fonts_dir / "arial.ttf"
@@ -287,14 +276,14 @@ def _register_fonts() -> str:
                 boldItalic="Arial-BoldItalic",
             )
             return "Arial"
-    
-    # Utiliser Liberation Sans comme alternative (disponible sur la plupart des systèmes Linux)
+
+    # 3. Fallback sur LiberationSans (Linux)
     try:
         liberation_regular = Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")
         liberation_bold = Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf")
         liberation_italic = Path("/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf")
         liberation_bolditalic = Path("/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf")
-        
+
         if liberation_regular.exists() and liberation_bold.exists() and liberation_italic.exists() and liberation_bolditalic.exists():
             pdfmetrics.registerFont(TTFont("LiberationSans", str(liberation_regular)))
             pdfmetrics.registerFont(TTFont("LiberationSans-Bold", str(liberation_bold)))
@@ -310,13 +299,15 @@ def _register_fonts() -> str:
             return "LiberationSans"
     except Exception:
         pass
-    
-    # Fallback final : Helvetica (police par défaut de ReportLab)
+
+    # 4. Fallback ultime : Helvetica (police de base ReportLab)
     return "Helvetica"
 
 
+# Famille de police active
 FONT_FAMILY = _register_fonts()
 
+# Styles prédéfinis de cellules de tableaux
 _CELL_NORMAL = ParagraphStyle(
     "CellNormal",
     fontName=FONT_FAMILY,
@@ -351,14 +342,18 @@ _CELL_HEADER_RIGHT = ParagraphStyle(
 )
 
 
+# ========================================================================================
+# FEUILLE DE STYLES DU RAPPORT PDF (TITRES, CORPS, DELEGATION)
+# ========================================================================================
+
 def _get_styles(typography_config: dict | None = None):
-    """Construit les ParagraphStyles conformes à la charte OFB."""
+    """Construit l'ensemble des styles de paragraphe (ParagraphStyle) aux normes de l'OFB."""
     ss = getSampleStyleSheet()
-    
+
     sub_italic = True
     if typography_config is not None:
         sub_italic = bool(typography_config.get("subsections_italic", True))
-    
+
     h_font = f"{FONT_FAMILY}-BoldItalic" if sub_italic else f"{FONT_FAMILY}-Bold"
 
     styles = {
@@ -485,16 +480,12 @@ def _get_styles(typography_config: dict | None = None):
     return styles
 
 
-class Spinner:
-    """Spinner texte pour indiquer qu'un traitement est en cours.
+# ========================================================================================
+# ANIMATEUR DE CONSOLE (SPINNER DE PATIENCE POUR EXECUTION CLI)
+# ========================================================================================
 
-    Animation type « machine à écrire » :
-    - apparition caractère par caractère de
-      « Traitement des données en cours. Patience... » (ou message personnalisé)
-    - courte pause avec le message complet
-    - effacement caractère par caractère
-    - boucle tant que le contexte est actif.
-    """
+class Spinner:
+    """Affiche une animation de chargement en console pendant l'exécution d'une tâche de calcul."""
 
     def __init__(self, message: str = "Traitement des données en cours. Patience...") -> None:
         self.message = message
@@ -502,6 +493,7 @@ class Spinner:
         self._thread = threading.Thread(target=self._spin, daemon=True)
 
     def _spin(self) -> None:
+        """Boucle d'animation affichant le texte caractère par caractère."""
         message = self.message
         appear_delay = 0.06
         disappear_delay = 0.03
@@ -510,7 +502,7 @@ class Spinner:
         msg_len = len(message)
 
         while not self._stop_event.is_set():
-            # Apparition caractère par caractère
+            # Apparition progressive du texte
             for i in range(1, msg_len + 1):
                 if self._stop_event.is_set():
                     break
@@ -521,7 +513,7 @@ class Spinner:
             if self._stop_event.is_set():
                 break
 
-            # Pause avec message complet
+            # Pause d'affichage du message complet
             elapsed = 0.0
             while elapsed < pause_full and not self._stop_event.is_set():
                 time.sleep(0.1)
@@ -530,11 +522,10 @@ class Spinner:
             if self._stop_event.is_set():
                 break
 
-            # Effacement caractère par caractère
+            # Effacement progressif du texte
             for i in range(msg_len, -1, -1):
                 if self._stop_event.is_set():
                     break
-                # Ajouter des espaces pour effacer complètement la ligne
                 sys.stdout.write("\r" + message[:i] + " " * (msg_len - i))
                 sys.stdout.flush()
                 time.sleep(disappear_delay)
@@ -549,9 +540,10 @@ class Spinner:
                 elapsed += 0.1
 
     def __enter__(self) -> "Spinner":
+        """Démarre l'animation lors de l'entrée dans un bloc `with Spinner():`."""
         if not sys.stdout.isatty():
             return self
-            
+
         import logging
         is_debug = False
         logger = logging.getLogger("ofbilan")
@@ -562,7 +554,7 @@ class Spinner:
                     break
         if is_debug:
             return self
-            
+
         _enable_windows_vt100()
         sys.stdout.write("\n")
         sys.stdout.flush()
@@ -570,9 +562,10 @@ class Spinner:
         return self
 
     def __exit__(self, _exc_type, _exc_val, _exc_tb) -> None:
+        """Arrête l'animation et efface la ligne lors de la sortie du bloc `with`."""
         if not sys.stdout.isatty():
             return
-            
+
         import logging
         is_debug = False
         logger = logging.getLogger("ofbilan")
@@ -583,9 +576,11 @@ class Spinner:
                     break
         if is_debug:
             return
-            
+
         self._stop_event.set()
         self._thread.join()
-        # Nettoyage de la ligne
+        sys.stdout.write("\r" + " " * len(self.message) + "\r")
+        sys.stdout.flush()
+gne
         sys.stdout.write("\r" + " " * len(self.message) + "\r")
         sys.stdout.flush()

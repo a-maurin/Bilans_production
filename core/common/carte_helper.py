@@ -15,31 +15,47 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Helper pour intégrer les cartes dans les bilans PDF.
+========================================================================================
+MODULE : ASSISTANT ET GESTIONNAIRE DE CARTOGRAPHIE (`carte_helper.py`)
+========================================================================================
+Ce module s'occupe de la localisation, de la vérification et de la génération des cartes QGIS
+destinées à être insérées dans les bilans et brochures PDF.
 
-Fournit des fonctions pour :
-- Vérifier si des cartes pré-générées existent
-- Tenter de générer des cartes via QGIS (si disponible)
-- Lister les cartes disponibles pour un profil donné
+Fonctionnalités principales :
+  1. Détection de la disponibilité de QGIS dans l'environnement Python.
+  2. Recherche et résolution des chemins des images PNG de cartes pré-générées.
+  3. Lancement de la génération de cartes via QGIS (en direct ou via un sous-processus).
+  4. Validation de la correspondance entre une carte et le territoire/département cible.
+========================================================================================
 """
+
 from __future__ import annotations
 
-import logging
-from pathlib import Path
-from typing import Any, List, Optional
+# --- IMPORTS STANDARDS PYTHON ---
+import logging  # Pour journaliser les avertissements et informations de cartographie
+from pathlib import Path  # Manipulation des chemins de fichiers de cartes PNG
+from typing import Any, List, Optional  # Annotations de types Python
 
-from core.chemins_projet import PROJECT_ROOT, get_cartes_dir
-from core.common.chargeur_gabarits import resolve_items_masques_carte
+# --- IMPORTS INTERNES DE L'APPLICATION ---
+from core.chemins_projet import PROJECT_ROOT, get_cartes_dir  # Accès aux dossiers racines et cartes
+from core.common.chargeur_gabarits import resolve_items_masques_carte  # Récupération des filtres de masquage des cartes
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # Journaliseur du module
 
+# Variable globale mémorisant si QGIS est disponible (évite d'importer QGIS inutilement plusieurs fois)
 _QGIS_AVAILABLE: Optional[bool] = None
 
 
+# ========================================================================================
+# DETECTEUR DE DISPONIBILITE DE QGIS
+# ========================================================================================
+
 def qgis_available() -> bool:
-    """Check if QGIS Python bindings are importable."""
+    """Vérifie si les bibliothèques Python de QGIS (`qgis.core`) peuvent être chargées.
+
+    Retourne `True` si QGIS est utilisable directement dans cet interpréteur Python, `False` sinon.
+    """
     global _QGIS_AVAILABLE
     if _QGIS_AVAILABLE is None:
         try:
@@ -50,8 +66,12 @@ def qgis_available() -> bool:
     return _QGIS_AVAILABLE
 
 
+# ========================================================================================
+# RECHERCHE ET RESOLUTION DES CHEMINS DES IMAGES DE CARTES (PNG)
+# ========================================================================================
+
 def _find_single_map_legacy(profile_id: str) -> Optional[Path]:
-    """Recherche une carte unique (comportement historique, glob partiel)."""
+    """Recherche historique d'une carte unique selon le nom du profil (fallback rétrocompatible)."""
     cartes = get_cartes_dir()
     candidates = [
         cartes / f"carte_{profile_id}.png",
@@ -71,7 +91,7 @@ def find_map(
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
 ) -> Optional[Path]:
-    """Return the path to a pre-generated map PNG for the given profile, or None."""
+    """Retourne le chemin d'accès au fichier PNG de carte pour le profil donné, ou `None` si introuvable."""
     return resolve_map_png_path(profile_id, bilan_profiles=bilan_profiles, target_dir=target_dir)
 
 
@@ -83,11 +103,15 @@ def resolve_map_png_path(
     is_brochure: bool = False,
     items_a_masquer: list[str] | None = None,
 ) -> Optional[Path]:
-    """Chemin PNG d'une carte (catalogue bilan ou conventions carte_{id}.png)."""
+    """Résout le chemin d'accès exact vers le fichier PNG de carte correspondant à un profil.
+
+    Consulte le catalogue cartographique des profils et teste la présence des variantes (brochure, etc.).
+    """
     pid = str(profile_id).strip()
     if not pid:
         return None
 
+    # Si l'identifiant transmis est déjà un chemin de fichier valide qui existe sur le disque
     try:
         p = Path(pid)
         if p.exists() and p.is_file():
@@ -97,6 +121,7 @@ def resolve_map_png_path(
 
     from core.common.cartographie_config import parse_cartography_catalog
 
+    # Cas particulier des cartes adaptées au format brochure
     if is_brochure or items_a_masquer:
         for prof in (bilan_profiles or {}).values():
             if not isinstance(prof, dict):
@@ -113,6 +138,7 @@ def resolve_map_png_path(
                     if cand.exists():
                         return cand
 
+        # Recherche fallback sur les noms de fichiers brochure historiques
         brochure_legacy_names = [f"carte_{pid}_resultats_brochure.png", f"carte_{pid}_domaines_brochure.png", f"carte_{pid}_brochure.png"]
         for b_name in brochure_legacy_names:
             if target_dir and (target_dir / b_name).exists():
@@ -121,6 +147,7 @@ def resolve_map_png_path(
                 return get_cartes_dir() / b_name
         return None
 
+    # Recherche standard dans le catalogue des profils de bilan
     for prof in (bilan_profiles or {}).values():
         if not isinstance(prof, dict):
             continue
@@ -137,6 +164,7 @@ def resolve_map_png_path(
                     if candidate_target.exists():
                         return candidate_target
 
+    # Fallback via la résolution classique des chemins de cartes
     bilan_profile = (bilan_profiles or {}).get(pid)
     paths = resolve_profile_map_paths(
         pid,
@@ -148,7 +176,12 @@ def resolve_map_png_path(
     return _find_single_map_legacy(pid)
 
 
+# ========================================================================================
+# FONCTIONS DE CONFIGURATION DE LA DISPOSITION ET DES MOTIFS DE CARTES
+# ========================================================================================
+
 def _format_map_pattern(pattern: str, map_id: str) -> str:
+    """Remplace le marqueur `{map_id}` dans un motif de nom de fichier par l'identifiant réel."""
     return str(pattern).replace("{map_id}", map_id).strip()
 
 
@@ -158,6 +191,7 @@ def _patterns_from_profile_and_presentation(
     profile: dict | None,
     presentation_cfg: dict | None,
 ) -> list[str]:
+    """Extrait la liste des motifs de noms de fichiers de cartes à partir des fichiers YAML de configuration."""
     patterns: list[str] = []
     carto = (profile or {}).get("cartographie") or {}
     if isinstance(carto, dict):
@@ -173,6 +207,7 @@ def _patterns_from_profile_and_presentation(
             if isinstance(raw, list) and raw:
                 patterns = [str(p).strip() for p in raw if str(p).strip()]
 
+    # Motifs par défaut si aucune configuration explicite n'est fournie
     if not patterns:
         patterns = [f"carte_{map_id}.png", f"carte_{map_id}_2.png"]
     return patterns
@@ -183,13 +218,7 @@ def resolve_map_layout(
     profile: dict | None = None,
     presentation_cfg: dict | None = None,
 ) -> str:
-    """
-    Disposition demandée pour les cartes : ``horizontal`` ou ``vertical``.
-
-    Note : le rendu PDF standard applique désormais une carte par page ; cette
-    information reste utile pour compatibilité de configuration et pour les
-    usages spécifiques (ex. brochure).
-    """
+    """Détermine la disposition demandée pour l'affichage des cartes : 'horizontal' ou 'vertical'."""
     carto = (profile or {}).get("cartographie") or {}
     if isinstance(carto, dict):
         mode = str(carto.get("disposition") or carto.get("layout") or "").strip().lower()
@@ -217,14 +246,7 @@ def resolve_profile_map_paths(
     presentation_cfg: dict | None = None,
     target_dir: Path | None = None,
 ) -> list[Path]:
-    """
-    Chemins des cartes PNG à intégrer (ordre conservé, doublons retirés).
-
-    Fichiers cherchés dans ``data/out/generateur_de_cartes/`` :
-    - motifs définis dans le profil ``cartographie.fichiers`` ;
-    - ou ``blocks.sec5.map_files`` (présentation PDF) ;
-    - sinon ``carte_{map_id}.png`` et ``carte_{map_id}_2.png``.
-    """
+    """Retourne la liste ordonnée des fichiers PNG de cartes existants pour un profil donné."""
     cartes_dir = get_cartes_dir()
     mid = str(map_id).strip()
     if not mid:
@@ -263,7 +285,7 @@ def expected_map_filenames(
     profile: dict | None = None,
     presentation_cfg: dict | None = None,
 ) -> list[str]:
-    """Noms de fichiers attendus (pour messages CLI / documentation)."""
+    """Construit la liste des noms de fichiers de cartes attendus (pour la documentation ou la CLI)."""
     mid = str(map_id).strip()
     patterns = _patterns_from_profile_and_presentation(
         mid, profile=profile, presentation_cfg=presentation_cfg
@@ -278,20 +300,25 @@ def expected_map_filenames(
     return names
 
 
+# Variable de mémorisation de l'instance de l'application QGIS en mode sans tête (Headless)
 _qgis_app = None
 
+
 def get_qgis_app():
+    """Initialise et mémorise l'application QGIS en mode sans interface graphique (Headless)."""
     global _qgis_app
     if _qgis_app is None:
         from core.cartographie.production_cartographique import init_qgis_headless
         _qgis_app = init_qgis_headless()
     return _qgis_app
 
+
 def _resolve_carto_dept(
     echelle: Optional[str],
     code: Optional[str],
     dept_code: Optional[str],
 ) -> str:
+    """Détermine le code du département concerné par la cartographie."""
     from core.common.utilitaires_metier import resolve_carto_dept_code
 
     echelle_eff = echelle or "departement"
@@ -300,6 +327,7 @@ def _resolve_carto_dept(
 
 
 def _warn_qgis_unavailable_for_cartes(carto_dept: str, *, subprocess_failed: bool = False) -> None:
+    """Émet un avertissement dans la console si QGIS n'est pas disponible pour la génération de cartes."""
     if subprocess_failed:
         logger.warning(
             "Génération cartes échouée (QGIS introuvable et générateur Matplotlib en erreur) "
@@ -324,6 +352,7 @@ def _warn_unresolved_cartes(
     *,
     qgis_was_available: bool,
 ) -> None:
+    """Émet un avertissement si des cartes demandées restent introuvables."""
     if not profile_ids:
         return
     cartes_dir = get_cartes_dir()
@@ -347,6 +376,10 @@ def _warn_unresolved_cartes(
     )
 
 
+# ========================================================================================
+# FONCTIONS PRINCIPALES DE GÉNERATION AUTOMATIQUE DE CARTES VIA QGIS
+# ========================================================================================
+
 def generate_maps(
     profile_ids: List[str],
     date_deb: Optional[str] = None,
@@ -361,9 +394,10 @@ def generate_maps(
     items_a_masquer: Optional[List[str]] = None,
     is_brochure: bool = False,
 ) -> List[Path]:
-    """
-    Try to generate maps via QGIS. Returns list of generated map paths.
-    If QGIS is not available, returns empty list (avertissement journalisé).
+    """Exécute l'exportation des cartes QGIS pour les profils spécifiés.
+
+    Si QGIS est disponible dans l'environnement courant, exécute l'export directement.
+    Sinon, lance un sous-processus dédié. Retourne la liste des chemins des cartes produites.
     """
     carto_dept = _resolve_carto_dept(echelle, code, dept_code)
     from datetime import datetime
@@ -409,6 +443,7 @@ def generate_maps(
                 )
                 return []
         else:
+            # Lancement via un sous-processus Python disposant de l'environnement QGIS
             from core.cartographie.qgis_runtime import run_cartography_export_subprocess
 
             logger.info(
@@ -434,6 +469,7 @@ def generate_maps(
         read_map_dept_marker,
     )
 
+    # Vérification et filtrage des cartes réellement générées et valides
     generated = []
     for pid in profile_ids:
         m = resolve_map_png_path(
@@ -488,13 +524,11 @@ def ensure_maps_for_profiles(
     is_brochure: bool = False,
     gabarit_data: dict[str, Any] | None = None,
 ) -> List[Path]:
-    """
-    Ensure that maps exist for a list of cartographic profiles.
+    """Garantit que des cartes valides existent pour une liste de profils.
 
-    - Utilise les cartes pré-générées si elles existent déjà (sauf si force_regen=True).
-    - Tente de générer les cartes manquantes/forcées via QGIS (run_export) si disponible.
-    - Ne lève pas d'erreur en cas d'échec de génération : retourne simplement
-      les cartes trouvées.
+    1. Vérifie la présence des cartes existantes (sauf si `force_regen=True`).
+    2. Génère uniquement les cartes manquantes.
+    3. Retourne la liste complète des cartes utilisables pour le document PDF.
     """
     if not profile_ids:
         return []
@@ -505,7 +539,7 @@ def ensure_maps_for_profiles(
             primary_profile = next(iter(bilan_profiles.values()), None)
         items_a_masquer = resolve_items_masques_carte(primary_profile, gabarit_data, is_brochure=is_brochure)
 
-    # Normalisation / dédoublonnage des identifiants de profils
+    # Dédoublonnage des identifiants de profils
     unique_ids: List[str] = []
     for pid in profile_ids:
         p = (pid or "").strip()
@@ -549,6 +583,7 @@ def ensure_maps_for_profiles(
         else:
             missing.append(pid)
 
+    # Génère les cartes absentes
     generated: List[Path] = []
     if missing:
         generated = generate_maps(
@@ -565,7 +600,7 @@ def ensure_maps_for_profiles(
             is_brochure=is_brochure,
         )
 
-    # Retourne l'ensemble des cartes trouvées / générées, sans doublons
+    # Fusionne et dédoublonne la liste des cartes finales
     result: List[Path] = []
     seen: set[Path] = set()
     for p in existing + generated:
@@ -588,4 +623,4 @@ def ensure_maps_for_profiles(
     if unresolved:
         _warn_unresolved_cartes(unresolved, carto_dept, qgis_was_available=qgis_ok)
 
-    return result
+    return result

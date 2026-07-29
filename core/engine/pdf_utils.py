@@ -15,7 +15,14 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-"""Ré-exportation de transition vers engine_pdf_helpers.py pour rétro-compatibilité."""
+"""
+========================================================================================
+MODULE : ALIAS ET RETRO-COMPATIBILITE DES UTILS PDF (`pdf_utils.py`)
+========================================================================================
+Ce module assure la pontage de rétro-compatibilité en ré-exportant les fonctions
+auxiliaires du module `engine_pdf_helpers.py`.
+========================================================================================
+"""
 from core.engine.engine_pdf_helpers import (
     truncate_with_dash,
     nb_non_conformes_brut,

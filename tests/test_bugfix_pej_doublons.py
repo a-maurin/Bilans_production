@@ -15,7 +15,14 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+TEST UNITAIRE : NON-DOUBLONNEMENT DES PROCEDURES PEJ (`test_bugfix_pej_doublons.py`)
+========================================================================================
+Ce fichier de test valide la résolution du bug de comptage en double des Procédures Enquête
+Judiciaire (PEJ) lorsque des faits multiples sont enregistrés sur une même fiche.
+========================================================================================
+"""
 import pandas as pd
 import pytest
 

@@ -1,3 +1,14 @@
+# ========================================================================================
+# GRAMMAIRE ET ARTICLES DES DEPARTEMENTS FRANÇAIS (`departements.yaml`)
+# ========================================================================================
+# Ce fichier répertorie l'article élidé ou contracté ("du", "de la", "des", "de l'", "de")
+# associé à chaque département français (Métropole et Outre-Mer).
+#
+# Rôle pédagogique :
+#   Permet de générer dynamiquement des titres de rapports et des phrases grammaticalement
+#   parfaites en français (ex: "Service départemental de la Côte-d'Or", "du Doubs", "des Vosges").
+# ========================================================================================
+
 coordination_departement:
   # Métropole
   "Ain": "de l'"

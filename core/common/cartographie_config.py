@@ -9,18 +9,24 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
-# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
+# doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer me nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Résolution catalogue / sélection des cartes à partir des profils YAML.
+========================================================================================
+MODULE : CONFIGURATION ET CATALOGUE CARTOGRAPHIQUE (`cartographie_config.py`)
+========================================================================================
+Ce module fait le lien entre les profils de bilan (YAML) et les cartes QGIS à produire ou afficher.
 
-Le code reste générique ; chaque profil déclare ``cartographie.catalog`` et
-``options.cartes_selection`` (liste d'identifiants carto QGIS).
+Fonctionnalités :
+  1. Génération dynamique du catalogue des cartes (domaines, usagers, résultats, procédures).
+  2. Résolution des sélections de cartes transmises via la CLI ou la configuration.
+  3. Association entre les identifiants de bilans et les profils cartographiques QGIS correspondants.
+  4. Transmission des surcharges métier (mots-clés, natinfs, colonnes) vers le moteur d'exportation QGIS.
+========================================================================================
 """
 from __future__ import annotations
 
@@ -35,32 +41,31 @@ logger = logging.getLogger(__name__)
 from core.common.carte_helper import resolve_map_layout
 
 
+# ========================================================================================
+# LECTURE ET CONSTRUCTEUR DU CATALOGUE DE CARTES
+# ========================================================================================
+
 def parse_cartography_catalog(profile: dict | None) -> list[dict[str, str]]:
-    """Entrées ``{id, label, fichier}`` générées dynamiquement depuis ``cartes_actives`` (Lot 2)."""
+    """Construit la liste des cartes disponibles pour un profil (liste de dictionnaires `{id, label, fichier}`)."""
     if not profile:
         return []
-    
-    # On récupère l'identifiant du profil (ex: 'agrainage')
+
     pid = str(profile.get("id", profile.get("titre_bilan", ""))).strip().lower()
     if not pid:
-        # Fallback heuristique si pas d'ID clair
         pid = "bilan"
-        
+
     carto = profile.get("cartographie")
     if not isinstance(carto, dict):
         return []
-        
+
     if "catalog" in carto and isinstance(carto["catalog"], list) and carto["catalog"]:
         return carto["catalog"]
 
-    # La liste des cartes actives pilote le catalogue. Par défaut les 4 génériques si absent.
     actives = carto.get("cartes_actives", ["domaines", "usagers", "resultats", "procedures"])
     if not isinstance(actives, list):
         return []
 
     entries: list[dict[str, str]] = []
-    
-    # Dictionnaire de correspondance générique socle
     labels_map = {
         "domaines": "Contrôles par domaine",
         "usagers": "Contrôles par usager",
@@ -75,16 +80,17 @@ def parse_cartography_catalog(profile: dict | None) -> list[dict[str, str]]:
         label = labels_map.get(mid, mid.capitalize())
         fichier = f"carte_{pid}_{mid}.png"
         entries.append({"id": f"{pid}_{mid}", "label": label, "fichier": fichier})
-        
+
     return entries
 
 
 def has_cartography_catalog(profile: dict | None) -> bool:
+    """Indique si un profil possède un catalogue de cartes valide."""
     return bool(parse_cartography_catalog(profile))
 
 
 def default_cartes_selection(profile: dict | None) -> list[str]:
-    """Valeurs par défaut : ``options.cartes_selection.default`` ou tout le catalogue."""
+    """Retourne la liste des cartes sélectionnées par défaut dans le profil YAML."""
     catalog = parse_cartography_catalog(profile)
     if not catalog:
         return []
@@ -109,12 +115,12 @@ def _catalog_by_id(profile: dict | None) -> dict[str, dict[str, str]]:
     return {e["id"]: e for e in parse_cartography_catalog(profile)}
 
 
-def resolve_cartes_selection(profile: dict | None, resolved_opts: dict | None) -> list[str]:
-    """
-    Liste ordonnée des profils carto QGIS retenus pour le PDF.
+# ========================================================================================
+# RESOLUTION DE LA SELECTION DE CARTES ET MAPPING QGIS
+# ========================================================================================
 
-    Priorité : ``cartes_profil`` CLI > ``cartes_selection`` résolu > défaut YAML.
-    """
+def resolve_cartes_selection(profile: dict | None, resolved_opts: dict | None) -> list[str]:
+    """Résout les cartes à inclure au PDF selon la priorité : Option CLI > Config YAML > Par défaut."""
     catalog = parse_cartography_catalog(profile)
     if not catalog:
         return []
@@ -157,18 +163,14 @@ def resolve_cartes_selection(profile: dict | None, resolved_opts: dict | None) -
     return default_cartes_selection(profile)
 
 
-# Profils QGIS dont l'id diffère de l'id bilan
+# Correspondance d'alias entre profil bilan et profil QGIS
 QGIS_PROFILE_ALIASES: dict[str, str] = {
     "types_usager": "global_usagers",
 }
 
 
 def infer_cartographie_mode(profile: dict | None, profil_id: str) -> str:
-    """
-    Mode cartographique déduit du YAML ou du filtre bilan.
-
-    Valeurs : ``catalog``, ``synthese``, ``dedie``, ``thematique_ref``, ``manuel``, ``none``.
-    """
+    """Détermine le mode cartographique du profil ('catalog', 'synthese', 'dedie', 'thematique_ref', 'none')."""
     carto = (profile or {}).get("cartographie") or {}
     if isinstance(carto, dict):
         raw_mode = str(carto.get("mode", "")).strip().lower()
@@ -199,7 +201,7 @@ def infer_cartographie_mode(profile: dict | None, profil_id: str) -> str:
 
 
 def resolve_qgis_profile_id(profile: dict | None, profil_id: str) -> str:
-    """Identifiant profil QGIS à générer / rechercher pour un profil bilan."""
+    """Retourne l'identifiant exact du profil QGIS à charger/générer."""
     carto = (profile or {}).get("cartographie") or {}
     if isinstance(carto, dict):
         explicit = str(carto.get("profil_qgis", "")).strip()
@@ -213,8 +215,12 @@ def resolve_qgis_profile_id(profile: dict | None, profil_id: str) -> str:
     return QGIS_PROFILE_ALIASES.get(pid, pid)
 
 
+# ========================================================================================
+# CONSTRUCTION DES OVERRIDES ET PARAMETRES POUR QGIS
+# ========================================================================================
+
 def collect_bilan_carto_override(profile: dict | None) -> dict[str, Any]:
-    """Surcharges QGIS (mots-clés) dérivées du profil bilan."""
+    """Extrait les filtres métiers (mots-clés, colonnes) d'un profil bilan pour les transmettre à QGIS."""
     if not profile:
         return {}
     carto = profile.get("cartographie") or {}
@@ -249,7 +255,7 @@ def collect_bilan_carto_override(profile: dict | None) -> dict[str, Any]:
 def build_qgis_overrides_from_bilan_profiles(
     bilan_profiles: dict[str, dict] | None,
 ) -> dict[str, dict[str, Any]]:
-    """Mappe identifiant profil QGIS → surcharges (keywords, colonnes, natinfs)."""
+    """Construit la table des surcharges QGIS pour l'ensemble des profils configurés."""
     if not bilan_profiles:
         return {}
     out: dict[str, dict[str, Any]] = {}
@@ -260,7 +266,6 @@ def build_qgis_overrides_from_bilan_profiles(
         if not qgis_id:
             continue
         override = collect_bilan_carto_override(profile)
-        # Surcharges NATINFs
         if "natinf_pve" in profile:
             override["natinf_pve"] = profile["natinf_pve"]
         if "natinf_pej" in profile:
@@ -270,7 +275,6 @@ def build_qgis_overrides_from_bilan_profiles(
 
         if override:
             out[qgis_id] = override
-            # Propagation aux sous-cartes (ex. global_procedures)
             prefixes = {bilan_id, qgis_id}
             for pref in prefixes:
                 if not pref:
@@ -285,7 +289,7 @@ def resolve_qgis_profile_ids(
     profil_id: str,
     resolved_opts: dict | None,
 ) -> list[str]:
-    """Liste des profils QGIS à générer pour un profil bilan."""
+    """Retourne les identifiants de cartes QGIS requis pour la génération."""
     opts = resolved_opts or {}
     if not opts.get("cartes", False):
         return []
@@ -313,9 +317,7 @@ def resolve_map_profiles_for_batch(
     profil_id: str,
     cli_options: dict | None,
 ) -> list[str]:
-    """
-    Profils QGIS à pré-générer avant le run (defaults CLI/YAML, sans menu interactif).
-    """
+    """Détermine les profils cartographiques QGIS pour une exécution en mode silencieux/batch."""
     prof = profile or {}
     opts: dict[str, Any] = {}
     options_config = prof.get("options") or {}
@@ -339,8 +341,15 @@ def resolve_map_profiles_for_batch(
 
 
 def resolve_map_file_for_catalog_entry(entry: dict[str, str], target_dir: Path | None = None) -> Path:
+    """Résout le chemin réel d'un fichier image de carte depuis une entrée de catalogue."""
     base = target_dir if target_dir else get_cartes_dir()
-    return base / entry["fichier"]
+    p = base / entry["fichier"]
+    if p.exists():
+        return p
+    brochure_p = base / f"{p.stem}_brochure{p.suffix}"
+    if brochure_p.exists():
+        return brochure_p
+    return p
 
 
 def resolve_selected_map_paths(
@@ -350,12 +359,7 @@ def resolve_selected_map_paths(
     carto_dept: str | None = None,
     target_dir: Path | None = None,
 ) -> tuple[list[Path], list[str]]:
-    """
-    Chemins PNG existants + légendes, dans l'ordre du catalogue puis de la sélection.
-
-    Si *carto_dept* est fourni, seules les cartes valides pour ce département
-    (marqueur ``.XX.dept`` ou rétrocompatibilité département 21) sont retenues.
-    """
+    """Retourne la liste des chemins de fichiers et des légendes associées pour les cartes sélectionnées."""
     from core.cartographie.pochoir_helper import is_map_valid_for_dept, read_map_dept_marker
 
     by_id = _catalog_by_id(profile)
@@ -405,6 +409,7 @@ def expected_map_filenames_for_selection(
     profile: dict | None,
     selected_ids: list[str],
 ) -> list[str]:
+    """Construit la liste des noms de fichiers d'images attendus pour une sélection."""
     by_id = _catalog_by_id(profile)
     catalog_order = [e["id"] for e in parse_cartography_catalog(profile)]
     order = [i for i in catalog_order if i in selected_ids]
@@ -418,7 +423,7 @@ def expected_map_filenames_for_selection(
 
 
 def ask_cartes_selection(profile: dict, current: list[str]) -> list[str]:
-    """Menu interactif multi-sélection (profil global catalogue)."""
+    """Affiche le menu interactif de sélection des cartes dans la console."""
     catalog = parse_cartography_catalog(profile)
     if not catalog or not sys.stdin.isatty():
         return current
@@ -461,4 +466,5 @@ def resolve_map_layout_for_profile(
     profile: dict | None,
     presentation_cfg: dict | None = None,
 ) -> str:
-    return resolve_map_layout(profile=profile, presentation_cfg=presentation_cfg)
+    """Détermine le mode de disposition des cartes (vertical ou horizontal)."""
+    return resolve_map_layout(profile=profile, presentation_cfg=presentation_cfg)

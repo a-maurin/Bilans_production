@@ -15,7 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+MODULE : CALCULS D'AGREGATION A L'ECHELLE REGIONALE (`agregations_region.py`)
+========================================================================================
+Ce module gère le regroupement et la ventilation des données de police au niveau régional
+et interdépartemental (Direction Régionale, Brigade de Mission Interdépartementale BMI).
+
+Rôles :
+  1. Association des NATINF PVe aux thèmes de profil via le registre YAML.
+  2. Ventilation interdépartementale des contrôles, opérations, PA, PEJ et PVe.
+  3. Génération des matrices de répartition départementale pour la cartographie et les
+     tableaux comparatifs régionaux dans les PDF.
+========================================================================================
+"""
 import pandas as pd
 from pathlib import Path
 from core.common.utilitaires_metier import get_departements_pour_perimetre

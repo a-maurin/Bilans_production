@@ -9,14 +9,25 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Configuration centralisée d'affichage des graphiques PDF."""
+"""
+========================================================================================
+MODULE : CONFIGURATION ET DIMENSIONNEMENT DES GRAPHIQUES PDF (`chart_display_config.py`)
+========================================================================================
+Ce module contrôle les proportions, échelles et polices des graphiques insérés dans les rapports.
+
+Points clés :
+  1. Configuration par défaut des ratios de largeur (camemberts et histogrammes).
+  2. Presets prédéfinis ('compact', 'standard', 'large') ajustant l'ensemble des figures.
+  3. Chargement dynamique des surcharges YAML (`charts_config.yaml` et `pdf_presentation.yaml`).
+  4. Calcul sécurisé des ratios avec bornes de garde-fous pour éviter tout débordement de page.
+========================================================================================
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,46 +39,47 @@ from core.common.pdf_report_builder import (
 )
 from core.common.pdf_presentation_config import load_pdf_presentation_raw_config
 
+# ========================================================================================
+# VALEURS PAR DÉFAUT ET PRESETS DE RENDU DES GRAPHIQUES
+# ========================================================================================
 
 DEFAULT_CHART_DISPLAY_CONFIG: dict[str, Any] = {
     "pdf": {
-        # Ratios "socle" utilisés si aucune surcharge n'est définie.
+        # Ratios de base pour l'insertion ReportLab
         "pie_width_ratio_base": float(THEMATIC_PIE_CHART_WIDTH_RATIO),
         "chart_width_ratio_base": float(THEMATIC_CHART_WIDTH_RATIO),
-        # Ajustements spécifiques à la section "Activité par types d'usagers".
+        # Ajustements pour la section usagers / activités
         "activite_usagers_controles_pie_scale": 3.0,
         "activite_usagers_resultats_bar_scale": 0.70,
-        # Ajustements globaux.
+        # Multiplicateurs pour les camemberts globaux
         "global_resultats_pie_scale": 1.0,
         "global_usagers_pie_scale": 1.0,
         "global_domaine_pie_scale": 1.0,
         "global_theme_pie_scale": 1.0,
-        # Uniformisation optionnelle : base commune pour les camemberts du global.
+        # Uniformisation des dimensions de camemberts
         "global_uniform_pie_scale": 1.0,
         "global_uniform_pie_min_ratio": 0.70,
         "global_uniform_pie_max_ratio": 0.82,
         "global_type_usager_bar_scale": 1.25,
-        # Uniformisation optionnelle du moteur thématique.
+        # Uniformisation du moteur thématique
         "thematique_uniform_pie_scale": 1.0,
         "thematique_uniform_pie_min_ratio": 0.70,
         "thematique_uniform_pie_max_ratio": 0.82,
         "thematique_uniform_chart_scale": 1.0,
-        # Multiplicateurs matplotlib (hauteur) — section 2.1 barres / courbe ; camembert §2.2.
+        # Multiplicateurs Matplotlib (hauteur de figure)
         "thematique_sec21_figure_scale_mult": 1.55,
         "thematique_sec22_resultats_pie_figure_scale_mult": 1.22,
         "thematique_sec22_resultats_pie_width_ratio_mult": 1.12,
-        # Section 4 thématique — camembert « contrôles par type d'usager » (avant tableaux thèmes).
-        # width_ratio_mult : appliqué à pie_ratio_base * 0.80 (1.0 = comportement historique).
-        # figure_scale_mult : multiplicateur matplotlib dédié au seul camembert §4 activité usagers.
         "thematique_sec4_activite_pie_width_ratio_mult": 1.0,
         "thematique_sec4_activite_pie_figure_scale_mult": 1.0,
-        # Taille matplotlib (avant insertion PDF) et légendes.
+        # Tailles et légendes Matplotlib
         "figure_scale": 1.0,
         "legend_fontsize": 8.0,
         "legend_ncol_max": 4.0,
     }
 }
 
+# Profils préconfigurés pour s'adapter aux différents gabarits de documents
 CHART_PRESETS: dict[str, dict[str, float]] = {
     "compact": {
         "pie_width_ratio_base": 0.30,
@@ -136,18 +148,17 @@ CHART_PRESETS: dict[str, dict[str, float]] = {
 
 
 def _clamp_ratio(value: float) -> float:
+    """Restreint une valeur de ratio dans l'intervalle valide [0.1, 1.0]."""
     return max(0.1, min(1.0, float(value)))
 
 
-def load_chart_display_config(root: Path, preset: str | None = None) -> dict[str, Any]:
-    """
-    Charge la config d'affichage des graphiques depuis
-    config/charts/charts_config.yaml puis, en fallback, ref/programme/charts_config.yaml.
+# ========================================================================================
+# CHARGEMENT ET CALCUL DES PROPORTIONS DE GRAPHIQUES
+# ========================================================================================
 
-    Si le fichier est absent (ou invalide), retourne les valeurs par défaut.
-    """
+def load_chart_display_config(root: Path, preset: str | None = None) -> dict[str, Any]:
+    """Charge la configuration d'affichage depuis les fichiers YAML de configuration."""
     cfg = DEFAULT_CHART_DISPLAY_CONFIG.copy()
-    # Lecture depuis la charte définie dans pdf_presentation.yaml (si présente)
     presentation_cfg = load_pdf_presentation_raw_config(root)
     presentation_charts = (presentation_cfg.get("defaults") or {}).get("charte", {}).get("charts", {})
     if presentation_charts and "pie_width_ratio_base" in presentation_charts:
@@ -187,7 +198,7 @@ def load_chart_display_config(root: Path, preset: str | None = None) -> dict[str
 
 
 def compute_pdf_ratios(cfg: dict[str, Any]) -> dict[str, float]:
-    """Construit les ratios PDF finaux avec garde-fous."""
+    """Calcule tous les ratios réels appliqués aux graphiques PDF avec sécurité de bornage."""
     pdf_cfg = cfg.get("pdf", {})
     pie_base = _clamp_ratio(pdf_cfg.get("pie_width_ratio_base", THEMATIC_PIE_CHART_WIDTH_RATIO))
     chart_base = _clamp_ratio(pdf_cfg.get("chart_width_ratio_base", THEMATIC_CHART_WIDTH_RATIO))
@@ -266,7 +277,7 @@ def clamp_uniform_pie_ratio(
     max_key: str,
     fallback_key: str = "pie_base",
 ) -> float:
-    """Ratio PDF de base des camemberts, borné par min/max (global ou thématique)."""
+    """Borne le ratio d'un camembert entre un minimum et un maximum autorisé."""
     pie_min = float(chart_ratios.get(min_key, 0.70))
     pie_max = float(chart_ratios.get(max_key, 0.82))
     if pie_min > pie_max:
@@ -279,11 +290,7 @@ def resolve_reference_pie_display(
     chart_ratios: dict[str, float],
     pie_ratio_base: float,
 ) -> dict[str, float]:
-    """
-    Dimensions du camembert de référence (§2.2 « Résultats des contrôles », profil agrainage).
-
-    Utilisé pour harmoniser tous les camemberts des bilans détaillés (hors brochure).
-    """
+    """Retourne la configuration de référence du camembert principal pour harmoniser l'ensemble des figures."""
     width_mult = float(
         chart_ratios.get("thematique_sec22_resultats_pie_width_ratio_mult", 1.12)
     )
@@ -295,4 +302,4 @@ def resolve_reference_pie_display(
         "width_ratio": min(0.95, float(pie_ratio_base) * width_mult),
         "figure_scale": base_fs * figure_mult,
         "legend_fontsize": float(chart_ratios.get("legend_fontsize", 8.0)),
-    }
+    }

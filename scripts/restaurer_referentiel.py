@@ -15,7 +15,14 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+SCRIPT DE RESTAURATION : DECOMPRESSION DES REFERENTIELS (`restaurer_referentiel.py`)
+========================================================================================
+Ce script décompresse l'archive `pack_configuration_referentiels.zip` directement à la racine
+du projet pour rétablir ou mettre à jour les dossiers `ref/` et `data/`.
+========================================================================================
+"""
 import zipfile
 from pathlib import Path
 

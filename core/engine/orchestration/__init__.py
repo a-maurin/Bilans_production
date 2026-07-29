@@ -15,9 +15,16 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Package d'orchestration modulaire des profils et bilans."""
+"""
+========================================================================================
+MODULE : PACKAGE D'ORCHESTRATION DES PROFILS (`core/engine/orchestration/__init__.py`)
+========================================================================================
+Ce fichier d'initialisation sous-système ré-exporte les fonctions clés du chargeur de profils.
 
+Exports :
+  - `load_profile_config` : fonction principale de lecture et normalisation des profils YAML.
+========================================================================================
+"""
 from core.engine.orchestration.loader import (
     load_profile_config,
     _deep_merge_dicts,

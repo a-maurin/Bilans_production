@@ -15,7 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
+"""
+========================================================================================
+MODULE : GENERATEUR DES SECTIONS REGIONALES PDF (`sections_region.py`)
+========================================================================================
+Ce module est dédié à la génération des tableaux et graphiques d'analyse interdépartementale
+pour les bilans à l'échelle régionale (DR) ou des Brigades de Mission Interdépartementale (BMI).
 
+Rôles :
+  1. Génération des histogrammes comparatifs entre départements (localisations, opérations).
+  2. Construction des tableaux d'agrégation interdépartementale par domaine et thématique.
+  3. Rendu des graphiques camembert de répartition des procédures (PA, PEJ, PVe) entre départements.
+  4. Création des annexes régionales détaillées.
+========================================================================================
+"""
 import logging
 from pathlib import Path
 import pandas as pd

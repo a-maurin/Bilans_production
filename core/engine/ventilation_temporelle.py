@@ -15,9 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Règles de ventilation temporelle (mode ``auto``)."""
+"""
+========================================================================================
+MODULE : VENTILATION TEMPORELLE AUTOMATIQUE (`ventilation_temporelle.py`)
+========================================================================================
+Ce module détermine la maille temporelle d'analyse optimale (hebdomadaire, mensuelle,
+trimestrielle ou annuelle) en fonction de la durée de la période sélectionnée.
 
+Règles appliquées :
+  - Périodes ≤ 6 mois (183 jours) : découpage hebdomadaire.
+  - Périodes entre 6 mois et 2 ans : découpage mensuel.
+  - Périodes de 2 ans : découpage trimestriel.
+  - Périodes > 2 ans : découpage annuel.
+========================================================================================
+"""
 from __future__ import annotations
 
 # Bornes en jours (durée inclusive date_fin − date_deb).

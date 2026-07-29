@@ -1,3 +1,15 @@
+# ========================================================================================
+# PROFIL DE BILAN SYNTHESE : ACTIVITES PA / PJ (`synthese_activite_PA_PJ.yaml`)
+# ========================================================================================
+# Ce fichier régit le profil de bilan synthétique centré sur les suites Procédures Administratives (PA)
+# et Procédures d'Enquête Judiciaire (PEJ). Il s'agit d'une présentation différente des données par rapport au profil 'global'
+#
+# Explication des fonctionnalités :
+#   - `aggregation.adapter` : utilise le moteur d'agrégation dédié `run_synthese_aggregations`.
+#   - `pdf.adapter` : utilise le générateur de rapport PDF dédié `generate_synthese_pdf_report`.
+#   - `cartographie.fichiers` : intègre les 4 cartes synthétiques (Domaines, Usagers, Résultats, Procédures).
+# ========================================================================================
+
 schema_version: 2
 id: synthese_activite_PA_PJ
 label: Synthèse des activités PA / PJ

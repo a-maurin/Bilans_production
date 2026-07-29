@@ -17,6 +17,23 @@
  * de l'auteur original (Aguirre MAURIN).
  */
 
+/**
+ * ========================================================================================
+ * EXPLORATEUR CARTOGRAPHIQUE ET DASHBOARD INTERACTIF (`explorer.js`)
+ * ========================================================================================
+ * Ce fichier JavaScript orchestre l'interface dynamique de l'explorateur de données OFBilan.
+ *
+ * Fonctionnalités majeures :
+ *   1. Initialisation et contrôle de la carte interactive Leaflet (fond de carte OpenStreetMap,
+ *      couches de points de contrôle, géométries PNF / TUB, marqueurs personnalisés).
+ *   2. Construction et mise à jour dynamique des graphiques d'analyse statistique (Chart.js) :
+ *      résultats de contrôle, répartition par usagers, domaines et thématiques.
+ *   3. Filtrage en temps réel des données par période, périmètre géographique et mots-clés.
+ *   4. Gestion du tableau de données interactif (tri des colonnes, pagination, recherche).
+ *   5. Export des données filtrées vers Excel et génération de rapports cartographiques.
+ * ========================================================================================
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
     let isUnloading = false;
     window.addEventListener('beforeunload', () => {

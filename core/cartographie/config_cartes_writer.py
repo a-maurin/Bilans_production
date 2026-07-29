@@ -15,7 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+MODULE : GENERATEUR DE CODE PYTHON DE CONFIGURATION (`config_cartes_writer.py`)
+========================================================================================
+Ce module est responsable de la sérialisation (écriture sous forme de fichier source Python)
+des objets de configuration `GlobalConfig` vers le fichier `config_cartes.py`.
+
+Rôles principaux :
+  1. `serialize_config()` : convertit l'objet mémoire `GlobalConfig` en code Python valide.
+  2. `_layer_repr()` / `_profile_repr()` : génère la représentation textuelle des objets dataclass.
+  3. `write_config_file()` : enregistre physiquement le fichier sur le disque après modification via l'interface GUI.
+========================================================================================
+"""
 from pathlib import Path
 from typing import Dict
 

@@ -15,12 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Résolution des couches QGIS par rôle métier.
+========================================================================================
+MODULE : RESOLUTION DYNAMIQUE DES COUCHES SIG PAR ROLE METIER (`layer_resolver.py`)
+========================================================================================
+Ce module identifie dynamiquement les couches vectorielles dans le projet QGIS en se basant
+sur leur rôle métier (ex: points de contrôle, PVe, PEJ, PA, pochoir départemental) plutôt
+que sur leur nom de fichier exact.
 
-Permet de retrouver une couche dans le projet même si le nom exact a changé
-(ex. renommage `point_ctrl_20260205_wgs84` → `point_ctrl_20260505_wgs84`).
+Avantages pédagogiques :
+  Permet d'absorber automatiquement les mises à jour de données datées (ex: un fichier renommé
+  `point_ctrl_20260205_wgs84` devenant `point_ctrl_20260505_wgs84`) sans casser les scripts.
+========================================================================================
 """
 from __future__ import annotations
 

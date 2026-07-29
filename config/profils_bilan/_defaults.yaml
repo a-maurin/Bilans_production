@@ -1,3 +1,17 @@
+# ========================================================================================
+# VALEURS PAR DEFAUT DES PROFILS DE BILAN (`_defaults.yaml`)
+# ========================================================================================
+# Ce fichier définit le socle de configuration par défaut hérité par tous les profils YAML
+# de bilan (`agrainage.yaml`, `chasse.yaml`, `global.yaml`, `piegeage.yaml`, etc.).
+#
+# Rôles des blocs pour les non-spécialistes :
+#   - `pipeline` / `presentation_scope` : mode d'analyse par défaut (`thematic` ou `global`).
+#   - `aggregation` / `pdf` : adaptateurs système responsables des calculs et du rendu PDF.
+#   - `capabilities` : autorise le mixage en lot (`mix_batch`) ou la fusion combinée (`combine`).
+#   - `cartographie` : liste des cartes actives par défaut, type d'emprise et textes de cartouche.
+#   - `options` : paramètres interactifs utilisateur (ex: activation de l'analyse PNF).
+# ========================================================================================
+
 schema_version: 2
 pipeline: thematic
 presentation_scope: thematique

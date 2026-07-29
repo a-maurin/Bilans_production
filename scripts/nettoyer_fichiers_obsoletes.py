@@ -15,8 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-"""Script de nettoyage exhaustif des fichiers inutiles/obsolètes validés par l'utilisateur."""
+"""
+========================================================================================
+SCRIPT DE NETTOYAGE : PURGE DES TEMPORAIRES ET LOGS (`nettoyer_fichiers_obsoletes.py`)
+========================================================================================
+Ce script utilitaire supprime les fichiers temporaires, journaux de logs de debug, et réorganise
+les scripts batch Windows (`.bat`) dans le dossier `scripts/windows/`.
 
+Actions :
+  1. Suppression des logs temporaires (`geojson_error.log`, `serveur_error.log`).
+  2. Nettoyage du dossier temporaire de travail `tests/sandbox/`.
+  3. Déplacement ordonné des fichiers `.bat` de lancement.
+========================================================================================
+"""
 from pathlib import Path
 import shutil
 

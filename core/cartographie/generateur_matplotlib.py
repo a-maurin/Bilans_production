@@ -15,7 +15,21 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+MODULE : GENERATEUR CARTOGRAPHIQUE MATPLOTLIB / GEOPANDAS (`generateur_matplotlib.py`)
+========================================================================================
+Ce module sert de moteur cartographique de secours ("fallback"). Lorsque QGIS n'est pas
+installé ou qu'un interpréteur PyQGIS complet n'est pas disponible, ce composant prend
+le relais pour tracer une carte statistique via Matplotlib et GeoPandas.
+
+Fonctions principales :
+  1. `charger_couche_pochoir()` : charge le contour du département depuis les SHP/GeoJSON.
+  2. `tracer_carte()` : dessine le fond de carte et la géométrie départementale.
+  3. `tracer_cartouche()` : compose le cartouche latéral (titre, dates, charte OFB).
+  4. `exporter_carte_matplotlib()` : exporte l'image PNG au format A4 Paysage à 300 DPI.
+========================================================================================
+"""
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt

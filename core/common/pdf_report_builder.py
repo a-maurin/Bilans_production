@@ -15,12 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-PDFReportBuilder : classe commune pour générer des rapports PDF OFB.
+========================================================================================
+MODULE : CONSTRUCTEUR DE RAPPORTS PDF INSTITUTIONNELS (`pdf_report_builder.py`)
+========================================================================================
+Ce module définit la classe maîtresse `PDFReportBuilder` qui orchestre l'assemblage
+des documents PDF de l'OFB via la bibliothèque ReportLab (Platypus).
 
-Factorisation du code de génération PDF dupliqué dans les scripts
-analyse_global.py, analyse_agrainage.py et analyse_chasse.py.
+Rôles principaux :
+  1. Configuration du gabarit de document (couverture, en-têtes, pieds de page, filigranes).
+  2. Gestion de la file d'attente d'affichage (`story`) et placement intelligent des sauts de page.
+  3. Intégration dynamique du sommaire interactif avec liens vers les signets.
+  4. Construction sécurisée des tableaux, graphiques, cartes et blocs d'avertissement.
+  5. Empêchement des orphelins (titres isolés en bas de page) via la mécanique `KeepTogether`.
+========================================================================================
 """
 from __future__ import annotations
 
@@ -83,22 +91,21 @@ from core.common.pdf_presentation_config import (
 )
 from core.common.pdf_utils import key_figures_table, key_figures_table_rows, ofb_table, ofb_table_wide
 
-# Largeur relative (sur la zone utile du PDF) pour les graphiques matplotlib
-# des bilans thématiques — barres, courbes, etc.
+# Ratios de largeur des visuels dans les pages PDF (relatifs aux marges utiles)
 THEMATIC_CHART_WIDTH_RATIO = 0.72
-# Camemberts : plus compacts que les barres (équilibre visuel), calibrés pour A4 +
-# export matplotlib un peu plus dense (dpi / polices dans chart_pie) afin de rester nets à l’écran.
 THEMATIC_PIE_CHART_WIDTH_RATIO = 0.34
 
-# Marge réservée au titre de section 5 + espacements dans un KeepTogether cartes.
+# Réserves de hauteur et d'espacements pour l'agencement cartographique
 _MAPS_SECTION_RESERVE_PT = 28 * mm
 _MAPS_VERTICAL_GAP_PT = 2 * mm
 _MAPS_HORIZONTAL_GAP_PT = 4 * mm
-# Carte seule : fraction < 1 pour éviter une coupe visuelle au bord droit (arrondis / centrage).
 _MAP_PAGE_WIDTH_FRACTION = 0.90
-# Retrait supplémentaire sur la largeur du bitmap dans la cellule (pt) — marge mécanique RL.
 _MAP_DRAW_INSET_PT = 4.0
 
+
+# ========================================================================================
+# CALCULS DE DIMENSIONNEMENT ET D'AGENCEMENT DES CARTES
+# ========================================================================================
 
 def compute_stacked_maps_width(
     avail_w: float,
@@ -109,7 +116,7 @@ def compute_stacked_maps_width(
     vertical_gap_pt: float = _MAPS_VERTICAL_GAP_PT,
     reserve_pt: float = _MAPS_SECTION_RESERVE_PT,
 ) -> float:
-    """Largeur pour empiler des cartes sans dépasser la hauteur utile d'une page."""
+    """Calcule la largeur optimale pour empiler verticalement plusieurs cartes sans déborder de la page."""
     max_w = avail_w * width_fraction
     budget = frame_height - reserve_pt
     total_ratio = sum(max(0.0, r) for r in aspect_ratios)
@@ -128,7 +135,7 @@ def compute_side_by_side_maps_width(
     horizontal_gap_pt: float = _MAPS_HORIZONTAL_GAP_PT,
     reserve_pt: float = _MAPS_SECTION_RESERVE_PT,
 ) -> float:
-    """Largeur d'une colonne pour deux cartes côte à côte sur une page."""
+    """Calcule la largeur maximale d'une carte dans un affichage à deux colonnes côte à côte."""
     col_w_max = (avail_w - horizontal_gap_pt) / 2.0
     budget = frame_height - reserve_pt
     if not aspect_ratios or budget <= 0:
@@ -140,8 +147,12 @@ def compute_side_by_side_maps_width(
     return min(col_w_max, w_fit)
 
 
+# ========================================================================================
+# CLASSE PRINCIPALE DE GENERATION PDF DE L'OFB
+# ========================================================================================
+
 class PDFReportBuilder:
-    """Builds an OFB-branded PDF report incrementally."""
+    """Générateur pas-à-pas du document PDF institutionnel OFB."""
 
     def __init__(
         self,
@@ -177,7 +188,7 @@ class PDFReportBuilder:
         )
         typography_cfg = self._charte.get("typography", {})
         self.styles = _get_styles(typography_config=typography_cfg)
-        # Titres : espace minimal en tête de bloc (le cadre démarre déjà sous l'en-tête page).
+
         self.styles["Heading1"] = ParagraphStyle(
             "OFBH1_compact",
             parent=self.styles["Heading1"],
@@ -267,23 +278,23 @@ class PDFReportBuilder:
         )
 
         self.story: list = []
-        # Titre de section en attente : gardé avec le prochain bloc (tableau, chiffres clés…)
-        # pour éviter un titre seul en bas de page et le tableau en haut de la suivante.
         self._pending_section: Optional[List] = None
         self._toc_allowed_anchors: set[str] = set()
         self._figure_counter: int = 0
 
     @property
     def tmp_dir(self) -> Path:
+        """Répertoire temporaire pour les images et artefacts générés lors du build."""
         return self._tmp_dir
 
     def begin_content_pages(self) -> None:
-        """Contenu sur le gabarit Normal, sans page de garde ni sommaire."""
+        """Bascule l'assemblage vers les pages de contenu courantes (template Normal)."""
         self.story.append(NextPageTemplate("Normal"))
 
-    # ------------------------------------------------------------------
-    # Page backgrounds
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # GESTION DES FONDS DE PAGE, EN-TETES ET PIEDS DE PAGE
+    # ========================================================================================
+
     def _title_page_banner_height_pt(self) -> float:
         title_cfg = self._charte.get("title_page", {}) if isinstance(self._charte, dict) else {}
         try:
@@ -292,7 +303,7 @@ class PDFReportBuilder:
             return 42.0 * mm
 
     def _draw_internal_diffusion_notice_on_title_page(self, canvas) -> None:
-        """Bandeau discret sous le bandeau Marianne (diffusion interne uniquement)."""
+        """Dessine l'encadré de mention restreinte (diffusion interne) sur la couverture."""
         if not should_show_internal_diffusion_title_notice(self._diffusion):
             return
         cfg = self._internal_diffusion_notice
@@ -328,6 +339,7 @@ class PDFReportBuilder:
         canvas.restoreState()
 
     def _title_page_bg(self, canvas, doc):
+        """Trace le fond décoratif et les logos de la page de garde."""
         title_cfg = self._charte.get("title_page", {}) if isinstance(self._charte, dict) else {}
         assets = self._charte.get("assets", {}) if isinstance(self._charte, dict) else {}
         try:
@@ -384,12 +396,10 @@ class PDFReportBuilder:
         return assets if isinstance(assets, dict) else {}
 
     def _footer_text_zone_top_pt(self) -> float:
-        """Sommet réservé au texte footer_line1/2 (coordonnées inchangées)."""
         y_foot = 8 * mm
         return y_foot + 12 + 7
 
     def _filigrane_image_size_pt(self, path: Path) -> tuple[float, float]:
-        """Retourne (largeur, hauteur) en pt pour le filigrane bas-droite."""
         cfg = self._content_page_cfg()
         align = str(cfg.get("filigrane_align", "bottom_right")).strip().lower()
         ratio_raw = cfg.get("filigrane_height_ratio")
@@ -425,7 +435,7 @@ class PDFReportBuilder:
         return width_pt, height_pt
 
     def _draw_content_page_watermark(self, canvas) -> None:
-        """Filigrane unique bas-droite (image3), sans doublon footer_deco."""
+        """Trace le filigrane OFB discret en bas de page."""
         cfg = self._content_page_cfg()
         if not cfg.get("watermark_enabled", True):
             return
@@ -494,6 +504,7 @@ class PDFReportBuilder:
         )
 
     def _header_footer(self, canvas, doc):
+        """Dessine l'en-tête (ligne de séparation + titre) et le pied de page (mentions + numéro de page)."""
         canvas.saveState()
         self._draw_content_page_watermark(canvas)
         self._draw_content_page_footer_deco(canvas)
@@ -514,7 +525,6 @@ class PDFReportBuilder:
                 canvas.drawString(MARGIN_LEFT, y_text, line)
                 y_text += line_step
 
-
         y_foot = 8 * mm
         canvas.setFont(f"{FONT_FAMILY}", 7)
         canvas.setFillColor(rl_colors.HexColor(COLOR_SECONDARY))
@@ -527,9 +537,10 @@ class PDFReportBuilder:
         canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot + 3, f"{doc.page}")
         canvas.restoreState()
 
-    # ------------------------------------------------------------------
-    # Title page
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # CONSTRUCTION DE LA PAGE DE COUVERTURE
+    # ========================================================================================
+
     def add_title_page(
         self,
         title_lines: List[str],
@@ -537,7 +548,7 @@ class PDFReportBuilder:
         subtitle: str = "",
         title_page_config: dict | None = None,
     ) -> None:
-        """Add a title page (uses TitlePage template)."""
+        """Génère la page de couverture du bilan avec les titres, sous-titres et la période."""
         s = self.styles
         cfg = title_page_config or {}
 
@@ -631,16 +642,16 @@ class PDFReportBuilder:
         self.story.append(NextPageTemplate("Normal"))
         self.story.append(PageBreak())
 
-    # ------------------------------------------------------------------
-    # Table of contents
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # TABLE DES MATIERES ET STRUCTURATION DES SECTIONS
+    # ========================================================================================
+
     def add_toc(self, sections: List[Tuple[str, str]]) -> None:
-        """Add a table of contents with page numbers."""
+        """Génère la table des matières dynamique avec les liens d'ancre vers chaque section."""
         s = self.styles
         self._toc_allowed_anchors = {a for a, _ in sections}
         self.story.append(Paragraph("Sommaire", s["Title"]))
         self.story.append(Spacer(1, 1 * mm))
-        # dotsMinLevel=0 : pointillés aussi pour les entrées de niveau principal (1., 2., …).
         toc = TableOfContents(dotsMinLevel=0)
         toc.levelStyles = [
             ParagraphStyle(
@@ -671,9 +682,6 @@ class PDFReportBuilder:
         self.story.append(toc)
         self.story.append(PageBreak())
 
-    # ------------------------------------------------------------------
-    # Section header
-    # ------------------------------------------------------------------
     def add_section(
         self,
         anchor: str,
@@ -685,6 +693,7 @@ class PDFReportBuilder:
         start_on_new_page: bool = False,
         append_to_pending: bool = False,
     ) -> None:
+        """Ajoute un titre de chapitre ou de sous-section avec mise en attente pour éviter les titres orphelins."""
         if self._pending_section is not None and not append_to_pending:
             for item in self._pending_section:
                 if hasattr(item, "keepWithNext"):
@@ -715,29 +724,19 @@ class PDFReportBuilder:
             self._pending_section = section_flowables
 
     def add_keep_together_block(self, flowables: List) -> None:
-        """
-        Enchaîne le titre de section en attente (s'il y en a un) avec des flowables
-        dans un seul ``KeepTogether`` (ex. section 2.4 : tableau + graphiques sur une page).
-        """
+        """Force le maintien d'un groupe d'éléments sur une même page."""
         self._append_with_pending(flowables, keep_together=True)
 
     def _should_keep_block_together(self, flowables: List) -> bool:
-        """Heuristique anti-pages vides: éviter KeepTogether sur blocs lourds.
-
-        Refuse le KeepTogether lorsque la hauteur estimée du bloc dépasse 40 %
-        de la zone utile (avail_h), pour éviter qu'un bloc trop grand ne soit
-        poussé entièrement sur la page suivante en laissant la précédente vide.
-        """
+        """Vérifie si un bloc peut être englobé dans un KeepTogether sans risquer de créer une page vide."""
         if not flowables:
             return False
         table_count = sum(1 for f in flowables if isinstance(f, Table))
         image_count = sum(1 for f in flowables if isinstance(f, RLImage))
-        # Jamais KeepTogether sur un bloc avec beaucoup d'images ou de tableaux
         if image_count > 2:
             return False
         if table_count > 1:
             return False
-        # Estimation rapide de la hauteur du bloc
         estimated_h = self._estimate_block_height(flowables)
         max_keep_h = self.avail_h * 0.40
         if estimated_h > max_keep_h:
@@ -745,7 +744,7 @@ class PDFReportBuilder:
         return True
 
     def _estimate_block_height(self, flowables: List) -> float:
-        """Estimation rapide de la hauteur d'un bloc de flowables (en points)."""
+        """Estime approximativement la hauteur verticale d'un ensemble d'éléments."""
         total = 0.0
         for f in flowables:
             if isinstance(f, Spacer):
@@ -753,47 +752,44 @@ class PDFReportBuilder:
             elif isinstance(f, RLImage):
                 total += getattr(f, 'drawHeight', 0) or getattr(f, '_height', 150)
             elif isinstance(f, Table):
-                # Wrap pour obtenir la taille réelle
                 try:
                     w_h = f.wrap(self.avail_w, self.avail_h)
                     total += w_h[1]
                 except Exception:
-                    total += 80  # fallback
+                    total += 80
             elif isinstance(f, Paragraph):
                 try:
                     w_h = f.wrap(self.avail_w, self.avail_h)
                     total += w_h[1]
                 except Exception:
-                    total += 18  # fallback ~1 ligne
+                    total += 18
             elif isinstance(f, KeepTogether):
-                # Recurse into nested KeepTogether
                 inner = getattr(f, '_content', []) or getattr(f, '_flowables', [])
                 if inner:
                     total += self._estimate_block_height(list(inner))
                 else:
-                    total += 100  # fallback
+                    total += 100
             else:
-                total += 20  # fallback pour flowable inconnu
+                total += 20
         return total
 
     @staticmethod
     def _block_has_local_heading_with_chart(block: List) -> bool:
-        """Bloc titre local + graphique (KeepTogether image) : pas de fusion monolithique."""
         if not block or not isinstance(block[0], Paragraph):
             return False
         return any(isinstance(f, KeepTogether) for f in block)
 
     def _append_with_pending(self, block: List, *, keep_together: bool) -> None:
-        """Ajoute un bloc en gérant le titre pending avec KeepTogether optionnel."""
+        """Injecte le bloc dans la story en déversant la section en attente."""
         has_pending = self._pending_section is not None
         pending: List = list(self._pending_section or [])
         if has_pending:
             self._pending_section = None
-            
+
         merged: List = pending + block
         if not merged:
             return
-            
+
         if (
             keep_together
             and self._should_keep_block_together(merged)
@@ -802,35 +798,18 @@ class PDFReportBuilder:
             self.story.append(KeepTogether(merged))
             return
 
-        # Règle stricte: un titre (section/sous-section ou titre local de bloc)
-        # reste lié au premier contenu afférent, même en pagination souple.
-        #
-        # Stratégie à deux niveaux :
-        #  1. Tenter un KeepTogether sur le sous-bloc minimal (pending + titre local
-        #     + premier contenu réel, typiquement titre+caption+table sans image) —
-        #     ce sous-bloc est souvent suffisamment petit pour tenir dans un KeepTogether,
-        #     même quand le bloc complet (avec image) le dépasse.
-        #  2. Si même ce sous-bloc est trop grand, revenir à keepWithNext sur les
-        #     paragraphes du préfixe (dernier recours, moins fiable mais sans page vide).
         attach_count = self._leading_title_chunk_len(block)
         if not keep_together:
-            # Si on ne veut pas keep_together (ex: tableau long), on ne met pas le contenu réel dans le préfixe
             attach_count = 0
             while attach_count < len(block) and isinstance(block[attach_count], (Paragraph, Spacer)):
                 attach_count += 1
-                
-        prefix = pending + block[:attach_count]
 
-        # On vérifie si le préfixe contient du vrai contenu (pas juste Titre + Spacer)
+        prefix = pending + block[:attach_count]
         has_real_content = any(not isinstance(item, (Paragraph, Spacer)) for item in prefix)
 
         if keep_together and prefix and has_real_content and self._should_keep_block_together(prefix):
-            # Le sous-bloc titre+table tient dans un KeepTogether → cohérence garantie
             self.story.append(KeepTogether(prefix))
         else:
-            # Dernier recours (ou keep_together=False, ou préfixe vide de vrai contenu) :
-            # CondPageBreak(150) pour garantir le collage titre/contenu sans déclencher
-            # le bug de saut de page de ReportLab sur les grands tableaux.
             self.story.append(CondPageBreak(150))
             for item in prefix:
                 if hasattr(item, 'keepWithNext'):
@@ -840,32 +819,24 @@ class PDFReportBuilder:
         self.story.extend(block[attach_count:])
 
     def _leading_title_chunk_len(self, block: List) -> int:
-        """
-        Taille minimale d'un préfixe à garder ensemble:
-        - titre local (Paragraph) + spacers immédiats + premier contenu réel TEXT/TABLE,
-        - mais JAMAIS au-delà d'une image (RLImage) ou KeepTogether (qui contient typiquement
-          une image + légende) : ces blocs lourds ne sont pas inclus dans le préfixe du titre
-          afin d'éviter de gonfler le sous-bloc et de provoquer des sauts de page.
-        - sinon au moins le premier élément.
-        """
-        # Types considérés comme "lourds" — ne pas les inclure dans le préfixe du titre
         _HEAVY_TYPES = (RLImage, KeepTogether)
 
         if not block:
             return 0
         if not isinstance(block[0], Paragraph):
-            # Le premier élément est déjà lourd ou non-Paragraph → ne lier que l'ancre (pending)
             return 0 if isinstance(block[0], _HEAVY_TYPES) else 1
         idx = 1
         while idx < len(block) and isinstance(block[idx], Spacer):
             idx += 1
-        # Vérifier que le premier "contenu réel" n'est pas une image/KeepTogether lourd
         if idx < len(block):
             if isinstance(block[idx], _HEAVY_TYPES):
-                # Ne pas inclure l'image dans le préfixe — s'arrêter avant
-                return idx  # titre + spacers, sans le premier contenu lourd
-            return idx + 1  # titre + spacers + premier contenu texte/tableau
+                return idx
+            return idx + 1
         return 1
+
+    # ========================================================================================
+    # COMPOSANTS VISUELS (CHIFFRES CLES, TABLEAUX ET ENCADRES)
+    # ========================================================================================
 
     def add_heading_chart_table_keep_together(
         self,
@@ -881,10 +852,7 @@ class PDFReportBuilder:
         header_font_size: float | None = None,
         trailing_spacer_mm: float = 4.0,
     ) -> None:
-        """
-        Sous-titre + graphique + tableau dans un seul ``KeepTogether`` pour éviter qu'un
-        saut de page n'isole le titre du contenu (cas fréquent en fin de page).
-        """
+        """Combine un titre, un graphique et un tableau dans un bloc insécable."""
         block: List = []
         if str(heading_text or "").strip():
             style_key = heading_style if heading_style in self.styles else "Heading2"
@@ -922,11 +890,7 @@ class PDFReportBuilder:
             keep_together=not split_by_row,
         )
 
-    # ------------------------------------------------------------------
-    # Key figures
-    # ------------------------------------------------------------------
     def extend_pending(self, flowables: List) -> None:
-        """Étend le bloc titre en attente ; sinon ajoute au story (comportement dégradé)."""
         if not flowables:
             return
         if self._pending_section is not None:
@@ -942,7 +906,7 @@ class PDFReportBuilder:
         density: str = "auto",
         merge_with_next: bool = False,
     ) -> None:
-        """figures = [(value_str, label_str), ...]"""
+        """Ajoute un bandeau horizontal de chiffres clés (ex: [(Valeur, Libellé)])."""
         if not figures:
             return
         kf_table = key_figures_table(
@@ -965,7 +929,7 @@ class PDFReportBuilder:
         *,
         spacer_after_mm: float = 2.0,
     ) -> None:
-        """Chiffres clés sur plusieurs lignes ; s'ajoute au titre de section en attente si présent."""
+        """Ajoute plusieurs rangées de chiffres clés."""
         if not figure_rows:
             return
         kf_table = key_figures_table_rows(figure_rows, self.styles, table_width=self.avail_w)
@@ -977,7 +941,6 @@ class PDFReportBuilder:
             self.story.append(spacer)
 
     def append_pending_paragraph(self, text: str, style: str = "BodyText") -> None:
-        """Paragraphe ajouté au bloc en attente (sans flush immédiat)."""
         para = Paragraph(text, self.styles[style])
         spacer = Spacer(1, SPACING_XXS)
         if self._pending_section is not None:
@@ -1032,6 +995,7 @@ class PDFReportBuilder:
         style: str = "BodyText",
         spacer_after_mm: float = 2.0,
     ) -> None:
+        """Génère un bloc mis en valeur avec un fond de couleur institutionnelle (Callout Box)."""
         block = self._build_callout_box_block(
             text,
             title=title,
@@ -1073,7 +1037,6 @@ class PDFReportBuilder:
         *,
         spacer_after_mm: float = 1.0,
     ) -> None:
-        """Image ajoutée au bloc en attente (sans flush immédiat)."""
         if not Path(path).exists():
             return
         w = self.avail_w * width_ratio
@@ -1085,11 +1048,11 @@ class PDFReportBuilder:
             ratio = 0.65
         img = RLImage(str(path), width=w, height=w * ratio)
         img.hAlign = "CENTER"
-        
+
         self._figure_counter += 1
         fig_text = f"Figure {self._figure_counter}"
         fig_paragraph = Paragraph(fig_text, self.styles.get("FigureCaption", self.styles["BodySmall"]))
-        
+
         block = [
             KeepTogether([img, fig_paragraph]),
             Spacer(1, float(spacer_after_mm) * mm)
@@ -1109,7 +1072,6 @@ class PDFReportBuilder:
         col_aligns: Optional[list] = None,
         spacer_after_mm: float = 1.5,
     ) -> None:
-        """Tableau ajouté au bloc en attente (sans flush immédiat)."""
         block: List = []
         if caption:
             block.append(Paragraph(caption, self.styles["TableCaption"]))
@@ -1138,7 +1100,6 @@ class PDFReportBuilder:
         *,
         merge_with_next: bool = False,
     ) -> None:
-        """Bandeau de chiffres clés + tableau dans un même KeepTogether pour éviter un débordement."""
         block: List = []
         if figures:
             kf_table = key_figures_table(figures, self.styles)
@@ -1164,7 +1125,6 @@ class PDFReportBuilder:
         *,
         compact: bool = False,
     ) -> List:
-        """Bandeau + tableaux (flowables) sans toucher au story ni au pending."""
         block: List = []
         if figures:
             kf_table = key_figures_table(figures, self.styles)
@@ -1196,12 +1156,6 @@ class PDFReportBuilder:
         compact: bool = False,
         merge_with_next: bool = False,
     ) -> None:
-        """Bandeau + plusieurs tableaux dans un même KeepTogether (même page).
-        tables = [{"data_rows": ..., "caption": ..., "col_widths": ..., "col_aligns": ...}, ...]
-        compact=True : espacements verticaux réduits (ex. section PEJ sur une page).
-        merge_with_next=True : garde le titre + bandeau + tableaux dans ``_pending_section``
-        jusqu'au prochain ``add_table`` (ex. détail PA / PEJ).
-        """
         block = self._build_key_figures_and_tables_block(figures, tables, compact=compact)
         if not block:
             return
@@ -1222,13 +1176,6 @@ class PDFReportBuilder:
         zone_table: dict | None = None,
         compact: bool = True,
     ) -> None:
-        """
-        Bandeau de chiffres clés + tableaux (ex. 3.1 PVe).
-
-        Titres de section + bandeau (+ intro éventuelle) dans un ``KeepTogether`` ;
-        chaque tableau avec légende dans son propre ``KeepTogether`` (légende + début
-        du tableau sur la même page, coupure inter-lignes si le tableau est long).
-        """
         if not figures and not intro_table and not table_specs and not zone_table:
             return
         gap_kf = 2 * mm if compact else 4 * mm
@@ -1239,7 +1186,7 @@ class PDFReportBuilder:
         if self._pending_section is not None:
             header.extend(self._pending_section)
             self._pending_section = None
-            
+
         if figures:
             header.extend([key_figures_table(figures, self.styles), Spacer(1, gap_kf)])
 
@@ -1283,16 +1230,14 @@ class PDFReportBuilder:
                 gap_after_mm=gap_after_tbl_mm,
             )
 
-    # ------------------------------------------------------------------
-    # Tables
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # RENDER ET INSERTION DES TABLEAUX DE DONNEES
+    # ========================================================================================
+
     def _table_uses_split_by_row(self, data_rows: list) -> bool:
         if bool(self._tables_layout.get("split_by_row")):
             return True
         n_rows = len(data_rows) if data_rows else 0
-        # Seuil minimal robuste : même si la config n'indique pas de split,
-        # certains tableaux (ex. NATINF détaillés) plantent si un tableau de
-        # ~13 lignes ne peut pas se scinder entre deux pages.
         if n_rows > 12:
             return True
         try:
@@ -1323,7 +1268,6 @@ class PDFReportBuilder:
         gap_cap_mm: float = 1.0,
         gap_after_mm: float = 2.0,
     ) -> None:
-        """Légende + tableau : même page au début ; tableau long coupé entre les lignes."""
         if not data_rows:
             return
         split_by_row = self._table_uses_split_by_row(data_rows)
@@ -1340,13 +1284,12 @@ class PDFReportBuilder:
             )
         )
         block.append(Spacer(1, float(gap_after_mm) * mm))
-        # Si le tableau doit être coupé entre les lignes, ne pas l'enfermer dans KeepTogether
-        # (sinon LayoutError si le tableau dépasse la hauteur utile d'une page).
         if split_by_row:
             for el in block:
                 self.story.append(el)
         else:
             self.story.append(KeepTogether(block))
+
     def add_table(
         self,
         data_rows: list,
@@ -1365,6 +1308,7 @@ class PDFReportBuilder:
         max_cell_chars_before_split: int | None = None,
         keep_caption_with_table: bool = True,
     ) -> None:
+        """Insère un tableau formaté dans le rapport PDF avec gestion dynamique des coupures de page."""
         block: List = []
         if caption:
             block.append(Paragraph(caption, self.styles["TableCaption"]))
@@ -1464,7 +1408,7 @@ class PDFReportBuilder:
         use_keep = (bool(caption) and keep_caption_with_table) or keep_together
         if split_by_row:
             use_keep = False
-            
+
         if self._pending_section is not None:
             self._append_with_pending(block, keep_together=use_keep)
         elif use_keep and self._should_keep_block_together(block):
@@ -1487,10 +1431,6 @@ class PDFReportBuilder:
         image_path: Optional[Path] = None,
         image_width_ratio: float = THEMATIC_CHART_WIDTH_RATIO,
     ) -> None:
-        """
-        Titre de section éventuellement en attente + légende de tableau + tableau
-        + graphique PNG dans un seul ``KeepTogether`` (ex. section VII PNF).
-        """
         block: List = []
         if table_caption:
             block.append(Paragraph(table_caption, self.styles["TableCaption"]))
@@ -1528,10 +1468,6 @@ class PDFReportBuilder:
         gap_between_mm: float = 2.0,
         trailing_spacer_mm: float = 2.0,
     ) -> None:
-        """
-        Enchaîne plusieurs tableaux (légendes incluses) dans un seul ``KeepTogether``
-        pour éviter un saut de page entre eux (ex. détail PVe + analyse NATINF en 3.1).
-        """
         if not table_specs:
             return
         block: List = []
@@ -1565,9 +1501,10 @@ class PDFReportBuilder:
             keep_together=self._should_keep_block_together(block),
         )
 
-    # ------------------------------------------------------------------
-    # Images / Charts
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # INTEGRATION DES IMAGES ET CARTES GEOGRAPHIQUES
+    # ========================================================================================
+
     def add_image(
         self,
         path: Path,
@@ -1576,13 +1513,11 @@ class PDFReportBuilder:
         *,
         spacer_after_mm: float = 2.0,
     ) -> None:
+        """Insère une image avec sa légende numerotée."""
         if not Path(path).exists():
             return
-        # Largeur maximale disponible pour l'image
         w = self.avail_w * width_ratio
 
-        # Respecter le ratio réel du PNG si possible, pour éviter les effets
-        # de graphiques "écrasés" dans le PDF.
         try:
             with PILImage.open(str(path)) as im:
                 width_px, height_px = im.size
@@ -1595,12 +1530,12 @@ class PDFReportBuilder:
 
         img = RLImage(str(path), width=w, height=w * ratio)
         img.hAlign = "CENTER"
-        
+
         self._figure_counter += 1
         fig_text = f"Figure {self._figure_counter}"
         if caption:
             fig_text += f" : {caption}"
-            
+
         fig_paragraph = Paragraph(fig_text, self.styles.get("FigureCaption", self.styles["BodySmall"]))
         block = [KeepTogether([img, fig_paragraph])]
         block.append(Spacer(1, float(spacer_after_mm) * mm))
@@ -1610,7 +1545,6 @@ class PDFReportBuilder:
         )
 
     def _map_image_holder_table(self, path: Path, map_cell_w: float) -> Table:
-        """Table 1×1 largeur fixe : centre l'image et évite un débordement perçu au bord du cadre."""
         draw_w = max(1.0, float(map_cell_w) - _MAP_DRAW_INSET_PT)
         img = self._scaled_image_flowable(Path(path), draw_w)
         holder = Table([[img]], colWidths=[map_cell_w])
@@ -1630,14 +1564,13 @@ class PDFReportBuilder:
         return holder
 
     def _map_display_width(self, path: Path) -> float:
-        """Largeur pour une carte seule tenant dans la hauteur utile (réserve titre / légende)."""
         ratio = self._image_aspect_ratio(path)
         return compute_stacked_maps_width(
             self.avail_w, self.avail_h, [ratio], width_fraction=_MAP_PAGE_WIDTH_FRACTION
         )
 
     def add_map(self, path: Path, caption: str = "") -> None:
-        """Ajoute une carte dimensionnée pour occuper au mieux la zone utile de la page."""
+        """Insère une carte cartographique dimensionnée pour occuper l'espace utile."""
         if not Path(path).exists():
             return
         map_cell_w = self._map_display_width(path)
@@ -1676,18 +1609,13 @@ class PDFReportBuilder:
         layout: str = "vertical",
         captions: list[str] | None = None,
     ) -> None:
-        """
-        Ajoute toutes les cartes PNG en les superposant par lot de 2 maximum par page.
-        """
+        """Insère un ensemble de cartes en gérant leur répartition sur plusieurs pages."""
         existing = [Path(p) for p in paths if p and Path(p).exists()]
         if not existing:
             return
-            
+
         caps = list(captions) if captions else []
-        
-        # --- Calcul de la largeur globale pour toutes les cartes ---
-        # On calcule map_cell_w en se basant sur le premier lot pour que toutes les cartes 
-        # (même celles sur les pages suivantes) aient exactement la même taille.
+
         eff_avail_h_global = self.avail_h
         if self._pending_section is not None:
             pending_h = self._estimate_block_height(self._pending_section)
@@ -1697,15 +1625,14 @@ class PDFReportBuilder:
         global_map_cell_w = compute_stacked_maps_width(
             self.avail_w, eff_avail_h_global, first_chunk_ratios, width_fraction=_MAP_PAGE_WIDTH_FRACTION
         )
-        
-        # Parcourir les cartes par lots de 2 maximum
+
         for chunk_idx in range(0, len(existing), 2):
             if chunk_idx > 0:
                 self.add_page_break()
-                
+
             chunk_paths = existing[chunk_idx:chunk_idx+2]
             chunk_caps = caps[chunk_idx:chunk_idx+2]
-            
+
             map_cell_w = global_map_cell_w
 
             block: List = []
@@ -1718,19 +1645,21 @@ class PDFReportBuilder:
                     block.append(Paragraph(f"<i>{cap}</i>", self.styles["BodySmall"]))
                 if i < len(chunk_paths) - 1:
                     block.append(Spacer(1, SPACING_M))
-                    
+
             block.append(Spacer(1, SPACING_S))
-            
+
             if chunk_idx == 0 and self._pending_section is not None:
                 self.story.append(KeepTogether(self._pending_section + block))
                 self._pending_section = None
             else:
                 self.story.append(KeepTogether(block))
 
-    # ------------------------------------------------------------------
-    # Text
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # PARAGRAPHES, ESPACEMENTS ET ELEMENTS DE TEXTE
+    # ========================================================================================
+
     def add_paragraph(self, text: str, style: str = "BodyText") -> None:
+        """Ajoute un paragraphe de texte dans le fil d'impression."""
         para = Paragraph(text, self.styles[style])
         spacer = Spacer(1, SPACING_XXS)
         if self._pending_section is not None:
@@ -1747,18 +1676,18 @@ class PDFReportBuilder:
             self.story.append(spacer)
 
     def add_spacer(self, height_mm: float = 6) -> None:
+        """Insère un espace vertical personnalisé."""
         self.story.append(Spacer(1, height_mm * mm))
 
     def add_page_break(self) -> None:
+        """Force un saut de page manuel."""
         if self._pending_section is not None:
             self.story.extend(self._pending_section)
             self._pending_section = None
         self.story.append(PageBreak())
 
-    # ------------------------------------------------------------------
-    # Methodology
-    # ------------------------------------------------------------------
     def add_methodology(self, html_text: str) -> None:
+        """Génère la section explicative méthodologique."""
         block = [
             Paragraph("Méthodologie", self.styles["Heading2"]),
             Spacer(1, SPACING_S),
@@ -1772,9 +1701,6 @@ class PDFReportBuilder:
             for el in block:
                 self.story.append(el)
 
-    # ------------------------------------------------------------------
-    # Glossary
-    # ------------------------------------------------------------------
     def add_glossary(
         self,
         rows: List[List[str]],
@@ -1782,7 +1708,7 @@ class PDFReportBuilder:
         col_widths: Optional[list] = None,
         col_aligns: Optional[list] = None,
     ) -> None:
-        """rows = [["Terme", "Définition"], ...]  (first row = header)"""
+        """Génère le tableau du glossaire (définitions et sigles)."""
         if not rows:
             return
         tbl = ofb_table(rows, col_widths=col_widths, col_aligns=col_aligns)
@@ -1799,16 +1725,16 @@ class PDFReportBuilder:
             for el in block:
                 self.story.append(el)
 
-    # ------------------------------------------------------------------
-    # Build
-    # ------------------------------------------------------------------
+    # ========================================================================================
+    # COMPILATION ET GENERATION FINALE DU PDF
+    # ========================================================================================
+
     def build(self) -> Path:
-        """Build the PDF and clean up the temp directory. Returns pdf_path."""
+        """Assemble l'ensemble du document PDF sur le disque et retourne le chemin d'accès final."""
         if self._pending_section is not None:
             self.story.extend(self._pending_section)
             self._pending_section = None
-            
-        # Debug story flowables
+
         try:
             debug_path = r"C:\Users\aguirre.maurin\.gemini\antigravity\brain\3fa1562d-d681-494a-bf8c-f533542965b2\scratch\story_flowables.txt"
             with open(debug_path, "w", encoding="utf-8") as f:
@@ -1816,17 +1742,11 @@ class PDFReportBuilder:
                     f.write(f"{idx}: {type(flowable).__name__}\n")
                     if hasattr(flowable, "_content"):
                         f.write(f"  Nested: {[type(x).__name__ for x in flowable._content]}\n")
-                    # If it has text or other info
                     if hasattr(flowable, "text"):
                         f.write(f"  Text: {flowable.text[:100]}\n")
-                    # If it's a KeepTogether or has Paragraphs inside
                     if type(flowable).__name__ == "KeepTogether":
                         for sub in getattr(flowable, "_content", []):
                             if hasattr(sub, "text"):
-                                f.write(f"    SubText: {sub.text[:100]}\n")
-        except Exception as e:
-            pass
-            
         try:
             self.doc.multiBuild(self.story)
         finally:

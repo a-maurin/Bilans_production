@@ -15,9 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Rendu PDF du profil global (moteur unique)."""
+"""
+========================================================================================
+MODULE : RENDU PDF DU PROFIL GLOBAL (`generation_pdf_profil.py`)
+========================================================================================
+Ce module orchestre l'assemblage et le rendu du rapport PDF principal (Bilan Global).
 
+Rôles :
+  1. Chargement et normalisation des CSV d'agrégation générés par le moteur.
+  2. Construction dynamique des graphiques Matplotlib (camemberts, barres empilées, courbes).
+  3. Intégration des cartes cartographiques et des tableaux statistiques.
+  4. Respect strict des règles d'affichage et de diffusion institutionnelles (couverture,
+     sommaire, notices méthodologiques, glossaire).
+========================================================================================
+"""
 from __future__ import annotations
 
 from pathlib import Path

@@ -4,19 +4,29 @@
 # selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
 # la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
 #
-# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
+# Ce programme est distribué dans l'espoir qu'il sera utile, me SANS AUCUNE GARANTIE ;
 # sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Tri décroissant des jeux de données affichés dans les tableaux PDF (parties 2 et 3)."""
+"""
+========================================================================================
+MODULE : GESTION DU TRI ET NORMES D'AFFICHAGE DES TABLEAUX PDF (`pdf_table_sort.py`)
+========================================================================================
+Ce module régit le classement des données et le nommage des en-têtes dans les tableaux PDF.
+
+Principes clés :
+  1. Tri par ordre décroissant de volume d'activité (nombre de contrôles ou de procédures).
+  2. Respect d'ordres métier fixes pour certains tableaux (ex: résultats de contrôle ou zones PEJ).
+  3. Renommage harmonisé des colonnes et mise en forme des légendes explicatives.
+========================================================================================
+"""
 
 from __future__ import annotations
 
@@ -24,6 +34,7 @@ import pandas as pd
 
 from core.common.utilitaires_metier import ZONE_PEJ_LECTEUR_TABLE_ORDER
 
+# Colonnes numériques de référence pour déterminer le tri par défaut
 _COUNT_COLUMNS_PRIORITY = (
     "nb_localisations",
     "nb_total",
@@ -34,7 +45,7 @@ _COUNT_COLUMNS_PRIORITY = (
     "Total",
 )
 
-# Libellés d'en-têtes de tableaux PDF (ne pas dériver « nb_pej » → « Nb Pej »).
+# Libellés officiels des en-têtes de colonnes dans les rapports PDF
 PDF_LABEL_PEJ = "PEJ"
 PDF_LABEL_PEJ_COUNT = "Nombre de PEJ"
 PDF_LABEL_CTRL_LOCATIONS = "Localisations de contrôle"
@@ -59,12 +70,12 @@ _METRIC_SUFFIX_PROC = " (nombre de procédures)"
 _METRIC_SUFFIX_EFFECTIFS = " (effectifs d'usagers)"
 
 
-def pdf_metric_caption(title: str, metric: str) -> str:
-    """
-    Complète un titre de tableau ou graphique avec la métrique si elle n'y figure pas déjà.
+# ========================================================================================
+# HARMONISATION DES TITRES ET LIBELLES DE COLONNES
+# ========================================================================================
 
-    metric : ``ctrl`` | ``proc`` | ``effectifs``
-    """
+def pdf_metric_caption(title: str, metric: str) -> str:
+    """Complète le titre d'un graphique ou d'un tableau en ajoutant la métrique (ex: '(nombre de procédures)')."""
     t = str(title).strip()
     low = t.lower()
     if metric == "ctrl" and "localisation" not in low:
@@ -77,13 +88,14 @@ def pdf_metric_caption(title: str, metric: str) -> str:
 
 
 def pdf_column_label(col: str) -> str:
-    """Libellé affiché pour une colonne de tableau PDF."""
+    """Convertit le nom technique d'une colonne DataFrame en libellé lisible pour le PDF."""
     key = str(col).strip()
     if key in _PDF_COLUMN_LABELS:
         return _PDF_COLUMN_LABELS[key]
     return key.replace("_", " ").title()
 
 
+# Ordre fixe d'affichage des lignes du tableau de bilan des contrôles
 _RESULTATS_CONTROLES_ROW_ORDER: tuple[str, ...] = (
     "Conforme",
     "Non-conforme",
@@ -94,7 +106,7 @@ _RESULTATS_CONTROLES_ROW_ORDER: tuple[str, ...] = (
 
 
 def resultat_controle_label_for_pdf(resultat: object) -> str:
-    """Libellé cellule PDF : indentation des sous-lignes « Dont … » via ``&nbsp;``."""
+    """Ajoute des espaces incécables d'indentation HTML pour les sous-lignes 'Dont...'."""
     label = str(resultat or "").strip()
     if label in ("Dont infraction", "Dont manquement"):
         return f"&nbsp;&nbsp;&nbsp;{label}"
@@ -102,7 +114,7 @@ def resultat_controle_label_for_pdf(resultat: object) -> str:
 
 
 def sort_tab_resultats_controles_for_pdf(df: pd.DataFrame) -> pd.DataFrame:
-    """Ordre fixe des lignes du tableau « Résultats des contrôles » (ne pas trier par nb)."""
+    """Conserve l'ordre métier réglementaire fixe des résultats de contrôle."""
     if df.empty or "resultat" not in df.columns:
         return df
 
@@ -122,8 +134,12 @@ def sort_tab_resultats_controles_for_pdf(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+# ========================================================================================
+# FONCTIONS GENERALES DE TRI DECROISSANT DE DATAFRAMES
+# ========================================================================================
+
 def sort_dataframe_desc(df: pd.DataFrame | None, columns: list[str]) -> pd.DataFrame | None:
-    """Trie un DataFrame par la première colonne numérique disponible (ordre décroissant)."""
+    """Trie un DataFrame selon la première colonne disponible de la liste (ordre décroissant)."""
     if df is None or df.empty:
         return df
     for col in columns:
@@ -133,7 +149,7 @@ def sort_dataframe_desc(df: pd.DataFrame | None, columns: list[str]) -> pd.DataF
 
 
 def sort_dataframe_desc_auto(df: pd.DataFrame | None) -> pd.DataFrame | None:
-    """Tri décroissant selon une colonne de dénombrement connue."""
+    """Détecte automatiquement la colonne numérique principale et trie en ordre décroissant."""
     return sort_dataframe_desc(df, list(_COUNT_COLUMNS_PRIORITY))
 
 
@@ -141,7 +157,7 @@ def sort_dataframe_desc_by_sum(
     df: pd.DataFrame | None,
     sum_columns: list[str] | None = None,
 ) -> pd.DataFrame | None:
-    """Tri décroissant selon la somme de colonnes numériques ``nb_*``."""
+    """Trie en ordre décroissant selon la somme calculée de plusieurs colonnes numériques `nb_*`."""
     if df is None or df.empty:
         return df
     cols = sum_columns or [c for c in df.columns if str(c).startswith("nb_")]
@@ -156,7 +172,7 @@ def sort_detail_dataframe_by_date_desc(
     df: pd.DataFrame | None,
     date_col: str = "date",
 ) -> pd.DataFrame | None:
-    """Tableaux de détail : tri décroissant par date (plus récent en premier)."""
+    """Trie les enregistrements par date décroissante (les événements récents apparaissent en premier)."""
     if df is None or df.empty or date_col not in df.columns:
         return df
     tmp = df.copy()
@@ -169,7 +185,7 @@ def sort_detail_dataframe_by_date_desc(
 
 
 def sort_zone_pej_for_pdf(df: pd.DataFrame) -> pd.DataFrame:
-    """Ordre lecteur fixe pour le tableau PEJ par zone ; sinon tri décroissant par effectif."""
+    """Ordre d'affichage spécifique pour le tableau PEJ par zone géographique."""
     if df is None or df.empty or "zone" not in df.columns:
         return df
     zones = df["zone"].astype(str)
@@ -179,8 +195,12 @@ def sort_zone_pej_for_pdf(df: pd.DataFrame) -> pd.DataFrame:
     return sort_dataframe_desc(df, ["nb"])
 
 
+# ========================================================================================
+# TRI ET FORMATAGE DE TOUS LES TABLEAUX DES SECTIONS PDF
+# ========================================================================================
+
 def prepare_pdf_results_sec23_sorting(results: dict) -> None:
-    """Applique le tri décroissant aux données des tableaux des parties 2 et 3 (in-place)."""
+    """Parcourt l'ensemble des DataFrames du dictionnaire de résultats et leur applique le tri approprié."""
     column_sorts: list[tuple[str, list[str]]] = [
         ("usager_effectifs", ["nb"]),
         ("tab_resultats", ["nb"]),
@@ -228,12 +248,7 @@ def build_resultats_par_usager_domaine_pdf_rows(
     is_single_usager: bool,
     max_rows: int = 15,
 ) -> tuple[list[str], list[list[str]], bool]:
-    """
-    Construit l'en-tête et les lignes du tableau « résultats par domaine ».
-
-    Returns:
-        (header, body_rows, with_type_usager_column)
-    """
+    """Prépare les lignes de données formatées du tableau 'Résultats par Domaine'."""
     if df is None or df.empty:
         return [], [], False
 
@@ -274,4 +289,4 @@ def build_resultats_par_usager_domaine_pdf_rows(
         else:
             body.append(base)
 
-    return header, body, with_type_col
+    return header, body, with_type_col

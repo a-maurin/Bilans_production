@@ -15,11 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Liste et résolution des profils bilans.
+========================================================================================
+MODULE : CATALOGUE ET RESOLUTION DES PROFILS DE BILAN (`catalogue_profils.py`)
+========================================================================================
+Ce module fournit la liste officielle des profils de bilan (thématiques métier)
+disponibles pour la génération de rapports.
 
-Source de vérité : fichiers YAML dans config/profils_bilan/ et ref_themes_ctrl.
+Fonctions principales :
+  1. `list_profiles()` : découvre dynamiquement les profils déclarés en YAML
+     (`config/profils_bilan/`) et dans le référentiel des thèmes (`ref_themes_ctrl`),
+     puis applique l'ordre d'affichage prioritaire.
+  2. `resolve_profile_ids()` : traduit les sélections numériques de la CLI
+     (ex: "1", "2") en identifiants textuels de profil (ex: "global", "agrainage").
+========================================================================================
 """
 from __future__ import annotations
 

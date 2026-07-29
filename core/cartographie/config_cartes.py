@@ -15,18 +15,26 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Configuration des cartes pour les bilans agrainage / chasse-agrainage.
-Généré par les outils de configuration (GUI ou mode interactif).
+========================================================================================
+MODULE : CONFIGURATION CARTOGRAPHIQUE PAR DEFAUT (`config_cartes.py`)
+========================================================================================
+Ce fichier régit la configuration de symbologie et de mise en page des cartes QGIS.
 
-Les dates de période doivent correspondre à celles des scripts d'analyse :
-- agrainage : analyse_agrainage.py (DATE_DEB, DATE_FIN)
-- chasse : analyse_chasse_agrainage.py (ou analyse_chasse.py) — thématique chasse uniquement
+Rôle pédagogique :
+  Un lecteur non spécialisé en SIG (Systèmes d'Information Géographique) comprendra ici
+  comment chaque profil cartographique (ex. Agrainage, Chasse, Piégeage, Bilan Global)
+  définit :
+    1. Le titre et le nom du modèle de mise en page QGIS (`layout_name`).
+    2. La symbologie des couches vecteur (couleurs, formes des points, remplissages).
+    3. Les filtres spatiaux et temporels associés aux contrôles et infractions.
+    4. La configuration globale des fonds de carte et de l'export des fichiers image PNG.
+========================================================================================
 """
 
 from typing import Dict
 
+# Importation des types de données et conteneurs de configuration de symbologie
 from config_cartes_model import (
     GeometryMode,
     FilterType,
@@ -40,7 +48,10 @@ from config_cartes_model import (
     GlobalConfig,
 )
 
-
+# --------------------------------------------------------------------------------------
+# DICTIONNAIRE DES PROFILS CARTOGRAPHIQUES PAR DÉFAUT
+# Chaque clé correspond à un profil métier (ex: 'agrainage', 'chasse', 'global')
+# --------------------------------------------------------------------------------------
 DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
     'agrainage': ProfileConfig(
         id='agrainage',

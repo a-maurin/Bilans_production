@@ -9,14 +9,25 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Préparation du tableau PDF « Usagers × Domaine » (troncature pilotée YAML)."""
+"""
+========================================================================================
+MODULE : GENERATEUR DU TABLEAU PDF 'USAGERS × DOMAINE' (`pdf_usagers_domaine_table.py`)
+========================================================================================
+Ce module prépare la matrice croisée liant les catégories d'usagers aux domaines d'intervention.
+
+Fonctionnalités :
+  1. Calcul des largeurs de colonnes ajustées dynamiquement selon la largeur disponible sur la page PDF.
+  2. Gestion du mode d'affichage des en-têtes (orientations verticales ou horizontales avec saut de ligne).
+  3. Troncation intelligente des lignes et colonnes les moins représentées si la matrice dépasse la page.
+  4. Génération d'une note d'explication explicative en bas de tableau si une troncation a eu lieu.
+========================================================================================
+"""
 
 from __future__ import annotations
 
@@ -25,12 +36,16 @@ from typing import Any
 import pandas as pd
 
 
+# ========================================================================================
+# CALCUL DES DIMENSIONS ET POLICES DES COLONNES
+# ========================================================================================
+
 def usagers_x_domaine_col_widths(
     avail_w: float,
     n_domain_cols: int,
     tables_layout: dict[str, Any] | None,
 ) -> list[float]:
-    """Largeurs de colonnes pour le tableau Usagers × Domaine (1ère colonne + domaines)."""
+    """Calcule la largeur en points de chaque colonne pour le tableau croisé (1ère col. usager + cols. domaines)."""
     cfg_root = tables_layout if isinstance(tables_layout, dict) else {}
     cfg = cfg_root.get("usagers_x_domaine")
     if not isinstance(cfg, dict):
@@ -49,7 +64,7 @@ def usagers_x_domaine_col_widths(
 
 
 def resolve_usagers_x_domaine_header_layout(tables_layout: dict[str, Any] | None) -> str:
-    """Mode d'en-tête pour Usagers × Domaine : ``horizontal_wrap`` (défaut) ou ``vertical``."""
+    """Détermine si les en-têtes de colonnes doivent être écrites verticalement ou horizontalement."""
     cfg_root = tables_layout if isinstance(tables_layout, dict) else {}
     cfg = cfg_root.get("usagers_x_domaine")
     if not isinstance(cfg, dict):
@@ -65,6 +80,7 @@ def resolve_usagers_x_domaine_header_font_size(
     *,
     fallback: float = 7.0,
 ) -> float:
+    """Lit la taille de police configurée pour les en-têtes de colonnes du tableau croisé."""
     cfg_root = tables_layout if isinstance(tables_layout, dict) else {}
     uxd = cfg_root.get("usagers_x_domaine")
     vh = cfg_root.get("vertical_header")
@@ -87,6 +103,7 @@ def resolve_usagers_x_domaine_header_max_lines(
     *,
     fallback: int = 5,
 ) -> int:
+    """Retourne le nombre maximum de lignes autorisées pour le renvoi à la ligne des en-têtes."""
     cfg_root = tables_layout if isinstance(tables_layout, dict) else {}
     uxd = cfg_root.get("usagers_x_domaine")
     vh = cfg_root.get("vertical_header")
@@ -101,18 +118,20 @@ def resolve_usagers_x_domaine_header_max_lines(
     return max(1, int(fallback))
 
 
+# ========================================================================================
+# CONSTRUCTION DU TABLEAU ET GESTION DE LA TRONCATION INTELLIGENTE
+# ========================================================================================
+
 def build_usagers_x_domaine_pdf_rows(
     cross_df: pd.DataFrame,
     *,
     tables_layout: dict[str, Any] | None,
 ) -> tuple[list[list[str]], str | None]:
-    """
-    Construit les lignes du tableau (en-tête + données) et un message HTML optionnel.
+    """Construit la grille de texte du tableau croisé et génère la note explicative si des lignes/colonnes sont masquées.
 
-    - Colonnes domaines : tri décroissant sur la somme des contrôles par colonne,
-      puis troncature selon ``max_domain_columns``.
-    - Lignes : tri décroissant sur la somme des contrôles (toutes colonnes domaines),
-      puis troncature selon ``max_usager_rows``.
+    - Tri décroissant des domaines par volume de contrôles.
+    - Tri décroissant des usagers par activité.
+    - Troncation paramétrable via la configuration YAML du gabarit.
     """
     cfg_root = tables_layout if isinstance(tables_layout, dict) else {}
     cfg = cfg_root.get("usagers_x_domaine")
@@ -201,4 +220,4 @@ def build_usagers_x_domaine_pdf_rows(
         note_html = wrap_tpl.format(note=combined)
     else:
         note_html = f"<i>{combined}</i>"
-    return tbl, note_html
+    return tbl, note_html

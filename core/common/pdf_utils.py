@@ -9,14 +9,25 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Helpers reportlab : tableaux OFB, chiffres clés."""
+"""
+========================================================================================
+MODULE : UTILITAIRES DE RENDU REPORTLAB DE L'OFB (`pdf_utils.py`)
+========================================================================================
+Ce module regroupe les composants bas niveau pour construire des éléments graphiques dans les PDF.
+
+Fonctions principales :
+  1. Troncation dynamique et habillage de textes pour les cellules de tableaux ReportLab.
+  2. Composant personnalisé `VerticalText` (rotation à -90°) pour les en-têtes de tableaux étroits.
+  3. Composant `OFBSplitTable` gérant la sécabilité propre des tableaux multi-pages sans coupures isolées.
+  4. Générateur de tableaux d'indicateurs et chiffres clés (`key_figures_table`).
+========================================================================================
+"""
 import re
 import textwrap
 from html import escape
@@ -46,6 +57,10 @@ from core.common.ofb_charte import (
 _AVail_W = PAGE_W - MARGIN_LEFT - MARGIN_RIGHT
 
 
+# ========================================================================================
+# TRONCATION ET HABILLAGE DES TEXTES DANS LES CELLULES PDF
+# ========================================================================================
+
 def truncate_text_to_width(
     value: str,
     max_width_pt: float,
@@ -55,7 +70,7 @@ def truncate_text_to_width(
     padding_pt: float = 8.0,
     suffix: str = "…",
 ) -> str:
-    """Tronque un libellé pour tenir sur une seule ligne dans une cellule de tableau PDF."""
+    """Tronque un texte au pixel près avec des points de suspension si sa largeur excède la cellule."""
     txt = " ".join(str(value or "").split())
     if not txt:
         return ""
@@ -89,10 +104,7 @@ def wrap_plain_text_for_pdf_paragraph(
     wrap_width: int = 36,
     max_lines: int = 16,
 ) -> str:
-    """
-    Prépare du texte brut pour ``Paragraph`` dans une cellule de tableau : retours à la ligne
-    contrôlés et plafond de lignes pour éviter un ``LayoutError`` lorsque le libellé est très long.
-    """
+    """Prépare du texte pour un composant ReportLab `Paragraph` avec découpe contrôlée par saut de ligne `<br/>`."""
     raw = " ".join(str(value or "").split())
     if not raw:
         return ""
@@ -110,7 +122,7 @@ def wrap_plain_text_for_pdf_paragraph(
 
 
 def _header_wrap_chars_for_col(col_width_pt: float, font_size: float) -> int:
-    """Estime le nombre de caractères par ligne d'en-tête pour une largeur de colonne (pt)."""
+    """Estime le nombre maximal de caractères rentrant sur une ligne d'en-tête selon sa largeur en points."""
     try:
         char_w = pdfmetrics.stringWidth("n", FONT_FAMILY, font_size)
     except Exception:
@@ -118,8 +130,12 @@ def _header_wrap_chars_for_col(col_width_pt: float, font_size: float) -> int:
     return max(8, int((float(col_width_pt) - 12.0) / max(char_w, 1.0)))
 
 
+# ========================================================================================
+# COMPOSANT FLOWABLE DE TEXTE VERTICAL (-90 DEGRÉS)
+# ========================================================================================
+
 class VerticalText(Flowable):
-    """Texte affiché verticalement (-90°) pour en-têtes de colonnes étroites."""
+    """Élément personnalisé ReportLab dessinant du texte orienté verticalement à -90°."""
 
     def __init__(
         self,
@@ -137,11 +153,11 @@ class VerticalText(Flowable):
         self._lines: list[str] = [self.text]
 
     def _split_lines(self, avail_width: float) -> list[str]:
+        """Découpe le texte en plusieurs colonnes verticales si le libellé est très long."""
         txt = " ".join(self.text.split())
         if not txt:
             return [""]
         leading = max(float(getattr(self.style, "leading", 0) or 0), float(self.style.fontSize) + 1.5)
-        # Segments empilés horizontalement dans la cellule : chaque segment = une « colonne » de texte vertical.
         width_cap = int(max(1, (avail_width - 6) // leading))
         max_lines = min(self.max_lines, max(width_cap, 2 if len(txt) > 22 else 1))
         if max_lines <= 1:
@@ -172,6 +188,7 @@ class VerticalText(Flowable):
         return lines
 
     def wrap(self, availWidth: float, availHeight: float):
+        """Calcule les dimensions nécessaires pour accueillir le texte après rotation."""
         self._lines = self._split_lines(availWidth)
         try:
             font = pdfmetrics.getFont(self.style.fontName)
@@ -182,12 +199,11 @@ class VerticalText(Flowable):
         self._block_w = len(self._lines) * leading + 6
         stack_extra = max(0, len(self._lines) - 1) * 6.0
         need_h = text_width + 30.0 + stack_extra
-        # Ne pas plafonner sur availHeight : ReportLab peut proposer une hauteur provisoire trop basse
-        # et couper les libellés verticaux longs (domaines OFB).
         self._height = max(float(self.style.fontSize) * 5.0, need_h)
         return (availWidth, self._height)
 
     def draw(self):
+        """Effectue le dessin de la chaîne tournée à -90° sur le canvas du PDF."""
         canv = self.canv
         leading = max(float(getattr(self.style, "leading", 0) or 0), float(self.style.fontSize) + 1.5)
         fs = float(self.style.fontSize)
@@ -199,12 +215,10 @@ class VerticalText(Flowable):
         canv.saveState()
         canv.setFont(fn, fs)
         canv.setFillColor(self.style.textColor)
-        # Centre géométrique dans la cellule (largeur / hauteur allouées par le Table).
         cx = self.width / 2.0 + self.pad_x_pt
         cy = self.height / 2.0
         canv.translate(cx, cy)
         canv.rotate(-90)
-        # Après rotation : empiler les segments le long de Y, centrés sur l’axe de la colonne.
         start_y = total_stack / 2.0
         for i, line in enumerate(self._lines):
             y = start_y - i * col_step
@@ -212,42 +226,35 @@ class VerticalText(Flowable):
         canv.restoreState()
 
 
+# ========================================================================================
+# TABLEAU SURCHARGÉ AVEC SÉCABILITÉ CONTRÔLÉE
+# ========================================================================================
+
 class OFBSplitTable(Table):
-    """Surcharge de Table pour appliquer une règle stricte de sécabilité.
-    Le tableau n'est coupé que si:
-    1. la première page contient au moins 5 lignes
-    2. la deuxième page contient au moins autant de lignes que la première.
-    Sinon, basculement complet sur la page suivante.
-    """
+    """Surcharge de la classe `Table` ReportLab garantissant une césure élégante des tableaux sur 2 pages."""
+
     def split(self, availWidth, availHeight):
         result = super().split(availWidth, availHeight)
         if not result or len(result) != 2:
             return result
-            
+
         t1, t2 = result
         lignes_avant = len(t1._rowHeights) if hasattr(t1, '_rowHeights') else len(t1._cellvalues)
         lignes_apres = len(t2._rowHeights) if hasattr(t2, '_rowHeights') else len(t2._cellvalues)
-        
-        # Si le split initial satisfait la règle métier, on le conserve.
+
         if lignes_avant >= 5 and lignes_apres >= lignes_avant:
             return result
-            
-        # Si on a placé trop de lignes sur la première page (lignes_apres < lignes_avant),
-        # on peut réduire artificiellement le nombre de lignes de t1 pour satisfaire la règle.
+
         if lignes_avant >= 5:
             repeat = getattr(self, 'repeatRows', 0)
             total_unique = lignes_avant + lignes_apres - repeat
-            # Le max_n idéal pour t1 est la moitié du total (plus le header)
             max_n = (total_unique + repeat) // 2
-            
+
             if max_n >= 5:
-                # On force le split à max_n lignes en réduisant la hauteur cible.
-                # L'utilisation de t1._rowHeights garantit qu'on a bien les hauteurs mesurées.
                 target_height = availHeight * 0.5
                 if hasattr(t1, '_rowHeights') and len(t1._rowHeights) >= max_n:
-                    # On ajoute un buffer (15pt) pour les bordures et marges internes
                     target_height = sum(t1._rowHeights[:max_n]) + 15
-                
+
                 new_result = super().split(availWidth, target_height)
                 if new_result and len(new_result) == 2:
                     nt1, nt2 = new_result
@@ -256,15 +263,15 @@ class OFBSplitTable(Table):
                     if nl_avant >= 5 and nl_apres >= nl_avant:
                         return [nt1, PageBreak(), nt2]
 
-        # Protection anti-LayoutError: 
-        # Si on est au début d'une nouvelle page (ex: availHeight > 550pt) et que 
-        # la règle ne peut pas être respectée, on force la coupe pour éviter le crash.
         if availHeight > 450:
             return result
-            
-        # Sinon, on refuse la coupe pour renvoyer à la page suivante (respect du keepWithNext).
+
         return []
 
+
+# ========================================================================================
+# CONSTRUCTEURS DE TABLEAUX OFB (STANDARDS ET LARGES)
+# ========================================================================================
 
 def ofb_table_wide(
     data_rows: list,
@@ -279,13 +286,7 @@ def ofb_table_wide(
     vertical_header_row_padding_pt: float = 8.0,
     header_layout: str = "vertical",
 ):
-    """Tableau OFB à en-têtes larges (colonnes domaine, etc.).
-
-    ``header_layout`` :
-    - ``vertical`` : colonnes 1..n en texte vertical (-90°) ;
-    - ``horizontal_wrap`` : en-têtes en ``Paragraph`` multi-lignes (meilleure lisibilité
-      pour les libellés longs type domaines OFB).
-    """
+    """Construit un tableau aux couleurs OFB avec en-têtes verticales ou multi-lignes pour les nombreuses colonnes."""
     if not data_rows:
         return OFBSplitTable([], colWidths=[])
 
@@ -374,7 +375,6 @@ def ofb_table_wide(
                 is_right = col_aligns[ci] == "RIGHT" if ci < len(col_aligns) else False
                 style = _CELL_RIGHT if is_right else _CELL_NORMAL
                 new_row.append(Paragraph(cell_str, style))
-        # Compléter la ligne si nécessaire
         while len(new_row) < n_cols:
             if ri == 0:
                 if use_horizontal_wrap:
@@ -433,29 +433,16 @@ def ofb_table(
     zebra_rows: bool = True,
     header_row: bool = True,
 ):
-    """Crée un Table reportlab stylisé charte OFB (en-tête bleu, lignes alternées).
-
-    header_font_size : si renseigné, police des cellules d'en-tête (ligne 0) réduite
-    pour limiter le retour à la ligne / la compression visuelle sur tableaux étroits.
-
-    Règle d’alignement :
-    - si col_aligns est fourni, il est utilisé tel quel ;
-    - sinon, les colonnes dont le contenu est majoritairement numérique
-      (nombres, pourcentages) sont automatiquement alignées à droite
-      pour l’ensemble du tableau (en-tête compris).
-    """
+    """Crée un tableau standard stylisé aux couleurs OFB (en-tête bleu, lignes alternées gris/blanc)."""
 
     def _looks_numeric(text: str) -> bool:
-        """Heuristique simple pour détecter une valeur chiffrée ou un pourcentage."""
         txt = text.strip().replace("\u202f", "").replace(" ", "")
         if not txt:
             return False
-        # Pourcentages du type '12.3%' ou '45 %'
         if txt.endswith("%"):
             txt_num = txt[:-1]
         else:
             txt_num = txt
-        # Nombres entiers ou décimaux, éventuellement signés
         return bool(re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?", txt_num))
 
     inferred_aligns = None
@@ -551,6 +538,10 @@ def ofb_table(
     return tbl
 
 
+# ========================================================================================
+# GENERATEURS DE TABLEAUX DE CHIFFRES CLES
+# ========================================================================================
+
 def key_figures_table(
     figures: list[tuple[str, str]],
     styles,
@@ -558,23 +549,21 @@ def key_figures_table(
     density: str = "auto",
     table_width: float | None = None,
 ):
-    """Bloc de chiffres clés : disposition dynamique et équilibrée."""
+    """Construit un bloc de mise en valeur des chiffres clés (cadre bleu, grands nombres en gras)."""
     if not figures:
         return Spacer(1, 0)
     import math
 
     n = len(figures)
     max_per_line = 4
-    
-    # 1. Calcul du nombre de lignes et colonnes pour équilibrer
+
     if n <= max_per_line:
         rows = 1
         cols_per_row = n
     else:
         rows = math.ceil(n / max_per_line)
         cols_per_row = math.ceil(n / rows)
-        
-    # 2. Définition de l'échelle dynamique
+
     if cols_per_row <= 3:
         scale = 1.0
         val_pad, lbl_pad = 8, 8
@@ -594,7 +583,7 @@ def key_figures_table(
         fontSize=styles["KeyFigureLabel"].fontSize * scale,
         leading=styles["KeyFigureLabel"].leading * scale,
     )
-    
+
     if rows == 1:
         header = []
         labels = []
@@ -618,14 +607,13 @@ def key_figures_table(
         )
         return tbl
 
-    # Multi-lignes équilibrées
     split_rows = []
     start = 0
     for i in range(rows):
         take = math.ceil((n - start) / (rows - i))
         split_rows.append(figures[start : start + take])
         start += take
-        
+
     return key_figures_table_rows(
         split_rows,
         styles,
@@ -643,7 +631,7 @@ def key_figures_table_rows(
     val_style=None,
     lbl_style=None,
 ):
-    """Bloc de chiffres clés sur plusieurs lignes (valeurs puis libellés par ligne)."""
+    """Génère la grille multi-lignes des chiffres clés pour les bilans denses."""
     if not figures_rows or not any(figures_rows):
         return Spacer(1, 0)
     n_cols = max(len(row) for row in figures_rows)
@@ -676,4 +664,4 @@ def key_figures_table_rows(
     if len(table_rows) >= 4:
         style_cmds.append(("LINEBELOW", (0, 1), (-1, 1), 0.5, COLOR_TABLE_BORDER))
     tbl.setStyle(TableStyle(style_cmds))
-    return tbl
+    return tbl

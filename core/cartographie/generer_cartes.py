@@ -15,17 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Wrapper Python pour la génération de cartes.
+========================================================================================
+MODULE : LANCEUR CLI DE PRODUCTION CARTOGRAPHIQUE (`generer_cartes.py`)
+========================================================================================
+Ce script sert d'interface en ligne de commande (CLI) standardisée pour déclencher
+la production cartographique QGIS.
 
-Pour l'instant, ce script délègue au lanceur existant basé sur QGIS
-(`src/ofbilan/cartographie/lancer_production_cartographique.bat`),
-ce qui permet d'avoir un point d'entrée CLI stable :
-
-    python src/ofbilan/cartographie/generer_cartes.py --profil agrainage --date-deb 2025-01-01 --date-fin 2025-12-31 --dept-code 21
+Rôles :
+  1. Animer les arguments de ligne de commande (`--profil`, `--date-deb`, `--date-fin`, `--dept-code`).
+  2. Invoquer de façon sécurisée le fichier batch Windows `lancer_production_cartographique.bat`
+     afin d'exécuter la génération dans l'environnement Python propre à QGIS.
+========================================================================================
 """
-
 from __future__ import annotations
 
 import argparse

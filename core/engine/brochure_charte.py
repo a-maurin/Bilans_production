@@ -15,9 +15,23 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Mise en forme brochure uniquement : encadrés arrondis + couleurs ``ofb_charte``."""
+"""
+========================================================================================
+MODULE : STYLE ET COMPOSANTS VISUELS DU FORMAT BROCHURE (`brochure_charte.py`)
+========================================================================================
+Ce module régit la mise en page spécifique du format "Brochure" institutionnel de l'OFB.
 
+Caractéristiques principales :
+  1. Conteneurs à coins arrondis (`BrochureEncadre`) : encapsulent les tableaux, textes
+     et chiffres clés dans des cadres élégants avec en-têtes colorés.
+  2. Bandeaux d'en-tête bleus (`BrochureBandeau`) : intègrent le logo blanc de l'OFB
+     et les titres principaux de la synthèse.
+  3. Déclinaisons de styles (`EncadreStyle`) : définissent les palettes de couleurs
+     (fond principal, surfaces secondaires, bordures fines).
+  4. Agencement mathématique dynamique : calcul automatique de la répartition des
+     colonnes et de la hauteur globale des blocs sans risque d'empiètement.
+========================================================================================
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

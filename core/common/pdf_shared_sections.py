@@ -9,14 +9,26 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Sections PDF partagées entre profils global et thématiques."""
+"""
+========================================================================================
+MODULE : SECTIONS DE PRESENTATION ET ANNEXES PARTAGÉES PDF (`pdf_shared_sections.py`)
+========================================================================================
+Ce module regroupe la construction des éléments de structure communs aux différents bilans PDF.
+
+Composants gérés :
+  1. Notice méthodologique initiale et encadrement des règles de diffusion (Restreint/Public).
+  2. Page de garde institutionnelle et Génération automatique de la table des matières (Sommaire).
+  3. Annexe méthodologique détaillée (Section 6) assemblée dynamiquement selon le contexte de données.
+  4. Glossaire automatique filtré selon la présence effective de sigles (PEJ, PA, PVe, PNF, TUB).
+  5. Tableaux de sous-sections de procédures ventilées par usagers.
+========================================================================================
+"""
 
 from __future__ import annotations
 
@@ -35,6 +47,7 @@ from core.common.pdf_presentation_config import (
 )
 from core.common.pdf_table_sort import pdf_metric_caption
 
+# Libellés d'explication pour les périodicités de restitution
 _VENTILATION_READER_LABELS: dict[str, str] = {
     "hebdomadaire": "indicateurs regroupés par semaine",
     "mensuelle": "indicateurs regroupés par mois",
@@ -44,6 +57,10 @@ _VENTILATION_READER_LABELS: dict[str, str] = {
 }
 
 
+# ========================================================================================
+# NOTICE METHODOLOGIQUE INITIALE ET PAGE DE GARDE
+# ========================================================================================
+
 def add_standard_notice_methodology(
     builder,
     *,
@@ -51,15 +68,7 @@ def add_standard_notice_methodology(
     effective_cfg: dict | None = None,
     diffusion: str | None = "interne",
 ) -> None:
-    """
-    Ajoute une notice méthodologique standardisée (début du PDF, avant le sommaire).
-
-    N'affecte pas la mention « diffusion restreinte » sur la page de garde, gérée
-    séparément par ``PDFReportBuilder`` lorsque ``--diffusion interne``.
-
-    `period_sentence` doit être déjà formatée, par ex:
-    - "Pour ce bilan, les extractions portent sur la période du 01/01/2025 au 05/02/2026."
-    """
+    """Génère la notice méthodologique préliminaire (placée en début de document avant le sommaire)."""
     notice_cfg = resolve_notice_methodology_config(effective_cfg or {})
     title = str(notice_cfg.get("title", "Notice méthodologique")).strip() or "Notice méthodologique"
     data_source = str(notice_cfg.get("data_source_paragraph", "")).strip()
@@ -97,11 +106,7 @@ def add_standard_cover_and_toc(
     nb_pve: int = 0,
     profile_id: str | None = None,
 ) -> dict:
-    """
-    Ajoute une page de garde standardisée suivie du sommaire.
-
-    Retourne la configuration effective de page de garde utilisée.
-    """
+    """Génère la page de couverture officielle de l'OFB puis insère le sommaire cliquable."""
     title_page_cfg = resolve_title_page_config(
         project_root,
         scope=scope,
@@ -118,6 +123,10 @@ def add_standard_cover_and_toc(
     return title_page_cfg
 
 
+# ========================================================================================
+# ANNEXE METHODOLOGIQUE ET CONTEXTE (SECTION 6)
+# ========================================================================================
+
 def _sources_phrase_for_methodology(
     *,
     source_point_ctrl: bool,
@@ -125,6 +134,7 @@ def _sources_phrase_for_methodology(
     source_pa: bool,
     source_pve: bool,
 ) -> str:
+    """Formate la phrase listant les bases de données sources utilisées dans le rapport."""
     labels: list[str] = []
     if source_point_ctrl:
         labels.append("contrôles (OSCEAN)")
@@ -149,6 +159,7 @@ def _resolve_zone_mode(
     has_tub: bool,
     is_pnf_profile: bool,
 ) -> str:
+    """Détermine la configuration spatiale spécifique aux zones réglementées (Parc National, Tuberculose)."""
     if is_pnf_profile and has_pnf:
         return "pnf_only"
     if has_pnf and has_tub:
@@ -182,7 +193,7 @@ def build_sec6_methodology_context(
     is_pnf_profile: bool = False,
     show_usagers: bool = False,
 ) -> dict[str, Any]:
-    """Contexte de formatage pour les paragraphes YAML de la méthodologie d'annexe."""
+    """Construit le dictionnaire de variables réinjectées dans les gabarits de la section 6."""
     diffusion_norm = normalize_diffusion(diffusion)
     zone_mode = _resolve_zone_mode(
         has_pnf=has_pnf,
@@ -231,6 +242,7 @@ def build_sec6_methodology_context(
 
 
 def _sec6_item_matches(when: str, ctx: dict[str, Any]) -> bool:
+    """Évalue la condition `when` d'un paragraphe méthodologique."""
     key = str(when or "always").strip().lower()
     if not key or key == "always":
         return True
@@ -238,6 +250,7 @@ def _sec6_item_matches(when: str, ctx: dict[str, Any]) -> bool:
 
 
 def _format_sec6_item_text(template: str, ctx: dict[str, Any]) -> str:
+    """Remplace les balises de variables `{dept_name}` dans le texte d'annexe."""
     raw = str(template or "").strip()
     if not raw:
         return ""
@@ -248,11 +261,11 @@ def _format_sec6_item_text(template: str, ctx: dict[str, Any]) -> str:
 
 
 def _sec6_methodology_items_from_cfg(cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Récupère la liste des éléments de méthodologie depuis la configuration YAML."""
     items = cfg.get("items")
     if isinstance(items, list) and items:
         return [x for x in items if isinstance(x, dict)]
 
-    # Rétrocompatibilité : anciennes clés line_* → items synthétiques.
     legacy_map = (
         ("line_period", "always"),
         ("line_scope", "always"),
@@ -309,12 +322,7 @@ def build_sec6_methodology_html(
     profile_id: str = "",
     show_usagers: bool = False,
 ) -> str:
-    """
-    Construit le HTML de la méthodologie d'annexe (section 6) à partir du YAML.
-
-    Les paragraphes sont listés dans ``sec6_methodology.items`` avec une condition
-    ``when`` évaluée sur le contenu réel du bilan (volumes, sources, zones, diffusion).
-    """
+    """Assemble le texte HTML de l'annexe méthodologique dynamique (Section 6)."""
     if context is None:
         ctx = build_sec6_methodology_context(
             period_str=period_str,
@@ -358,6 +366,10 @@ def build_sec6_methodology_html(
     return "<br/>".join(lines) + ("<br/>" if lines else "")
 
 
+# ========================================================================================
+# GLOSSAIRE AUTOMATIQUE FILTRÉ ET SECTIONS PROCEUDRES USAGERS
+# ========================================================================================
+
 def build_filtered_glossary_rows(
     *,
     gloss_cfg: dict,
@@ -368,9 +380,7 @@ def build_filtered_glossary_rows(
     include_pnf: bool = False,
     include_tub: bool = False,
 ) -> list[list[str]]:
-    """
-    Construit les lignes du glossaire filtrées selon le contenu réel du bilan.
-    """
+    """Génère le tableau du glossaire en conservant uniquement les sigles présents dans les données du rapport."""
     header_cfg = gloss_cfg.get("header", {}) if isinstance(gloss_cfg, dict) else {}
     abbr_list = gloss_cfg.get("abbreviations", []) if isinstance(gloss_cfg, dict) else []
     if not isinstance(header_cfg, dict):
@@ -417,11 +427,7 @@ def build_filtered_glossary_rows(
 
 
 def load_glossary_config(root: Path) -> dict:
-    """
-    Charge la configuration du glossaire (config puis fallback ref).
-
-    Retourne un défaut robuste si le YAML est absent ou invalide.
-    """
+    """Charge le dictionnaire des abréviations depuis `glossaire.yaml`."""
     cfg_candidates = [
         root / "config" / "presentation" / "glossaire.yaml",
         root / "ref" / "programme" / "glossaire.yaml",
@@ -484,7 +490,7 @@ def load_glossary_config(root: Path) -> dict:
 def summarize_procedures_par_type_usager(
     proc_par_domaine: Any,
 ) -> Any:
-    """Agrège PEJ/PA par type d'usager à partir d'un tableau domaine×usager."""
+    """Calcule les totaux de PEJ et PA par type d'usager."""
     import pandas as pd
 
     if proc_par_domaine is None or getattr(proc_par_domaine, "empty", True):
@@ -509,7 +515,7 @@ def add_procedures_par_type_usager_subsection(
     presentation_cfg: dict[str, Any] | None,
     section_title: dict[str, str] | None = None,
 ) -> None:
-    """Sous-parties PEJ/PA ventilées par type d'usager (section Activité par type d'usager)."""
+    """Insère dans le builder PDF les tableaux détaillés de PEJ et PA par type d'usager."""
     import pandas as pd
 
     cfg = presentation_cfg if isinstance(presentation_cfg, dict) else {}
@@ -584,4 +590,4 @@ def add_procedures_par_type_usager_subsection(
                 col_aligns=["LEFT", "RIGHT"],
                 keep_together=True,
                 spacer_after_mm=1.0,
-            )
+            )

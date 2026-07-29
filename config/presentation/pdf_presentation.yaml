@@ -1,3 +1,16 @@
+# ========================================================================================
+# CONFIGURATION CENTRALE DE PRESENTATION PDF (`pdf_presentation.yaml`)
+# ========================================================================================
+# Ce fichier constitue la source de vérité pour le style, l'ordonnancement des chapitres
+# et l'habillage graphique de tous les rapports PDF générés par OFBilan.
+#
+# Rôles principaux expliqués aux non-spécialistes :
+#   - `defaults.title` : règle de composition des 3 lignes du titre principal sur la page de couverture.
+#   - `sections.order` : ordre des chapitres du rapport (sec1, sec2, sec3, sec4, sec5, sec6).
+#   - `blocks` : activation/désactivation fine des sous-éléments (graphiques, camemberts, tableaux).
+#   - `charte` : gestion des logos, filigranes institutionnels OFB et marges de page.
+# ========================================================================================
+
 version: 1
 
 # -----------------------------------------------------------------------------

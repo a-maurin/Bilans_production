@@ -15,9 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Rendu PDF du profil synthese_activite_PA_PJ."""
+"""
+========================================================================================
+MODULE : RENDU PDF DU BILAN DE SYNTHESE PA / PJ (`generation_pdf_synthese.py`)
+========================================================================================
+Ce module est spécialisé dans le rendu PDF du profil `synthese_activite_PA_PJ`.
 
+Principales missions :
+  1. Extraction et consolidation des indicateurs clés d'activité administrative et judiciaire.
+  2. Construction des graphiques de répartition des suites données (PA/PJ) par domaine.
+  3. Génération des tableaux synthétiques des contrôles, poursuites et Procès-Verbaux.
+  4. Mise en page du document selon les normes graphiques institutionnelles OFB.
+========================================================================================
+"""
 from __future__ import annotations
 
 import textwrap

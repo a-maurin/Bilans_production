@@ -15,12 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Découverte du Python QGIS et export cartographique en sous-processus.
+========================================================================================
+MODULE : RESOLUTION ET INITIALISATION DE L'ENVIRONNEMENT PYQGIS (`qgis_runtime.py`)
+========================================================================================
+Ce module est chargé de détecter dynamiquement l'emplacement de l'interpréteur Python QGIS
+(OSGeo4W) sur le système de l'utilisateur (Windows, Linux, macOS).
 
-Permet à ``python -m ofbilan`` (interpréteur standard) de déléguer la génération
-des cartes au Python/OSGeo4W lorsque PyQGIS n'est pas importable in-process.
+Rôle stratégique :
+  Lorsque OFBilan est exécuté depuis un Python standard (ex. environnement virtuel `.venv`),
+  `qgis_runtime.py` localise l'exécutable `python.exe` propre à QGIS pour sous-traiter
+  la génération cartographique en sous-processus sans nécessiter l'installation complète
+  de PyQGIS dans le Python système.
+========================================================================================
 """
 from __future__ import annotations
 

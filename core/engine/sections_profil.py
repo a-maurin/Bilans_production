@@ -15,9 +15,22 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Fonctions de rendu des sections pour le profil thématique/global."""
+"""
+========================================================================================
+MODULE : GENERATEUR DES SECTIONS PDF DE PROFIL (`sections_profil.py`)
+========================================================================================
+Ce module regroupe les fonctions de construction des différentes sections du PDF
+d'un profil thématique ou global (sections 1 à 6).
 
+Sections traitées :
+  - Section 1 : Introduction et synthèse des chiffres clés.
+  - Section 2 : Activité de contrôle (localisations, opérations, conformités, usagers).
+  - Section 3 : Activité administrative et judiciaire (PA, PEJ, PVe, NATINF).
+  - Section 4 : Analyses croisées et ventilations temporelles (courbes, histogrammes).
+  - Section 5 : Cartographie thématique (cartes PNG superposées).
+  - Section 6 : Annexes, méthodologie et glossaire.
+========================================================================================
+"""
 from pathlib import Path
 import pandas as pd
 

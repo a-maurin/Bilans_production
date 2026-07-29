@@ -15,8 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Graphiques matplotlib pour les bilans (camemberts, barres, cartes)."""
+"""
+========================================================================================
+MODULE : GENERATION DES RENDUS GRAPHIQUES MATPLOTLIB (`rendus_graphiques.py`)
+========================================================================================
+Ce module génère les graphiques d'illustration (images PNG) intégrés dans les bilans PDF.
+
+Types de graphiques pris en charge :
+  1. Camemberts / Anneaux (Pie charts / Donuts) pour la ventilation des contrôles par domaine ou résultat.
+  2. Barres verticales et horizontales (simples, groupées, empilées).
+  3. Courbes d'évolution chronologique et diagrammes d'aires empilées (`stackplot`).
+  4. Cartes choroplèthes communales et comparatifs interdépartementaux.
+========================================================================================
+"""
 from __future__ import annotations
 
 import re
@@ -41,8 +52,12 @@ from core.common.ofb_charte import (
 from core.common.percent_format import int_percents_largest_remainder
 
 
+# ========================================================================================
+# SELECTION ET CONFIGURATION DU STYLE GRAPHIQUE OFB
+# ========================================================================================
+
 def _pick_mpl_font() -> str:
-    """Pick the best matplotlib-compatible font from the OFB chain."""
+    """Sélectionne la meilleure police disponible (Marianne, Arial, Liberation Sans)."""
     from matplotlib.font_manager import fontManager
     available = {f.name for f in fontManager.ttflist}
     for name in ("Marianne", "Arial", "Liberation Sans", "Helvetica", "DejaVu Sans"):
@@ -79,7 +94,7 @@ _KEYWORDS_ATTENTE = ("en attente", "attente")
 
 
 def _pie_segment_color(label: str, base_color: str) -> str:
-    """Couleur OFB d'un segment de camembert selon son libellé métier."""
+    """Associe une couleur spécifique à chaque catégorie (rouge pour infractions, gris pour attente)."""
     lbl = str(label).lower()
     if any(k in lbl for k in _KEYWORDS_INFRACTION):
         return COLOR_CHART_4
@@ -89,13 +104,17 @@ def _pie_segment_color(label: str, base_color: str) -> str:
 
 
 def apply_mpl_style() -> None:
-    """Style matplotlib pour les graphiques exportés en PNG."""
+    """Applique les paramètres de style globaux de la charte OFB à Matplotlib."""
     plt.rcParams["font.family"] = _pick_mpl_font()
     plt.rcParams["axes.titlesize"] = 12
     plt.rcParams["axes.labelsize"] = 10
     plt.rcParams["figure.facecolor"] = "white"
     plt.rcParams["legend.frameon"] = False
 
+
+# ========================================================================================
+# POSITIONNEMENT ET GESTION DES LEGENDES
+# ========================================================================================
 
 def _legend_below_axis(
     ax,
@@ -104,7 +123,7 @@ def _legend_below_axis(
     fontsize: float = 8.0,
     anchor_y: float = -0.14,
 ) -> None:
-    """Légende centrée sous le graphique (repère axes, y négatif)."""
+    """Place la légende de manière centrée sous le graphique."""
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return
@@ -123,7 +142,7 @@ def _legend_below_axis(
 
 
 def _legend_right_of_axis(ax, *, fontsize: float = 8.0) -> None:
-    """Légende à droite du tracé (évite la superposition avec les libellés d'axe X longs / tournés)."""
+    """Place la légende à la droite du graphique."""
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return
@@ -146,7 +165,7 @@ def _tight_with_legend_space(
     left: float = 0.04,
     right: float = 0.96,
 ) -> None:
-    """Marges figure (légende sous l'axe ou à droite selon le graphique)."""
+    """Ajuste les marges de la figure pour ne pas tronquer la légende."""
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -165,6 +184,7 @@ def save_chart(
     tight: bool = True,
     pad_inches: float = 0.1,
 ) -> str:
+    """Exporte la figure matplotlib au format PNG sur le disque temporaire."""
     path = str(tmp_dir / name)
     save_kw = {"dpi": dpi, "facecolor": "white"}
     if tight:
@@ -179,10 +199,7 @@ _RE_PERIODE_SEMAINE_W_VERS_S = re.compile(r"(\d{4})-W(\d{2})\b")
 
 
 def _sanitize_chart_period_tick_labels(labels: list) -> list[str]:
-    """
-    Libellés d'axe (périodes) : retire toute mention « ISO » et affiche les semaines en YYYY-Sww
-    (même si le CSV contient encore YYYY-Www ou un suffixe « (ISO) »).
-    """
+    """Nettoie les libellés de semaines pour afficher une notation uniforme `YYYY-Sww`."""
     out: list[str] = []
     for raw in labels:
         s = str(raw).strip()
@@ -193,16 +210,16 @@ def _sanitize_chart_period_tick_labels(labels: list) -> list[str]:
     return out
 
 
+# ========================================================================================
+# CONSTRUCTEURS DE CAMEMBERTS ET DONUTS
+# ========================================================================================
+
 def _prepare_pie_data(
     data: dict,
     group_below_pct: float = 1.0,
     other_label: str = "Autres domaines",
 ) -> dict:
-    """
-    Filtre, regroupe les catégories < group_below_pct % dans 'Autres domaines'
-    et trie les données par ordre décroissant (avec 'Autres domaines' en toute fin).
-    Exclut du regroupement les graphiques de statuts (Conforme / Non-conforme / En attente).
-    """
+    """Regroupe les catégories de faible effectif (< group_below_pct %) sous l'étiquette 'Autres domaines'."""
     if not data:
         return {}
 
@@ -261,6 +278,7 @@ def chart_pie(
     group_below_pct: float = 1.0,
     other_label: str = "Autres domaines",
 ) -> str:
+    """Génère un graphique camembert (ou anneau/donut) avec légende inférieure."""
     if apply_mpl:
         apply_mpl_style()
     prepared_data = _prepare_pie_data(data, group_below_pct=group_below_pct, other_label=other_label)
@@ -376,7 +394,7 @@ def chart_pie_legend_right(
     group_below_pct: float = 1.0,
     other_label: str = "Autres domaines",
 ) -> str:
-    """Camembert / Donut compact avec légende à droite en 1 seule colonne (libellés compacts sur 2 lignes)."""
+    """Génère un camembert compact avec légende latérale disposée à droite."""
     if apply_mpl:
         apply_mpl_style()
     prepared_data = _prepare_pie_data(data, group_below_pct=group_below_pct, other_label=other_label)
@@ -438,6 +456,10 @@ def chart_pie_legend_right(
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
 
 
+# ========================================================================================
+# CONSTRUCTEURS DE BARRES ET HISTOGRAMMES
+# ========================================================================================
+
 def chart_bar(
     categories: list,
     values: list,
@@ -449,6 +471,7 @@ def chart_bar(
     *,
     figure_scale: float = 1.0,
 ) -> str:
+    """Génère un histogramme à barres verticales simples."""
     apply_mpl_style()
     fig, ax = plt.subplots(figsize=(CHART_FIG_WIDTH * figure_scale, CHART_FIG_HEIGHT_BAR * figure_scale))
     x = np.arange(len(categories))
@@ -480,6 +503,7 @@ def chart_bar_grouped(
     legend_ncol_max: int = 4,
     figure_scale: float = 1.0,
 ) -> str:
+    """Génère un graphique à barres groupées par catégorie."""
     apply_mpl_style()
     fig, ax = plt.subplots(figsize=(CHART_FIG_WIDTH * figure_scale, CHART_FIG_HEIGHT_WITH_LEGEND * figure_scale))
     x = np.arange(len(group_labels))
@@ -526,7 +550,7 @@ def chart_bar_stacked(
     legend_ncol_max: int = 4,
     figure_scale: float = 1.0,
 ) -> str:
-    """Barres empilées : chaque série est empilée sur la précédente."""
+    """Génère un graphique à barres verticales empilées."""
     apply_mpl_style()
     group_labels = _sanitize_chart_period_tick_labels(list(group_labels))
     n_groups = max(1, len(group_labels))
@@ -590,11 +614,7 @@ def chart_stackplot_resultats_domaine(
     legend_ncol_max: int = 3,
     figure_scale: float = 0.68,
 ) -> str:
-    """
-    Aires empilées (stackplot) par domaine : Conforme, Non-conforme, En attente.
-
-    Gabarit compact pour tenir sur une même page PDF avec tableau + camembert.
-    """
+    """Génère un graphique d'aires empilées (`stackplot`) compact (Conforme/Non-conforme/Attente)."""
     apply_mpl_style()
     n = max(1, len(domain_labels))
     # Marge droite réservée à la légende (hors zone des libellés X tournés).
@@ -658,7 +678,7 @@ def chart_bar_horizontal_stacked(
     grouped_colors: list[str] | None = None,
     title_color: str | None = None,
 ) -> str:
-    """Barres horizontales empilées : une ligne par catégorie, segments empilés selon les séries."""
+    """Génère un graphique à barres horizontales empilées pour visualiser la répartition par catégorie/usager."""
     if apply_mpl:
         apply_mpl_style()
     bar_palette = grouped_colors if grouped_colors else CHART_BAR_GROUPED_COLORS
@@ -800,7 +820,7 @@ def chart_bar_horizontal_simple(
     apply_mpl: bool = True,
     bar_color: str | None = None,
 ) -> str:
-    """Barres horizontales simples (brochure PDF, sans titre ni légende matplotlib)."""
+    """Génère un graphique simple à barres horizontales sans légende (pour brochures)."""
     if apply_mpl:
         apply_mpl_style()
     n = max(1, len(labels))
@@ -827,6 +847,10 @@ def chart_bar_horizontal_simple(
     return save_chart(fig, tmp_dir, name, dpi=dpi)
 
 
+# ========================================================================================
+# CONSTRUCTEURS DE COURBES ET CARTES CHOROPLETHES
+# ========================================================================================
+
 def chart_line_evolution(
     x_labels: list,
     series: dict,
@@ -839,7 +863,7 @@ def chart_line_evolution(
     legend_ncol_max: int = 4,
     figure_scale: float = 1.0,
 ) -> str:
-    """Courbe d'évolution multi-séries (un trait par indicateur)."""
+    """Génère une courbe d'évolution temporelle multi-indicateurs."""
     apply_mpl_style()
     x_labels = _sanitize_chart_period_tick_labels(list(x_labels))
     n_x = max(1, len(x_labels))
@@ -890,7 +914,7 @@ def _make_map(
     points_gdf=None,
     points_label=None,
 ) -> str:
-    """Génère une carte choroplèthe PNG pour intégration dans le PDF."""
+    """Génère une carte choroplèthe communale matplotlib autonome."""
     apply_mpl_style()
     communes_simple = communes_gdf.copy()
     communes_simple["geometry"] = communes_simple.geometry.simplify(
@@ -989,6 +1013,10 @@ def _make_map(
     return save_chart(fig, tmp_dir, name)
 
 
+# ========================================================================================
+# RENDUS COMPARATIFS INTERDEPARTEMENTAUX
+# ========================================================================================
+
 def chart_ppp_ratio_pej(
     depts: list[str],
     total_pej: list[int],
@@ -998,7 +1026,7 @@ def chart_ppp_ratio_pej(
     *,
     figure_scale: float = 1.0,
 ) -> str:
-    """Graphique comparatif des départements: part des PEJ PPP sur le total des PEJ."""
+    """Génère un comparatif des départements mesurant la part des PEJ PPP dans le total des procédures."""
     apply_mpl_style()
     
     # Calculer les PEJ hors PPP
@@ -1071,7 +1099,7 @@ def chart_interdept_stacked_bar(
     colors: list[str] | None = None,
     figure_scale: float = 1.0,
 ) -> str:
-    """Graphique comparatif interdépartemental en barres empilées horizontales."""
+    """Génère un comparatif interdépartemental en barres horizontales empilées."""
     apply_mpl_style()
     
     if not colors:
@@ -1115,4 +1143,4 @@ def chart_interdept_stacked_bar(
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
         
-    return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
+    return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)

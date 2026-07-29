@@ -15,7 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+SUITE DE TESTS - CONFIGURATION PYTEST (`conftest.py`)
+========================================================================================
+Ce module Pytest configure l'environnement d'exécution automatique des tests unitaires.
+
+Rôles :
+  1. Injection des dossiers `core/` et `tools/` dans le `sys.path` Python.
+  2. Mocking (simulation d'objets factices `MagicMock`) des modules PyQGIS (`qgis.core`, `qgis.gui`,
+     `qgis.PyQt`) afin que les tests automatiques puissent s'exécuter hors environnement QGIS.
+========================================================================================
+"""
 from __future__ import annotations
 
 import sys

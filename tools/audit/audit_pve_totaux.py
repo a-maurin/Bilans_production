@@ -15,16 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Audit cohérence des totaux PVe pour un profil thématique.
+========================================================================================
+OUTIL D'AUDIT : COHERENCE DES TOTAUX PVe (`audit_pve_totaux.py`)
+========================================================================================
+Ce script d'audit permet de rejouer les étapes de chargement et de filtrage des Procès-Verbaux
+Électroniques (PVe) afin de vérifier la cohérence des totaux entre les résultats en mémoire
+et les fichiers CSV exportés (`pve_*.csv`).
 
-Rejoue load_pve + _filter_pve (+ restriction PNF si restrict_geo: pnf) et compare
-au nombre de lignes des exports pve_<prefix>.csv (hors fichiers *_par_zone).
-
-Usage:
-  python tools/audit_pve_totaux.py --profil pnf --dept 21 \\
-    --date-deb 2025-01-01 --date-fin 2025-12-31 --out-dir data/out/bilan_pnf
+Utilité pédagogique :
+  1. Permet de vérifier qu'aucune perte de ligne PVe ne survient lors du filtrage NATINF/mots-clés.
+  2. Alerte en cas d'écart entre le nombre de lignes réelles en base et les exports du bilan.
+========================================================================================
 """
 from __future__ import annotations
 

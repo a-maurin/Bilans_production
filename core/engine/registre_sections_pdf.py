@@ -15,24 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Contrat pour un futur registre de sections PDF partagé global / thématique.
+========================================================================================
+MODULE : REGISTRE DES SECTIONS PDF (`registre_sections_pdf.py`)
+========================================================================================
+Ce module implémente le pattern d'architecture Registre (`SectionRegistry`) pour le rendu
+des différentes sections de rapports PDF.
 
-Aujourd'hui, le rendu PDF reste implémenté dans
-``bilan_global.analyse_global`` et ``bilan_thematique.bilan_thematique_engine``.
-Ce module fournit un squelette minimal (enregistrement / résolution) pour
-factoriser progressivement les sections sans disperser des ``if profil``.
-
-Usage envisagé :
-
-    from core.engine.registre_sections_pdf import SectionRegistry
-
-    registry = SectionRegistry()
-    registry.register("sec4", render_sec4_thematic)
-    registry.render("sec4", context)
+Objectifs :
+  1. Permettre aux différents générateurs d'enregistrer dynamiquement leurs fonctions de rendu
+     associées à chaque identifiant de section (ex: `sec1`, `sec2`, `sec4`).
+  2. Offrir une exécution modulaire (`render()` et `render_many()`) évitant la multiplication
+     des conditions `if/else` monolithiques.
+========================================================================================
 """
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping

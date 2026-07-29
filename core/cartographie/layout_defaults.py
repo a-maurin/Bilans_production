@@ -15,13 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Chargement et application des gabarits de mise en page (layout_defaults.yaml).
+========================================================================================
+MODULE : GABARITS DE MISE EN PAGE ET PARSER LAYOUT (`layout_defaults.py`)
+========================================================================================
+Ce module gère la lecture et l'application des gabarits géométriques de mise en page QGIS
+déclarés dans `layout_defaults.yaml` (ex. page carrée 210x210mm ou A4 Paysage).
 
-L'application PyQGIS est optionnelle : les fonctions de parsing sont testables sans QGIS.
+Rôles principaux :
+  1. Parsing des dimensions (en mm) des cartes, légendes, bandeaux et logos.
+  2. Sélection automatique du gabarit approprié selon les dimensions du papier (`auto_template_from_page`).
+  3. Repositionnement exact des éléments visuels ReportLab / PyQGIS sans chevauchement.
+========================================================================================
 """
-
 from __future__ import annotations
 
 import logging

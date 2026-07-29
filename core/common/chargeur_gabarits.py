@@ -9,14 +9,25 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
 """
-Module de découverte, chargement et résolution des gabarits de présentation PDF.
+========================================================================================
+MODULE : CHARGEUR ET GESTIONNAIRE DE GABARITS DE PRESENTATION (`chargeur_gabarits.py`)
+========================================================================================
+Ce module gère la découverte, le chargement et l'attribution des gabarits personnalisés (fichiers YAML).
+
+Fonctions assurées :
+  1. Découverte des répertoires de gabarits (locaux et globaux).
+  2. Chargement et validation de la structure YAML d'un gabarit (gabarit_id, libellés, cibles).
+  3. Vérification de la compatibilité d'un gabarit avec un profil de bilan.
+  4. Résolution automatique du gabarit approprié selon l'organisation (Région / Service).
+  5. Détermination des éléments de carte à masquer (pochoirs cartographiques).
+========================================================================================
 """
 from __future__ import annotations
 
@@ -30,8 +41,17 @@ from core.chemins_projet import PROJECT_ROOT
 logger = logging.getLogger(__name__)
 
 
+# ========================================================================================
+# RECHERCHE ET LISTAGE DES DOSSIERS DE GABARITS
+# ========================================================================================
+
 def get_gabarits_dirs(root: Path | None = None) -> list[Path]:
-    """Retourne la liste des dossiers de gabarits (officiel + local utilisateur)."""
+    """Retourne la liste des répertoires où sont stockés les fichiers YAML de gabarits.
+
+    Consulte dans l'ordre :
+      - Le dossier du projet (`config/presentation/gabarits/`).
+      - Le dossier utilisateur local (`~/.ofbilan/gabarits/`).
+    """
     base_root = root or PROJECT_ROOT
     dirs = [
         base_root / "config" / "presentation" / "gabarits",
@@ -52,7 +72,7 @@ def get_gabarits_dirs(root: Path | None = None) -> list[Path]:
 
 
 def load_gabarit_from_path(file_path: Path) -> dict[str, Any] | None:
-    """Charge et valide la structure minimale d'un fichier YAML de gabarit."""
+    """Lit un fichier YAML de gabarit, le valide et complète ses valeurs par défaut."""
     try:
         with file_path.open("r", encoding="utf-8") as f:
             content = yaml.safe_load(f)
@@ -70,10 +90,7 @@ def load_gabarit_from_path(file_path: Path) -> dict[str, Any] | None:
 
 
 def list_gabarits(root: Path | None = None) -> list[dict[str, Any]]:
-    """
-    Retourne la liste des gabarits disponibles avec leurs métadonnées.
-    Chaque élément comporte 'gabarit_id', 'label', 'description', 'cible'.
-    """
+    """Scanne tous les dossiers et retourne la liste des gabarits disponibles avec leurs métadonnées."""
     seen: set[str] = set()
     gabarits: list[dict[str, Any]] = []
 
@@ -98,8 +115,12 @@ def list_gabarits(root: Path | None = None) -> list[dict[str, Any]]:
     return gabarits
 
 
+# ========================================================================================
+# CHARGEMENT ET VERIFICATION DE COMPATIBILITE DES GABARITS
+# ========================================================================================
+
 def load_gabarit(gabarit_id: str, root: Path | None = None) -> dict[str, Any] | None:
-    """Charge la configuration complète d'un gabarit spécifique par son ID."""
+    """Charge la configuration complète d'un gabarit spécifique par son identifiant."""
     gid_clean = str(gabarit_id).strip()
     if not gid_clean or gid_clean.lower() in ("none", "null", "standard", "default"):
         return None
@@ -111,7 +132,7 @@ def load_gabarit(gabarit_id: str, root: Path | None = None) -> dict[str, Any] | 
             if data and data.get("gabarit_id") == gid_clean:
                 return data
 
-        # Recherche fallback si l'ID diffère du nom du fichier
+        # Recherche par parcours de tous les fichiers YAML si le nom de fichier diffère
         for p in d.glob("*.yaml"):
             data = load_gabarit_from_path(p)
             if data and data.get("gabarit_id") == gid_clean:
@@ -126,7 +147,7 @@ def is_gabarit_compatible(
     profile_id: str | None = None,
     cible: str = "bilan",
 ) -> bool:
-    """Vérifie si un gabarit est compatible avec la cible (bilan/brochure) et le profil."""
+    """Vérifie si un gabarit peut s'appliquer au type de document (bilan ou brochure) et au profil choisi."""
     g_cible = str(gabarit.get("cible", "les_deux")).strip().lower()
     if g_cible not in ("les_deux", cible.lower()):
         return False
@@ -144,10 +165,10 @@ def resolve_gabarit_for_service(
     code_service: str | None = None,
     root: Path | None = None,
 ) -> str | None:
-    """
-    Résout l'ID de gabarit par défaut selon la hiérarchie Région → Service.
-    1. Correspondance exacte région + service
-    2. Correspondance région seule
+    """Détermine automatiquement le gabarit à utiliser selon la région et le service demandeur.
+
+    1. Priorité 1 : Gabarit spécifique au service dans la région.
+    2. Priorité 2 : Gabarit régional général.
     """
     reg = str(code_region or "").strip().lower()
     srv = str(code_service or "").strip().lower()
@@ -180,11 +201,7 @@ def resolve_items_masques_carte(
     *,
     is_brochure: bool = False,
 ) -> list[str]:
-    """
-    Résout la liste des identifiants d'éléments de la carte à masquer selon la hiérarchie :
-    1. Gabarit (cartographie.items_masques / cartographie.items_masques_brochure)
-    2. Profil bilan (cartographie.items_masques_brochure / cartographie.items_masques)
-    """
+    """Détermine la liste des éléments de la carte à masquer (ex: légendes ou logos spécifiques)."""
     g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
     if isinstance(g_carto, dict):
         res = g_carto.get("items_masques_brochure", g_carto.get("items_masques"))
@@ -202,4 +219,3 @@ def resolve_items_masques_carte(
             return [str(x) for x in res]
 
     return []
-

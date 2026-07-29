@@ -15,8 +15,22 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Utilitaires transverses pour les moteurs PDF (global, profil, etc.)."""
+"""
+========================================================================================
+MODULE : ASSISTANTS DES MOTEURS DE GENERATION PDF (`engine_pdf_helpers.py`)
+========================================================================================
+Ce module regroupe des fonctions d'assistance transverses utilisées par les différents
+générateurs de rapports PDF.
+
+Fonctions principales :
+  1. `truncate_with_dash()` : tronquage propre des textes longs avec tiret pour les tableaux PDF.
+  2. `nb_non_conformes_brut()` : calcul des non-conformités (somme des Infractions et Manquements).
+  3. `pct_table_cell()` : formatage sécurisé des pourcentages pour les cellules de tableaux.
+  4. `get_region_name_for_footer()` : résolution du nom officiel de la Direction Régionale (DR)
+     depuis le fichier de configuration `annuaire_ofb.yaml`.
+========================================================================================
+"""
+from __future__ import annotations
 
 import pandas as pd
 import yaml

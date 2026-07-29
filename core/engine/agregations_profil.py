@@ -15,7 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+MODULE : CALCULS D'AGREGATION PAR PROFIL DE BILAN (`agregations_profil.py`)
+========================================================================================
+Ce module regroupe les fonctions de calcul statistique et d'agrégation de données pour
+les bilans par profil (SD départemental, Région, thématique spécifique).
+
+Opérations clés :
+  1. Comptage des opérations de contrôle et décompte par domaine / thème / usager.
+  2. Classification des résultats (Conforme, Manquement, Infraction, En attente).
+  3. Construction des tableaux de détails des procédures (PEJ, PA, PVe).
+  4. Génération des fichiers CSV de synthèse intermédiaire prêts pour l'injection PDF.
+========================================================================================
+"""
 from __future__ import annotations
 
 from pathlib import Path

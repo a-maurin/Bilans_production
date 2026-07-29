@@ -15,12 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Moteur unique : exécution orientée profils.
+========================================================================================
+MODULE : EXECUTION PAR LOTS DE PROFILS DE BILAN (`execution_lots_profils.py`)
+========================================================================================
+Ce module orchestre le traitement par lots ("batch") de plusieurs profils de bilan
+(ex. enchaînement automatique des bilans Agrainage, Chasse, PNF, etc.).
 
-Pipeline logique : résolution du profil -> backend unique `run_engine`.
-Les spécificités global/thématiques sont pilotées par le YAML de profil.
+Fonctionnalités :
+  1. Résolution dynamique des dossiers de sortie (`data/out/bilan_<profil>_<code_dept>`).
+  2. Gestion du mode combiné (`--combine`) pour générer une séquence consolidée.
+  3. Vérification des capacités de mixage (`mix_batch`) pour empêcher des mélanges incompatibles.
+  4. Récupération et ouverture automatique dans l'explorateur des fichiers PDF produits.
+========================================================================================
 """
 from __future__ import annotations
 

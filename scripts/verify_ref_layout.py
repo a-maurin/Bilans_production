@@ -16,8 +16,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Vérifie la cohérence de ref/programme et ref/hors_programme avec le code."""
+"""
+========================================================================================
+SCRIPT DE DIAGNOSTIC : VERIFICATION DU LAYOUT DE REFERENTIEL (`verify_ref_layout.py`)
+========================================================================================
+Ce script d'intégrité contrôle la structure du dossier `ref/` (référentiels obligatoires).
+
+Vérifications effectuées :
+  1. Présence de tous les fichiers référentiels indispensables (`types_usagers.csv`, `liste_natinf.csv`).
+  2. Présence des couches SIG de base (`bilans_carte.qgz`, `emprise_dep.gpkg`, SHP communes/PNF).
+  3. Détection des doublons ou des anciens dossiers déplacés.
+========================================================================================
+"""
 from __future__ import annotations
 
 import sys

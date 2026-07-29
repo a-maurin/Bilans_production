@@ -15,8 +15,28 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Chargement des données OSCEAN (points de contrôle, PEJ, PA, PVe, PNF, TUB, infractions PJ)."""
+"""
+========================================================================================
+MODULE : CHARGEURS DE DONNEES METIER ET GEOSPATIALES (`chargeurs_donnees.py`)
+========================================================================================
+Ce module constitue le moteur principal d'acquisition, de nettoyage et d'enrichissement
+spatial des données de police de l'environnement de l'OFB.
+
+Données traitées :
+  1. Points de contrôle OSCEAN (GPKG / Shapefiles issus des contrôles de terrain).
+  2. Procédures d'Enquête Judiciaire (PEJ) issues des exports ODS/XLSX d'OSCEAN.
+  3. Procédures Administratives (PA) et Procès-Verbaux Électroniques (PVe).
+  4. Référentiels géographiques : communes (21 / France), zones PNF (Parc National de
+     Forêts) et TUB (Tuberculose Bovine).
+  5. Référentiels d'infractions (Codes NATINF et leurs qualifications juridiques).
+
+Fonctionnalités avancées :
+  - Mise en cache mémoire de session (`_SESSION_CACHE`) pour accélérer le traitement.
+  - Jointures spatiales automatiques via GeoPandas / OGR pour attribuer les communes.
+  - Parsing robuste des dates multi-formats (ISO et français DD/MM/YYYY).
+  - Coalescence des dates et dédoublonnage intelligent par ID de dossier (`DC_ID`).
+========================================================================================
+"""
 from __future__ import annotations
 import logging
 import sys
@@ -80,7 +100,11 @@ def read_vector_attributes(path: Path) -> pd.DataFrame:
         ds = None
         return pd.DataFrame(data, columns=fields)
 
-# Ordre aligné sur bilan_thematique_engine._get_insee_col
+# ========================================================================================
+# 1. UTILITAIRES DE LECTURE VECTEUR ET GESTION DU CACHE MEMOIRE
+# ========================================================================================
+
+# Ordre d'évaluation prioritaire des colonnes INSEE pour l'unification des jeux de données
 _INSEE_COL_PRIORITY: Tuple[str, ...] = (
     "insee_comm",
     "insee_commun",
@@ -88,7 +112,7 @@ _INSEE_COL_PRIORITY: Tuple[str, ...] = (
     "INF-INSEE",
 )
 
-
+# Structure du cache global de session (évite de relire plusieurs fois les fichiers volumineux)
 _SESSION_CACHE = {
     "active": False,
     "point_ctrl": None,
@@ -289,6 +313,10 @@ def _read_spreadsheet(path: Path, *, dtype=str) -> pd.DataFrame:
         return pd.read_excel(path, dtype=dtype, engine="openpyxl")
     raise ValueError(f"Format de classeur non pris en charge : {path}")
 
+
+# ========================================================================================
+# 2. CHARGEMENT ET FILTRAGE DES DONNEES METIER OSCEAN (POINTS CTRL, PEJ, PA, PVE)
+# ========================================================================================
 
 def load_point_ctrl(
     root: Path,
@@ -758,6 +786,10 @@ def load_rech_av(root: Path) -> pd.DataFrame:
         logger.warning("Lecture de rech_av_*.csv impossible : %s", e)
     return pd.DataFrame(columns=["num_dossier", "mots_cles"])
 
+
+# ========================================================================================
+# 3. REFERENTIELS GEOGRAPHIQUES ET ZONAGES SPATIAUX (PNF, TUB)
+# ========================================================================================
 
 def _load_pnf_from_127_communes_shp(root: Path) -> Optional[pd.DataFrame]:
     """
@@ -1438,6 +1470,10 @@ def overlay_pnf_zone_from_communes_pnf_csv(
     return out
 
 
+# ========================================================================================
+# 4. COMMUNES, CENTROIDES ET JOINTURES SPATIALES AUTOMATIQUES
+# ========================================================================================
+
 def load_communes_noms(root: Path) -> dict:
     """
     Charge la table de correspondance code INSEE → nom de commune.
@@ -1847,6 +1883,10 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
         "ni ref/programme/sig/communes-france-2025.csv ni shapefile/GeoPackage équivalent."
     )
 
+
+# ========================================================================================
+# 5. REFERENTIELS D'INFRACTIONS (NOMENCLATURE NATINF)
+# ========================================================================================
 
 def load_natinf_ref(root: Path) -> pd.DataFrame:
     """Charge le référentiel NATINF pour libeller les exports."""

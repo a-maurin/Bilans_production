@@ -15,8 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Interface de configuration des profils YAML (pilotée par schema_ui.yaml)."""
+"""
+========================================================================================
+OUTIL : INTERFACE GUI Tkinter DE CONFIGURATION DES PROFILS (`config_profils.py`)
+========================================================================================
+Cet outil autonome fournit une interface graphique Tkinter permettant d'éditer visuellement
+les fichiers de profil YAML (`config/profils_bilan/*.yaml`) sans avoir à manipuler la syntaxe YAML à la main.
+
+Fonctionnalités :
+  1. Génération dynamique des formulaires de saisie pilotés par le schéma `schema_ui.yaml`.
+  2. Gestion des valeurs héritées depuis `_defaults.yaml` et des surcharges spécifiques par profil.
+  3. Validation des types de données (chaînes, listes, entiers, booléens) et réécriture propre des fichiers.
+========================================================================================
+"""
 from __future__ import annotations
 
 import sys

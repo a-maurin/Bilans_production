@@ -15,8 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Audit cohérence des comptages profil synthese_activite_PA_PJ (département 21, 2025), dont PVe (resume + pve_global_resume)."""
+"""
+========================================================================================
+OUTIL D'AUDIT : COHERENCE DES COMPTAGES DE SYNTHESE (`audit_synthese_donnees.py`)
+========================================================================================
+Ce script d'audit valide les métriques calculées pour le profil `synthese_activite_PA_PJ`.
+
+Fonctions d'audit :
+  1. Comparaison du décompte des opérations de contrôle par rapport aux fiches de terrain.
+  2. Vérification des procédures administratives (PA) et judiciaires (PEJ).
+  3. Contrôle des totaux PVe (résumés globaux vs fichiers détaillés).
+========================================================================================
+"""
 from __future__ import annotations
 
 import sys

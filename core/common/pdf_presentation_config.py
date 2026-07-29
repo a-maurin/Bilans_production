@@ -4,7 +4,7 @@
 # selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
 # la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
 #
-# Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE GARANTIE ;
+# Ce programme est distribué dans l'espoir qu'il sera utile, me SANS AUCUNE GARANTIE ;
 # sans même la garantie implicite de QUALITÉ MARCHANDE ou D'ADÉQUATION À UN USAGE PARTICULIER.
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
@@ -15,15 +15,30 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Chargement/fusion de la configuration de présentation PDF (YAML)."""
+"""
+========================================================================================
+MODULE : CONFIGURATION ET RÈGLES DE PRÉSENTATION PDF (`pdf_presentation_config.py`)
+========================================================================================
+Ce module orchestre le chargement, la fusion et la résolution des options de présentation PDF.
+
+Règles de fusion hiérarchique :
+  1. Configuration de base (`DEFAULT_PDF_PRESENTATION_CONFIG`).
+  2. Surcharge par le scope du document (`global`, `thematique`, `synthese_regionale`).
+  3. Surcharge par le profil métier spécifique (`agrainage`, `chasse`, etc.).
+  4. Surcharge par le gabarit de rapport YAML sélectionné.
+
+Fonctions associées :
+  - Normalisation des identifiants et titres de sections/sous-sections.
+  - Masquage des blocs sans données ou hors périmètre de diffusion.
+========================================================================================
+"""
 from __future__ import annotations
 
 import warnings
 import yaml
 from core.chemins_projet import PROJECT_ROOT
 
-# Load identity configuration
+# Chargement du fichier d'identité de l'auteur
 _IDENTITE_PATH = PROJECT_ROOT / "config" / "identite.yaml"
 if _IDENTITE_PATH.exists():
     _IDENTITE = yaml.safe_load(_IDENTITE_PATH.read_text(encoding="utf-8")) or {}
@@ -36,13 +51,13 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-# Alias sémantiques (migration progressive) → identifiants historiques internes.
+# Identifiants de sections avec leurs alias historiques pour la rétrocompatibilité
 SECTION_ID_ALIASES: dict[str, str] = {
     "sec_usagers": "sec4",
     "sec_procedures": "sec3",
 }
 
-# Sous-sections du chapitre « Activité par type d'usager » (ID interne sec4, numérotation PDF 3.x).
+# Sous-sections du chapitre "Activité par type d'usager"
 SEC4_SUBSECTION_DEFAULTS: tuple[tuple[str, str], ...] = (
     ("sec41", "3.1. Thème de contrôle par type d'usager"),
     ("sec42", "3.2. Résultats des contrôles par type d'usager"),
@@ -51,27 +66,28 @@ SEC4_SUBSECTION_DEFAULTS: tuple[tuple[str, str], ...] = (
 )
 
 
+# Configuration de présentation par défaut pour l'ensemble du système
 DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
     "version": 1,
     "behavior": {
-        "missing_data_policy": "hide_silently",  # hide_silently | show_placeholder
-        "unknown_block_policy": "ignore",  # ignore | warn
+        "missing_data_policy": "hide_silently",
+        "unknown_block_policy": "ignore",
     },
     "defaults": {
         "title": {
             "model": "three_lines",
             "line1": "Bilan des activités de police\nde l'environnement de l'OFB",
-            "line2_mode": "profile_label",  # profile_label | fixed | none
+            "line2_mode": "profile_label",
             "line2_fixed": "",
-            "line3_mode": "department",  # department | fixed
+            "line3_mode": "department",
             "line3_fixed": "",
             "typography": {
                 "normalize_department_name": True,
-                "apostrophe_style": "typographic",  # typographic | ascii
+                "apostrophe_style": "typographic",
             },
         },
         "title_page": {
-            "alignment": "right",  # left | center | right
+            "alignment": "right",
             "right_indent_mm": 25,
             "paragraph_space_after": 8,
             "main_title_font_size": 24,
@@ -236,39 +252,28 @@ DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
                 {
                     "when": "always",
                     "text": (
-                        "Créé avec OFBilan – Auteur : Aguirre MAURIN (OFB, Service départemental de la Côte d’Or)"
+                        "Créé avec OFBilan – Auteur⯯: Aguirre MAURIN (OFB, Service départemental de la Côte d’Or)"
                     ),
                     "section": "annex"
                 },
             ],
         },
-        # Mise en page des tableaux PDF (ReportLab) — préférer le pilotage YAML.
         "tables": {
-            # Si false : pas de coupure entre pages sauf si le tableau dépasse max_rows_keep_together
-            # (dans ce cas add_table force split_by_row et désactive KeepTogether).
             "split_by_row": False,
             "max_rows_keep_together": 8,
             "max_cell_chars_before_split": 100,
             "vertical_header": {
-                # Décalage horizontal fin (pt) après centrage des libellés verticaux.
                 "pad_x_pt": 0.0,
-                # Segments empilés pour libellés longs (ex. domaines) ; hauteur de ligne d'en-tête adaptée.
                 "max_lines": 6,
                 "font_size": 7.0,
                 "row_padding_pt": 8.0,
             },
             "usagers_x_domaine": {
-                # Nombre maximal de colonnes « domaine » affichées (tri décroissant sur le volume).
-                # null ou <= 0 : pas de limite sur les colonnes.
                 "max_domain_columns": 14,
-                # horizontal_wrap (défaut) ou vertical pour les en-têtes de colonnes domaine.
                 "header_layout": "horizontal_wrap",
                 "header_font_size": 7.0,
                 "header_wrap_max_lines": 5,
-                # Part de largeur pour la colonne type_usager (reste réparti entre les domaines).
                 "first_column_width_ratio": 0.20,
-                # Nombre maximal de lignes « type d'usager » (tri décroissant sur le volume).
-                # null ou <= 0 : pas de limite sur les lignes.
                 "max_usager_rows": 15,
                 "overflow_note_separator": " ",
                 "overflow_note_column_part": (
@@ -279,12 +284,9 @@ DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
                     "Types d’usagers : {rows_shown} lignes affichées sur {rows_total} "
                     "(ordre décroissant du volume de contrôles sur les colonnes affichées)."
                 ),
-                # Enveloppe HTML ; {note} = parties concaténées (colonnes / lignes).
                 "overflow_note_wrap": "<i>{note}</i>",
             },
         },
-        # Éléments visuels OFB (filigranes, bandeaux) — calibrés sur le modèle Word dotx.
-        # Le texte de pied de page (coordonnées SD départemental) reste géré par PDFReportBuilder.
         "charte": {
             "assets": {
                 "banner": "image5.jpg",
@@ -293,18 +295,14 @@ DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
                 "footer_deco": "image4.jpeg",
             },
             "title_page": {
-                # Bandeau Marianne + OFB en haut (header2 dotx ≈ 42 mm).
                 "banner_height_mm": 42.0,
-                # Fond décoratif bleu bas de page de garde (footer2 dotx, image6).
                 "deco_height_ratio": 0.50,
                 "deco_align": "bottom_right",
             },
             "content_page": {
                 "watermark_enabled": True,
-                # Filigrane courbes : une seule instance, ancrée bas-droite (comme visuel page de garde).
                 "filigrane_height_ratio": 0.50,
                 "filigrane_align": "bottom_right",
-                # Conservé pour compatibilité ; ignoré si filigrane_height_ratio est défini.
                 "watermark_height_mm": None,
                 "footer_deco_enabled": False,
                 "footer_deco_width_mm": 96.7,
@@ -334,8 +332,12 @@ DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
 }
 
 
+# ========================================================================================
+# FONCTIONS DE FUSION RECURSIVE ET RESOLUTION CONFIGURATION
+# ========================================================================================
+
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Merge récursif de dictionnaires (override prioritaire)."""
+    """Fusionne récursivement deux dictionnaires de configuration (les clés d'override sont prioritaires)."""
     out = deepcopy(base)
     for key, value in (override or {}).items():
         if key in out and isinstance(out[key], dict) and isinstance(value, dict):
@@ -346,7 +348,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
-    """Normalisation minimale des clés attendues."""
+    """Garantit la présence des sous-arbres essentiels dans la configuration."""
     out = deepcopy(data)
     out.setdefault("version", 1)
     out.setdefault("behavior", {})
@@ -360,12 +362,7 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_pdf_presentation_raw_config(root: Path) -> dict[str, Any]:
-    """
-    Charge la configuration brute depuis config/presentation/pdf_presentation.yaml
-    puis, en fallback de compatibilite, depuis ref/pdf_presentation.yaml.
-
-    Retourne toujours une config valide (fallback sur DEFAULT).
-    """
+    """Lit le fichier YAML `pdf_presentation.yaml` sur le disque et retourne sa configuration."""
     cfg_candidates = [
         root / "config" / "presentation" / "pdf_presentation.yaml",
         root / "ref" / "programme" / "pdf_presentation.yaml",
@@ -400,10 +397,7 @@ def resolve_pdf_presentation_config(
     diffusion: str | None = "interne",
     gabarit_id: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Résout la config effective :
-    defaults -> scopes[scope] -> profiles[profile_id] -> gabarit_id (si valide/compatible).
-    """
+    """Calcule la configuration finale effective après empilement des surcharges (scope, profil, gabarit)."""
     raw = load_pdf_presentation_raw_config(root)
 
     defaults = raw.get("defaults", {})
@@ -431,7 +425,6 @@ def resolve_pdf_presentation_config(
         profiles = raw.get("profiles", {})
         ext_cfg = profiles.get("_diffusion_externe", {}) if isinstance(profiles, dict) else {}
         if isinstance(ext_cfg, dict) and ext_cfg:
-            # Overlay hors scope profil : règles communes de diffusion externe.
             overlay = {k: v for k, v in ext_cfg.items() if k != "scope"}
             effective = _deep_merge(effective, overlay)
 
@@ -467,6 +460,10 @@ def resolve_pdf_presentation_config(
     }
 
 
+# ========================================================================================
+# RÈGLES ET MENTIONS DE DIFFUSION
+# ========================================================================================
+
 INTERNAL_DIFFUSION_TITLE_NOTICE = (
     "Diffusion restreinte – Document contenant des données sensibles – "
     "Réservé aux services autorisés."
@@ -474,7 +471,7 @@ INTERNAL_DIFFUSION_TITLE_NOTICE = (
 
 
 def normalize_diffusion(value: str | None) -> str:
-    """Retourne ``interne`` ou ``externe`` (défaut : interne)."""
+    """Valide le mode de diffusion du rapport (`interne` ou `externe`)."""
     s = str(value or "interne").strip().lower()
     if s in ("externe", "external", "ext"):
         return "externe"
@@ -482,17 +479,17 @@ def normalize_diffusion(value: str | None) -> str:
 
 
 def should_show_internal_diffusion_title_notice(diffusion: str | None) -> bool:
-    """Afficher la mention de diffusion restreinte sur la page de garde."""
+    """Indique si l'avertissement de diffusion restreinte doit apparaître sur la couverture."""
     return normalize_diffusion(diffusion) == "interne"
 
 
 def diffusion_pdf_suffix(diffusion: str | None) -> str:
-    """Suffixe de nom de fichier PDF selon le périmètre de diffusion."""
+    """Génère le suffixe du nom de fichier PDF (`_int` pour interne, `_ext` pour externe)."""
     return "_ext" if normalize_diffusion(diffusion) == "externe" else "_int"
 
 
 def apply_diffusion_pdf_suffix(path: Path | str, diffusion: str | None) -> Path:
-    """Ajoute ``_int`` ou ``_ext`` avant l'extension ``.pdf``."""
+    """Ajoute le suffixe de diffusion avant l'extension `.pdf` du fichier."""
     p = Path(path)
     tag = diffusion_pdf_suffix(diffusion)
     if p.suffix.lower() == ".pdf":
@@ -500,13 +497,17 @@ def apply_diffusion_pdf_suffix(path: Path | str, diffusion: str | None) -> Path:
     return p.with_name(f"{p.name}{tag}.pdf")
 
 
+# ========================================================================================
+# RESOLUTION DES SOUS-ENSEMBLES DE CONFIGURATION (PAGE DE GARDE, TABLES, CHARTE)
+# ========================================================================================
+
 def resolve_title_page_config(
     root: Path,
     *,
     scope: str,
     profile_id: str | None = None,
 ) -> dict[str, Any]:
-    """Retourne la configuration effective de la page de garde."""
+    """Extrait les paramètres de mise en forme de la page de garde."""
     resolved = resolve_pdf_presentation_config(root, scope=scope, profile_id=profile_id)
     effective = resolved.get("effective", {})
     title_page = (
@@ -523,11 +524,7 @@ def resolve_title_page_config(
 def resolve_internal_diffusion_notice_config(
     title_page_cfg: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """
-    Mise en page de la mention « diffusion restreinte » sur la page de garde.
-
-    ``text`` vide dans le YAML : texte par défaut ``INTERNAL_DIFFUSION_TITLE_NOTICE``.
-    """
+    """Retourne la configuration du bandeau d'avertissement de diffusion restreinte."""
     default_notice = DEFAULT_PDF_PRESENTATION_CONFIG["defaults"]["title_page"][
         "internal_diffusion_notice"
     ]
@@ -543,7 +540,7 @@ def resolve_internal_diffusion_notice_config(
 
 
 def resolve_notice_methodology_config(effective_cfg: dict[str, Any]) -> dict[str, Any]:
-    """Retourne la configuration effective de la notice méthodologique."""
+    """Retourne les paragraphes de la notice méthodologique initiale."""
     default_notice = DEFAULT_PDF_PRESENTATION_CONFIG["defaults"]["notice_methodology"]
     if not isinstance(effective_cfg, dict):
         return deepcopy(default_notice)
@@ -554,7 +551,7 @@ def resolve_notice_methodology_config(effective_cfg: dict[str, Any]) -> dict[str
 
 
 def resolve_tables_layout(effective_cfg: dict[str, Any] | None) -> dict[str, Any]:
-    """Fusionne la section ``tables`` de la config effective avec les valeurs par défaut."""
+    """Retourne les contraintes de rendu des tableaux (hauteur max, sécabilité, marges)."""
     base = deepcopy(
         (DEFAULT_PDF_PRESENTATION_CONFIG.get("defaults") or {}).get("tables") or {}
     )
@@ -567,7 +564,7 @@ def resolve_tables_layout(effective_cfg: dict[str, Any] | None) -> dict[str, Any
 
 
 def resolve_charte_config(effective_cfg: dict[str, Any] | None) -> dict[str, Any]:
-    """Fusionne la section ``charte`` (filigranes, bandeaux) avec les valeurs par défaut."""
+    """Retourne la configuration des filigranes et bandeaux institutionnels."""
     base = deepcopy(
         (DEFAULT_PDF_PRESENTATION_CONFIG.get("defaults") or {}).get("charte") or {}
     )
@@ -586,7 +583,7 @@ def resolve_charte_config_from_root(
     profile_id: str | None = None,
     diffusion: str | None = None,
 ) -> dict[str, Any]:
-    """Retourne la configuration effective de la charte graphique PDF."""
+    """Détermine la charte visuelle effective à appliquer pour un rapport donné."""
     resolved = resolve_pdf_presentation_config(
         root,
         scope=scope,
@@ -600,7 +597,7 @@ def resolve_charte_config_from_root(
 
 
 def resolve_sec6_methodology_config(effective_cfg: dict[str, Any]) -> dict[str, Any]:
-    """Retourne la configuration effective de la méthodologie d'annexe (sec6)."""
+    """Retourne les paragraphes conditionnels de l'annexe méthodologique (Section 6)."""
     default_cfg = DEFAULT_PDF_PRESENTATION_CONFIG["defaults"]["sec6_methodology"]
     if not isinstance(effective_cfg, dict):
         return deepcopy(default_cfg)
@@ -616,18 +613,18 @@ def get_effective_pdf_presentation(
     scope: str,
     profile_id: str | None = None,
 ) -> dict[str, Any]:
-    """Retourne uniquement la config effective fusionnée."""
+    """Accès direct aux valeurs de configuration fusionnées."""
     resolved = resolve_pdf_presentation_config(root, scope=scope, profile_id=profile_id)
     effective = resolved.get("effective", {})
     return effective if isinstance(effective, dict) else {}
 
 
-def feature_registry_allows_scope(rule: Any, scope: str, section_id: str = "") -> bool:
-    """
-    Indique si une entrée ``feature_registry`` autorise la section pour ce moteur.
+# ========================================================================================
+# FILTRAGE ET VALIDATION DES SECTIONS ET BLOCS
+# ========================================================================================
 
-    Valeurs attendues : ``both``, ``global``, ``thematique`` (insensible à la casse).
-    """
+def feature_registry_allows_scope(rule: Any, scope: str, section_id: str = "") -> bool:
+    """Vérifie si une fonctionnalité est autorisée pour le périmètre courant."""
     r = str(rule or "both").strip().lower()
     s = str(scope or "").strip().lower()
     if r in ("both", "all", ""):
@@ -639,17 +636,12 @@ def feature_registry_allows_scope(rule: Any, scope: str, section_id: str = "") -
     return r == s
 
 
-
 def apply_feature_registry_to_effective(
     effective_cfg: dict[str, Any],
     scope: str,
     feature_registry: dict[str, Any],
 ) -> None:
-    """
-    Désactive les sections hors périmètre moteur via ``sections.enabled``.
-
-    Une clé déjà présente dans ``sections.enabled`` (profil ou scope) n'est pas écrasée.
-    """
+    """Désactive les chapitres non concernés par le type de bilan généré."""
     sections = effective_cfg.setdefault("sections", {})
     enabled = sections.setdefault("enabled", {})
     if not isinstance(enabled, dict):
@@ -664,12 +656,7 @@ def apply_feature_registry_to_effective(
 
 
 def normalize_section_id(section_id: str, *, emit_alias_warning: bool = False) -> str:
-    """
-    Résout un identifiant de section (alias sémantique → ID historique interne).
-
-    Les alias ``sec_usagers`` / ``sec_procedures`` restent acceptés dans le YAML
-    avec un avertissement de dépréciation.
-    """
+    """Convertit un identifiant ou alias de section vers sa forme canonique interne."""
     sid = str(section_id or "").strip()
     if not sid:
         return sid
@@ -689,7 +676,7 @@ def is_section_enabled(
     section_id: str,
     default: bool = True,
 ) -> bool:
-    """Vrai si la section est activée dans effective.sections.enabled."""
+    """Indique si un chapitre doit figurer dans le PDF selon la configuration YAML."""
     sections = effective_cfg.get("sections", {})
     if not isinstance(sections, dict):
         return default
@@ -706,7 +693,7 @@ def is_section_enabled(
 
 
 def _resolve_blocks_node(effective_cfg: dict[str, Any], block_id: str) -> Any:
-    """Valeur du nœud effective.blocks pour un chemin pointé (ex. sec31.max_detail_rows)."""
+    """Lit une sous-clé de bloc de configuration sous la forme `nom_section.nom_bloc`."""
     blocks = effective_cfg.get("blocks", {})
     if not isinstance(blocks, dict):
         return None
@@ -723,7 +710,7 @@ def is_block_enabled(
     block_id: str,
     default: bool = True,
 ) -> bool:
-    """Vrai si le bloc est activé dans effective.blocks (supporte les clés imbriquées via '.')."""
+    """Vérifie l'activation d'un sous-bloc ou d'un tableau spécifique dans la configuration."""
     val = _resolve_blocks_node(effective_cfg, block_id)
     if val is None:
         return default
@@ -735,12 +722,7 @@ def get_block_int(
     block_id: str,
     default: int = 0,
 ) -> int:
-    """
-    Entier dans effective.blocks (clés imbriquées via '.').
-
-    Pour ``sec31.max_detail_rows`` : 0 ou absent = pas de plafond sur le tableau détail ;
-    entier > 0 = nombre maximal de lignes affichées.
-    """
+    """Lit une contrainte numérique (ex: plafond de lignes dans un tableau)."""
     val = _resolve_blocks_node(effective_cfg, block_id)
     if val is None:
         return int(default)
@@ -750,12 +732,16 @@ def get_block_int(
         return int(default)
 
 
+# ========================================================================================
+# TRONCATION ET LEGENDES DES TABLEAUX DE PROCEDURES
+# ========================================================================================
+
 def slice_proc_detail_for_pdf(
     detail_df: Any,
     effective_cfg: dict[str, Any],
     block_prefix: str,
 ) -> tuple[Any, int]:
-    """Retourne (dataframe tronqué selon max_detail_rows, nombre total de lignes)."""
+    """Plafonne le nombre de lignes affichées dans un tableau détaillé de procédures."""
     if detail_df is None or getattr(detail_df, "empty", True):
         return detail_df, 0
     total = int(len(detail_df))
@@ -772,16 +758,20 @@ def format_proc_detail_caption(
     total: int,
     cap: int,
 ) -> str:
-    """Suffixe « N premiers sur T » si le plafond YAML tronque le détail."""
+    """Complète la légende avec le nombre de lignes retenues en cas de troncation."""
     if cap > 0 and shown < total:
         return f"{base_caption} ({shown} premiers sur {total})"
     return base_caption
 
 
+# ========================================================================================
+# AGENCEMENT ET STRUCTURATION DE LA TABLE DES MATIERES
+# ========================================================================================
+
 def inject_sec4_subsections(
     section_defs: list[tuple[str, str]],
 ) -> list[tuple[str, str]]:
-    """Insère les sous-sections 3.x immédiatement après ``sec4`` dans la liste de définition."""
+    """Injecte les sous-sections d'activité usagers à la suite du chapitre 3."""
     out: list[tuple[str, str]] = []
     for sid, title in section_defs:
         out.append((sid, title))
@@ -795,11 +785,7 @@ def resolve_sec2_render_order(
     *,
     include_zone_subsections: bool,
 ) -> list[str]:
-    """
-    Ordre de rendu des sous-parties du chapitre 2 (piloté par ``sections_toc``).
-
-    ``include_zone_subsections`` : True pour le profil agrainage (sec22theme / sec22res).
-    """
+    """Retourne l'ordre de rendu des sous-parties de la section 2 (Contrôles)."""
     allowed = (
         {"sec21", "sec22", "sec23", "sec22theme", "sec22res"}
         if include_zone_subsections
@@ -817,12 +803,7 @@ def resolve_sec2_render_order(
 def resolve_sec34_render_order(
     effective_cfg: dict[str, Any],
 ) -> list[str]:
-    """
-    Ordre de rendu des chapitres « Activité par type d'usager » (sec4) et
-    « Procédures » (sec3), aligné sur la numérotation PDF (3 puis 4).
-
-    Priorité : ``sections.order`` du YAML, puis repli ``sec4`` puis ``sec3``.
-    """
+    """Détermine l'ordre de présentation des chapitres Usagers et Procédures."""
     canonical = ("sec4", "sec3")
     sections_cfg = effective_cfg.get("sections", {})
     if not isinstance(sections_cfg, dict):
@@ -848,12 +829,7 @@ def resolve_sections_for_toc(
     effective_cfg: dict[str, Any],
     section_defs: list[tuple[str, str]],
 ) -> list[tuple[str, str]]:
-    """
-    Applique sections.order + sections.enabled à la liste des sections.
-
-    - Les sections non listées dans order sont conservées en fin (ordre initial).
-    - Les sections désactivées sont retirées.
-    """
+    """Construit la liste ordonnée des sections actives pour constituer le sommaire."""
     by_id = {sid: (sid, title) for sid, title in section_defs}
 
     sections_cfg = effective_cfg.get("sections", {})
@@ -891,11 +867,7 @@ def resolve_section_titles(
     effective_cfg: dict[str, Any],
     section_defs: list[tuple[str, str]],
 ) -> list[tuple[str, str]]:
-    """
-    Surcharge les libellés de sections via effective.sections.titles.<section_id>.
-
-    Ne modifie pas l'ordre : l'ordre reste géré par `resolve_sections_for_toc`.
-    """
+    """Applique les éventuelles surcharges de titres définies par le profil dans le YAML."""
     sections_cfg = effective_cfg.get("sections", {})
     if not isinstance(sections_cfg, dict):
         return section_defs
@@ -920,20 +892,19 @@ def resolve_section_titles(
 def should_show_placeholder(
     behavior_cfg: dict[str, Any] | None,
 ) -> bool:
-    """
-    Politique homogène d'affichage des messages d'absence de données.
-
-    - hide_silently: masque les placeholders
-    - show_placeholder: affiche les placeholders
-    """
+    """Indique si un paragraphe explicatif doit s'afficher en l'absence de données."""
     if not isinstance(behavior_cfg, dict):
         return False
     policy = str(behavior_cfg.get("missing_data_policy", "hide_silently")).strip().lower()
     return policy == "show_placeholder"
 
 
+# ========================================================================================
+# CONSTRUCTEURS TYPOGRAPHIQUES DU TITRE DE COUVERTURE
+# ========================================================================================
+
 def normalize_dept_typography(name: str) -> str:
-    """Harmonise la typographie des noms de département (apostrophe/hyphens)."""
+    """Harmonise la typographie des noms de département (apostrophes typographiques `’`)."""
     s = str(name or "").strip()
     s = s.replace("-d'", " d’").replace("-D'", " D’")
     s = s.replace("d'", "d’").replace("D'", "D’")
@@ -947,12 +918,7 @@ def build_title_lines_from_cfg(
     perimetre_name_typo: str,
     echelle: str = "departement",
 ) -> tuple[list[str], list[str]]:
-    """Construit les lignes de titre de garde + en-tête depuis la config effective.
-
-    Un caractère ``\\n`` présent dans ``line1`` (ou ``line2``/``line3`` en mode
-    ``fixed``) provoque un retour à la ligne dans le même paragraphe sur la
-    page de garde, mais est aplati en espace dans l'en-tête de page courant.
-    """
+    """Formate les 3 lignes du titre principal sur la page de couverture et l'en-tête."""
     default_line1 = "Bilan des activités de police\nde l'environnement de l'OFB"
 
     title_cfg = effective_cfg.get("title", {}) if isinstance(effective_cfg, dict) else {}
@@ -976,7 +942,7 @@ def build_title_lines_from_cfg(
         if echelle == "departement":
             from core.chemins_projet import PROJECT_ROOT
             import yaml
-            
+
             coord = "de la"
             try:
                 cfg_path = PROJECT_ROOT / "config" / "departements.yaml"
@@ -989,7 +955,7 @@ def build_title_lines_from_cfg(
                             coord = coord_map[dept_key]
             except Exception:
                 pass
-            
+
             line3 = f"Département {coord} {perimetre_name_typo}"
         elif echelle == "region":
             line3 = f"Région {perimetre_name_typo}"
@@ -997,11 +963,9 @@ def build_title_lines_from_cfg(
             line3 = f"Périmètre {perimetre_name_typo}"
 
     def _flatten(text: str) -> str:
-        # En-tête courant: une seule ligne. Les "\n" deviennent des espaces.
         return " ".join(part.strip() for part in str(text).splitlines() if part.strip())
 
     def _split(text: str) -> list[str]:
-        # Page de garde: chaque "\n" produit une ligne dans le même paragraphe.
         return [part.strip() for part in str(text).splitlines() if part.strip()]
 
     header_lines = [_flatten(x) for x in [line1, line2, line3] if x]
@@ -1021,13 +985,8 @@ def resolve_cover_subtitle(
     *,
     nb_pve: int = 0,
 ) -> str:
-    """Résout le sous-titre de page de garde selon la config YAML.
-
-    Modes supportés :
-    - none   : pas de sous-titre (défaut)
-    - fixed  : texte fixe via `subtitle_fixed`
-    """
-    del nb_pve  # paramètre conservé pour compat. signature, non utilisé
+    """Retourne le sous-titre de la page de garde s'il est spécifié dans la configuration."""
+    del nb_pve
     mode = str(title_page_cfg.get("subtitle_mode", "none")).strip().lower()
     if mode == "fixed":
         return str(title_page_cfg.get("subtitle_fixed", "")).strip()

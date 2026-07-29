@@ -1,3 +1,16 @@
+# ========================================================================================
+# PROFIL DE BILAN THEMATHIQUE : AGRAINAGE (`agrainage.yaml`)
+# ========================================================================================
+# Ce fichier régit le filtrage et la génération du rapport PDF thématique "Contrôles agrainage".
+#
+# Clés et règles de filtrage pour les non-spécialistes :
+#   - `keywords` : mot-clé recherché ("agrain") dans le nom des fiches de contrôle.
+#   - `exclude_patterns` : exclusion des contrôles Tuberculose bovine, Grippe aviaire ou Piégeage.
+#   - `natinf_pve` / `natinf_pej` : codes d'infractions NATINF ciblés (ex: 27742 - agrainage non conforme).
+#   - `analyses.zone_lecteur_4_zones` : active la ventilation géographique entre Coeur de Parc PNF,
+#     Aire d'Adhésion, Zone TUB et Hors périmètres.
+# ========================================================================================
+
 # Profil bilan agrainage
 schema_version: 2
 id: agrainage

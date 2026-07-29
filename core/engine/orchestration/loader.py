@@ -15,9 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Module de chargement et de normalisation des profils YAML."""
+"""
+========================================================================================
+MODULE : CHARGEMENT ET NORMALISATION DES PROFILS YAML (`loader.py`)
+========================================================================================
+Ce module régit le chargement des fichiers de configuration YAML (`config/profils_bilan/`).
 
+Rôles :
+  1. `load_profile_config()` : lecture d'un profil YAML avec fusion des valeurs par défaut (`_defaults.yaml`).
+  2. `_deep_merge_dicts()` : fusion récursive de dictionnaires pour hériter proprement des paramètres.
+  3. `_normalize_profile()` : validation et injection des clés manquantes (mots-clés, NATINF, colonnes).
+  4. Gestion de la directive `!include` pour la modularité des fichiers YAML.
+========================================================================================
+"""
 from __future__ import annotations
 
 import logging

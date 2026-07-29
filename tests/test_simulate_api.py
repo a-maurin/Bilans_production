@@ -15,5 +15,10 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-# Temporaire
+"""
+========================================================================================
+TEST UNITAIRE : SIMULATION D'APPEL API (`test_simulate_api.py`)
+========================================================================================
+Ce fichier de test simule l'appel des endpoints HTTP de l'API REST local du serveur web.
+========================================================================================
+"""

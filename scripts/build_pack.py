@@ -16,11 +16,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Génère l'archive pack_configuration_referentiels.zip contenant les référentiels 
-et les données brutes (ref/, data/sources/, data/sources_archive/).
-Vérifie préalablement l'intégrité de la structure.
+========================================================================================
+SCRIPT DE DEPLOIEMENT : EMPAQUETAGE DES REFERENTIELS (`build_pack.py`)
+========================================================================================
+Ce script génère l'archive de déploiement `pack_configuration_referentiels.zip` dans le dossier
+`distribution/` pour permettre l'installation des référentiels SIG et configurations OFBilan.
+
+Étapes automatisées :
+  1. Contrôle de l'arborescence via `verify_ref_layout.py`.
+  2. Empaquetage compressé des dossiers `ref/` et des référentiels cartographiques.
+  3. Copie du script d'installation Windows `installer_pack.bat`.
+========================================================================================
 """
 from __future__ import annotations
 

@@ -15,8 +15,15 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-"""Script de vérification et de mise à niveau des en-têtes de copyright sur tous les fichiers Python du projet."""
-
+"""
+========================================================================================
+SCRIPT DE MAINTENANCE : VERIFICATION DES EN-TETES DE COPYRIGHT (`ajouter_entetes_copyright.py`)
+========================================================================================
+Ce script utilitaire parcourt de manière récursive l'ensemble du projet pour s'assurer
+que tous les fichiers source Python comportent la notice de licence GNU GPL v3 ainsi que
+la clause obligatoire d'attribution (Section 7b).
+========================================================================================
+"""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

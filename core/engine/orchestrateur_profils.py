@@ -15,17 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Moteur profilé des bilans — pipeline unique piloté par YAML.
+========================================================================================
+MODULE : ORCHESTRATEUR PRINCIPAL DES PROFILS DE BILAN (`orchestrateur_profils.py`)
+========================================================================================
+Ce module constitue le cœur névralgique du moteur de bilan. Il régit la totalité du
+pipeline de traitement, du filtrage initial des données jusqu'à la génération PDF finale.
 
-Toute la logique (chasse, agrainage, procédures, types d'usagers, mots-clés
-génériques, etc.) est centralisée ici. Le profil YAML pilote le comportement :
-filtres, sources de données, options utilisateur, analyses, PDF.
-
-Usage interne (appelé par le runner de profils ``bilans.engine``) :
-    from core.engine.orchestrateur_profils import run_engine
-    run_engine("chasse", "2025-09-01", "2026-03-01", "21", options={})
+Fonctionnalités majeures :
+  1. Chargement et validation des fichiers de configuration YAML de profils.
+  2. Filtrage multicritères des points de contrôle, PEJ, PA et PVe (par période,
+     périmètre géographique, thématique, NATINF, mots-clés ou types d'usagers).
+  3. Orchestration des analyses statistiques et calcul des agrégations métier.
+  4. Déclenchement de la génération des cartes cartographiques et des rapports PDF.
+========================================================================================
 """
 from __future__ import annotations
 
@@ -924,7 +927,11 @@ def prompt_cartography_integration(
 
         def _carte_ready(name: str) -> bool:
             path = cartes_dir / name
-            return path.exists() and is_map_valid_for_dept(path, carto_dept)
+            if path.exists() and is_map_valid_for_dept(path, carto_dept):
+                return True
+            p = Path(name)
+            brochure_path = cartes_dir / f"{p.stem}_brochure{p.suffix}"
+            return brochure_path.exists() and is_map_valid_for_dept(brochure_path, carto_dept)
 
         all_exist = all(_carte_ready(name) for name in expected_names) if expected_names else False
         if all_exist:

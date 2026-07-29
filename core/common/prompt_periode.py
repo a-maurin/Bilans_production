@@ -9,18 +9,23 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Saisie commune département et période pour les scripts de bilan.
+========================================================================================
+MODULE : ASSISTANT INTERACTIF DE SAISIE DE PÉRIODE ET PÉRIMÈTRE (`prompt_periode.py`)
+========================================================================================
+Ce module gère les invites de commande interactives dans le terminal (CLI).
 
-Utilisé par les programmes d'analyse (agrainage, chasse, cartes) lorsque
-les paramètres --date-deb, --date-fin, --echelle, --code ne sont pas fournis en CLI.
+Il est utilisé lorsqu'un script est lancé sans paramètres de ligne de commande :
+  1. Demande les dates de début et de fin (au format AAAA-MM-JJ).
+  2. Demande l'échelle spatiale (Département, Région, Façade maritime, National).
+  3. Propose une sélection par menu numéroté avec valeurs par défaut sur touche 'Entrée'.
+========================================================================================
 """
 from __future__ import annotations
 
@@ -30,12 +35,12 @@ from typing import Tuple
 
 
 def _is_interactive() -> bool:
-    """Retourne True si stdin est un terminal (saisie interactive possible)."""
+    """Détermine si l'exécutable Python tourne dans une console interactive."""
     return hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
 
 
 def _validate_date(s: str) -> bool:
-    """Vérifie que *s* est une date valide au format YYYY-MM-DD."""
+    """Vérifie qu'une chaîne respecte strictement le format de date ISO 'YYYY-MM-DD'."""
     if not s:
         return False
     try:
@@ -46,14 +51,18 @@ def _validate_date(s: str) -> bool:
 
 
 def _default_date_deb() -> str:
-    """1er janvier de l'année en cours (mode interactif)."""
+    """Retourne le 1er janvier de l'année en cours comme valeur par défaut."""
     return f"{dt.datetime.now().year}-01-01"
 
 
 def _default_date_fin() -> str:
-    """Date du jour (mode interactif)."""
+    """Retourne la date d'aujourd'hui comme valeur par défaut."""
     return dt.datetime.now().strftime("%Y-%m-%d")
 
+
+# ========================================================================================
+# INVITES ET MENUS CLI INTERACTIFS
+# ========================================================================================
 
 def ask_periode_perimetre(
     date_deb_default: str | None = None,
@@ -61,11 +70,9 @@ def ask_periode_perimetre(
     echelle_default: str = "departement",
     code_default: str = "21",
 ) -> Tuple[str, str, str, str]:
-    """
-    Demande à l'utilisateur la date de début, la date de fin et le périmètre (échelle + code).
+    """Demande la période et l'échelle géographique à l'utilisateur dans la console interactive.
 
-    Returns:
-        (date_deb_str, date_fin_str, echelle_str, code_str)
+    Retourne le tuple : `(date_deb, date_fin, echelle, code)`.
     """
     if not _is_interactive():
         deb = date_deb_default or ""
@@ -104,7 +111,7 @@ def ask_periode_perimetre(
     print("-" * 50)
     date_deb = _prompt("Date de début (YYYY-MM-DD)", date_deb_default, _validate_date)
     date_fin = _prompt("Date de fin (YYYY-MM-DD)", date_fin_default, _validate_date)
-    
+
     echelle_choices = [
         ("departement", "Département"),
         ("region", "Région"),
@@ -112,7 +119,7 @@ def ask_periode_perimetre(
         ("national", "National"),
     ]
     echelle = ask_choice_list("Échelle spatiale", echelle_choices, echelle_default)
-    
+
     code = "FR"
     if echelle != "national":
         code = _prompt("Code (ex: 21 pour département, 27 pour région BFC)", code_default)
@@ -121,7 +128,7 @@ def ask_periode_perimetre(
 
 
 def ask_choice_list(label: str, choices: list[Tuple[str, str]], default_val: str | None = None) -> str:
-    """Affiche une liste de choix numérotés et retourne la valeur sélectionnée."""
+    """Affiche un menu de choix numérotés dans le terminal et renvoie la clé sélectionnée."""
     if not _is_interactive():
         return default_val or (choices[0][0] if choices else "")
 
@@ -131,19 +138,19 @@ def ask_choice_list(label: str, choices: list[Tuple[str, str]], default_val: str
         if val == default_val:
             default_idx = i
         print(f"  [{i}] {desc}")
-    
+
     hint = f" [{default_idx}]" if default_idx else ""
     while True:
         try:
             raw = input(f"Votre choix (numéro){hint} : ").strip()
         except EOFError:
             raw = ""
-        
+
         if not raw and default_idx is not None:
             return default_val
-            
+
         if raw.isdigit():
             idx = int(raw)
             if 1 <= idx <= len(choices):
                 return choices[idx - 1][0]
-        print("Saisie invalide, veuillez entrer le numéro correspondant.")
+        print("Saisie invalide, veuillez entrer le numéro correspondant.")

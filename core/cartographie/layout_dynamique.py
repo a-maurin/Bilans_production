@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) 2026 Aguirre MAURIN
 #
 # Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier
@@ -16,11 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Génération dynamique du layout cartographique QGIS sans dépendance au projet .qgz.
-"""
+========================================================================================
+MODULE : GENERATEUR DYNAMIQUE DE LAYOUT QGIS (`layout_dynamique.py`)
+========================================================================================
+Ce module permet d'instancier par programmation (via l'API PyQGIS `QgsPrintLayout`)
+une mise en page de carte A4 Paysage complète, sans dépendre d'un fichier modèle `.qgz`.
 
+Éléments créés dynamiquement :
+  1. Bandeau supérieur bleu (`bandeau_titre`) et titre principal (`titre_principal`).
+  2. Zone d'affichage de la carte principale (`carte_principale`).
+  3. Barre d'échelle kilométrique (`echelle`) et flèche du nord SVG (`fleche_du_nord`).
+  4. Bandeau inférieur des sources de données et mentions d'auteurs (`bandeau_source`).
+========================================================================================
+"""
 from qgis.core import (
     QgsPrintLayout,
     QgsLayoutItemMap,

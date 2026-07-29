@@ -15,13 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Couches découvertes depuis un layout QGIS (mode layout-driven).
+========================================================================================
+MODULE : INSPECTION DES COUCHES DU LAYOUT QGIS (`layout_layers.py`)
+========================================================================================
+Ce module est spécialisé dans l'inspection et la découverte automatique des couches
+vecteur associées à une mise en page (layout) QGIS.
 
-Le projet bilans_carte.qgz peut avoir un LayerSet vide sur les cartes : dans ce cas
-on complète via la légende du layout, un groupe d'arborescence (`layout_layer_group`)
-ou les couches métier visibles du projet.
+Rôles :
+  1. Extraction des couches actives depuis la légende du layout ou du LayerSet de la carte.
+  2. Filtrage des couches de fond de carte (OSM, ESRI, IGN, WMS) pour isoler les données métier.
+  3. Association dynamique des règles de filtres et de symbologies.
+========================================================================================
 """
 from __future__ import annotations
 

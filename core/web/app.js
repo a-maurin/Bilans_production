@@ -17,6 +17,22 @@
  * de l'auteur original (Aguirre MAURIN).
  */
 
+/**
+ * ========================================================================================
+ * APPLICATION WEB FRONT-END - EDITION DE BILAN (`app.js`)
+ * ========================================================================================
+ * Ce fichier JavaScript régit les interactions utilisateur sur la page principale
+ * d'édition des bilans (formulaires de sélection, requêtes API, suivi du chargement).
+ *
+ * Rôles principaux :
+ *   1. Chargement dynamique des profils YAML et des gabarits disponibles via `/api/profils`.
+ *   2. Gestion dynamique des sélecteurs de périmètre (Département, Région, France).
+ *   3. Envoi de la demande de génération de bilan via la méthode POST `/api/generate`.
+ *   4. Affichage en temps réel des logs de progression et de la barre d'avancement.
+ *   5. Ouverture directe des rapports générés et gestion des sauvegardes.
+ * ========================================================================================
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
     const btnGenerate = document.getElementById('btn-generate');
     const btnClear = document.getElementById('btn-clear');

@@ -15,7 +15,22 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+MODULE : SERVEUR WEB LOCAL ET API REST (`serveur.py`)
+========================================================================================
+Ce module implémente le serveur Web HTTP local (basé sur `http.server.SimpleHTTPRequestHandler`)
+qui alimente l'interface utilisateur web d'OFBilan (Édition de Bilan Web & Explorateur).
+
+Endpoints et rôles API :
+  1. `/api/generate` : déclenche la génération d'un bilan PDF / Excel en arrière-plan.
+  2. `/api/profiles` : fournit la liste dynamique des profils YAML et de leurs paramètres.
+  3. `/api/explorer/data` : renvoie les données spatiales et tabulaires pour la carte interactive Leaflet.
+  4. `/api/config` : gestion des paramètres utilisateur et préférences de l'application.
+  5. Service des fichiers statiques HTML, CSS, JavaScript et assets du dossier web.
+========================================================================================
+"""
+from __future__ import annotations
 import http.server
 import threading
 import socketserver

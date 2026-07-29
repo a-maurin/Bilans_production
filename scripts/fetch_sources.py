@@ -15,7 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+SCRIPT DE SYNCHRONISATION : RECUPERATION DES SOURCES NETWORK (`fetch_sources.py`)
+========================================================================================
+Ce script automatise la synchronisation des bases de données de police depuis les partages
+réseau de l'OFB (`\\\\ad.intra\\dfs\\COMMUNS\\...`) vers le dossier local `data/sources/`.
+
+Rôles :
+  1. `archive_existing_sources()` : sauvegarde horodatée des anciennes données locales dans `data/sources_archive/`.
+  2. Récupération des extractions PVe, OSCEAN (PEJ / PA) et couches SIG d'infrastructures.
+  3. Normalisation des noms de fichiers pour l'ingestion automatique par le chargeur `chargeurs_donnees.py`.
+========================================================================================
+"""
 import os
 import shutil
 import glob

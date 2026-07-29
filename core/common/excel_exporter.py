@@ -9,15 +9,24 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-# Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier
-# selon les termes de la Licence Publique Générale GNU (GPL) telle que publiée par
-# la Free Software Foundation, version 3 de la licence, ou (à votre choix) toute version ultérieure.
+"""
+========================================================================================
+MODULE : EXPORTATEUR DE DONNÉES EN CLASSEURS EXCEL (`excel_exporter.py`)
+========================================================================================
+Ce module s'occupe de la création et de la mise en forme automatique des fichiers Excel (.xlsx).
+
+Fonctionnalités principales :
+  1. Application de la charte graphique OFB (en-têtes bleus `#003366`, polices Arial, bordures grises).
+  2. Ajustement automatique de la largeur des colonnes selon la longueur du contenu.
+  3. Génération de classeurs multi-onglets (Synthèse Régionale + 1 onglet par Département).
+========================================================================================
+"""
 
 import logging
 from pathlib import Path
@@ -28,8 +37,13 @@ from openpyxl.utils import get_column_letter
 
 logger = logging.getLogger(__name__)
 
+
+# ========================================================================================
+# MISE EN FORME DES FEUILLES DE CALCUL (STYLES OFB ET AUTO-FIT)
+# ========================================================================================
+
 def _format_worksheet(ws) -> None:
-    """Applique la charte graphique OFB et l'ajustement automatique des colonnes sur une feuille Excel."""
+    """Applique la charte graphique OFB et ajuste automatiquement la largeur des colonnes."""
     header_fill = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
     header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     data_font = Font(name="Arial", size=9)
@@ -39,16 +53,16 @@ def _format_worksheet(ws) -> None:
         top=Side(style="thin", color="D3D3D3"),
         bottom=Side(style="thin", color="D3D3D3")
     )
-    
+
     ws.views.sheetView[0].showGridLines = True
-    
-    # 1. En-têtes
+
+    # 1. En-têtes (fond bleu roi, texte blanc gras, centré)
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    
-    # 2. Données et bordures
+
+    # 2. Données et bordures (nombres à droite, textes à gauche)
     for row in ws.iter_rows(min_row=2):
         for cell in row:
             cell.font = data_font
@@ -58,7 +72,7 @@ def _format_worksheet(ws) -> None:
             else:
                 cell.alignment = Alignment(horizontal="left", vertical="center")
 
-    # 3. Auto-fit des largeurs de colonnes
+    # 3. Calcul dynamique de la largeur optimale des colonnes
     for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
@@ -68,6 +82,10 @@ def _format_worksheet(ws) -> None:
         ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
 
+# ========================================================================================
+# EXPORT DE LA SYNTHESE REGIONALE MULTI-ONGLETS
+# ========================================================================================
+
 def export_synthese_region_excel(
     out_dir: Path,
     df_detail: pd.DataFrame,
@@ -75,10 +93,10 @@ def export_synthese_region_excel(
     df_ratio: Optional[pd.DataFrame] = None,
     filename: str = "Synthese_Region.xlsx"
 ) -> Optional[Path]:
-    """
-    Exporte la synthèse régionale et le détail par département dans un classeur Excel multi-onglets formaté.
-    - Onglet 1 : Synthèse Régionale & Ratios
-    - Onglets suivants : Détail par Département
+    """Exporte la synthèse régionale et les détails départementaux dans un classeur Excel.
+
+    - Onglet 1 : Synthèse Régionale & Ratios globaux
+    - Onglets 2+ : Résumé propre à chaque Département
     """
     if df_detail.empty:
         logger.warning("df_detail est vide, annulation de l'export Excel régional.")
@@ -87,7 +105,7 @@ def export_synthese_region_excel(
     xlsx_path = out_dir / filename
     try:
         with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-            # 1. Onglet Synthèse Régionale
+            # 1. Génération de l'onglet de Synthèse Régionale
             if df_ratio is not None and not df_ratio.empty:
                 df_ratio.to_excel(writer, sheet_name="Synthese_Regionale", index=False)
             else:
@@ -98,7 +116,7 @@ def export_synthese_region_excel(
 
             _format_worksheet(writer.sheets["Synthese_Regionale"])
 
-            # 2. Onglets par département
+            # 2. Génération des onglets individuels par département
             df_detail["departement"] = df_detail["departement"].astype(str)
             for dept in depts:
                 dept_str = str(dept)
@@ -118,3 +136,4 @@ def export_synthese_region_excel(
     except Exception as e:
         logger.error(f"Erreur lors de la génération du classeur Excel {xlsx_path} : {e}")
         return None
+

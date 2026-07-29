@@ -17,23 +17,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Génération des cartes bilans agrainage / chasse-agrainage.
-À exécuter avec l'interpréteur Python de QGIS (pyqgis).
+========================================================================================
+MODULE : MOTEUR DE PRODUCTION CARTOGRAPHIQUE QGIS (`production_cartographique.py`)
+========================================================================================
+Ce module est le cœur de la génération de cartes haute définition via l'API PyQGIS.
 
-Référence de présentation : la carte dans data/out/bilan_agrainage/bilan_agrainage_Cote_dOr.pdf (section V. Cartographie).
-Le layout QGIS doit reproduire cette présentation (bandeau titre, carte, légende, échelle, pied de page).
-
-Usage:
-  # Interface graphique : sélectionner les couches et paramétrer la symbologie
-  python production_cartographique.py --gui
-
-  # Mode interactif (CLI) : configurer la symbologie puis l'enregistrer
-  python production_cartographique.py --interactive [agrainage|chasse|tous]
-
-  # Mode non interactif : générer les cartes avec la config enregistrée
-  python production_cartographique.py [agrainage|chasse|piegeage|tous]
+Fonctionnalités clés :
+  1. Initialisation automatique de l'environnement QGIS (QgsApplication).
+  2. Chargement dynamique du projet QGIS referentiel (`ofbilan.qgz`).
+  3. Filtrage spatial des couches vecteur (Points de contrôle, PVe, PEJ, PA).
+  4. Application du masque pochoir (stencil mask) pour masquer l'extérieur du territoire.
+  5. Ajustement automatique de l'emprise géographique (zoom sur la région ou département).
+  6. Export des cartes au format PNG haute résolution (300 DPI) pour intégration PDF.
+========================================================================================
 """
 from __future__ import annotations
 
@@ -2842,7 +2839,7 @@ def run_export(
                         logger.warning("  Aucune donnée de légende à dessiner pour %s", png_path.name)
                     _draw_legend_on_image(png_path, legend_data)
                     if items_a_masquer or getattr(prof, "items_masques", None):
-                        _crop_and_format_brochure_map(png_path, target_aspect_ratio=95.0 / 75.0, padding_px=10)
+                        _crop_image_whitespace(png_path, padding_px=15)
                     logger.info("  Légende dessinée sur %s", png_path.name)
                 except Exception as e:
                     logger.error("  Erreur de dessin de légende sur %s : %s", png_path.name, e)
@@ -3334,57 +3331,27 @@ def _draw_legend_on_image(image_path, legend_data):
     except Exception as e:
         logger.error("Erreur de sauvegarde de la légende sur %s : %s", image_path.name, e)
 
-def _crop_and_format_brochure_map(
-    image_path: Path,
-    target_aspect_ratio: float = 95.0 / 75.0,
-    padding_px: int = 10,
-) -> None:
-    """Rogne et formate l'image carte brochure pour épouser exactement le ratio du cadre PDF (95mm x 75mm).
-    Place la légende à l'extrême droite du cadre sans espace blanc résiduel à droite.
-    """
+def _crop_image_whitespace(image_path: Path, padding_px: int = 15) -> None:
+    """Rogne les marges blanches superflues autour du contenu de l'image de carte (conservation du ratio naturel)."""
     try:
         from PIL import Image, ImageChops
-        img = Image.open(image_path).convert("RGBA")
+        img = Image.open(image_path)
         img_rgb = img.convert("RGB")
         bg = Image.new("RGB", img_rgb.size, (255, 255, 255))
         diff = ImageChops.difference(img_rgb, bg)
         bbox = diff.getbbox()
-        if not bbox:
-            return
-            
-        w_orig, h_orig = img.size
-        left = max(0, bbox[0] - padding_px)
-        top = max(0, bbox[1] - padding_px)
-        right = min(w_orig, bbox[2] + padding_px)
-        bottom = min(h_orig, bbox[3] + padding_px)
-        
-        content_w = right - left
-        content_h = bottom - top
-        
-        current_ratio = content_w / float(content_h) if content_h > 0 else target_aspect_ratio
-        
-        if current_ratio < target_aspect_ratio:
-            target_w = int(content_h * target_aspect_ratio)
-            right = left + target_w
-            if right > w_orig:
-                right = w_orig
-                left = max(0, right - target_w)
-        else:
-            target_h = int(content_w / target_aspect_ratio)
-            diff_h = target_h - content_h
-            top = max(0, top - diff_h // 2)
-            bottom = top + target_h
-            if bottom > h_orig:
-                bottom = h_orig
-                top = max(0, bottom - target_h)
-                
-        cropped = img.crop((left, top, right, bottom))
-        final_img = Image.new("RGB", cropped.size, (255, 255, 255))
-        final_img.paste(cropped, mask=cropped.split()[3] if cropped.mode == "RGBA" else None)
-        final_img.save(image_path)
-        logger.info("Image %s formatée au ratio cadre PDF (%s) : %s", image_path.name, target_aspect_ratio, final_img.size)
+        if bbox:
+            w, h = img.size
+            left = max(0, bbox[0] - padding_px)
+            top = max(0, bbox[1] - padding_px)
+            right = min(w, bbox[2] + padding_px)
+            bottom = min(h, bbox[3] + padding_px)
+            if (right - left) > 50 and (bottom - top) > 50:
+                cropped = img.crop((left, top, right, bottom))
+                cropped.save(image_path)
+                logger.info("Image %s rognée au contenu (ratio naturel) : %s -> %s", image_path.name, (w, h), cropped.size)
     except Exception as exc:
-        logger.debug("Formatage ratio cadre PDF ignoré : %s", exc)
+        logger.debug("Rognage automatique de l'image ignoré : %s", exc)
 
 
 if __name__ == "__main__":

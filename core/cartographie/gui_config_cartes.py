@@ -17,10 +17,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Interface graphique pour configurer les couches des cartes bilans agrainage/chasse-agrainage.
-Lance avec : python gui_config_cartes.py (via Python QGIS)
+========================================================================================
+MODULE : INTERFACE GRAPHIQUE DE CONFIGURATION CARTOGRAPHIQUE (`gui_config_cartes.py`)
+========================================================================================
+Ce module fournit une interface PyQt/PyQGIS permettant à un utilisateur d'interagir
+visuellement avec la configuration de symbologie des couches cartographiques.
+
+Fonctionnalités :
+  1. Affichage de la liste des couches vecteur détectées dans le projet QGIS active.
+  2. Sélection des palettes de couleurs (Blues, YlOrRd, RdYlGn, etc.) et des règles de classification.
+  3. Définition des étiquettes de légende personnalisées et filtrage des éléments affichés.
+  4. Enregistrement direct des modifications dans `config_cartes.py`.
+========================================================================================
 """
 from __future__ import annotations
 

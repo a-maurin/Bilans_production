@@ -9,14 +9,22 @@
 # Voir la Licence Publique Générale GNU pour plus de détails.
 #
 # CONDITIONS SUPPLÉMENTAIRES D'ATTRIBUTION (SECTION 7(b) DE LA GPL v3) :
-# Conformément à la section 7(b) de la GNU GPL v3, vous devez expressément conserver
+# Conformément à la section 7(b) DE LA GPL v3, vous devez expressément conserver
 # intactes et lisibles toutes les mentions d'auteur, notices de copyright et la présente
 # clause dans chaque fichier source ou interface utilisateur redistribué. Toute version modifiée
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Affichage des pourcentages en entiers (PDF, tableaux, légendes de graphiques)."""
+"""
+========================================================================================
+MODULE : FORMATAGE DES POURCENTAGES ET RATIOS (`percent_format.py`)
+========================================================================================
+Ce module s'occupe de la conversion et de la mise en forme des taux et pourcentages.
+
+Utilise la 'méthode des plus grands restes' pour s'assurer que la somme des pourcentages
+arrondis à l'entier d'un tableau donne toujours exactement 100 % (sans perte d'arrondi).
+========================================================================================
+"""
 from __future__ import annotations
 
 from typing import Sequence
@@ -25,7 +33,7 @@ import pandas as pd
 
 
 def format_pct_int_from_rate(rate: float | None, *, na: str = "n.d.") -> str:
-    """Formate un taux dans [0, 1] (ou proche) en pourcentage entier, ex. ``42 %``."""
+    """Formate un taux décimal entre 0.0 et 1.0 en pourcentage entier (ex: 0.42 -> '42 %')."""
     if rate is None or pd.isna(rate):
         return na
     try:
@@ -38,10 +46,9 @@ def format_pct_int_from_rate(rate: float | None, *, na: str = "n.d.") -> str:
 
 
 def int_percents_largest_remainder(counts: Sequence[int]) -> list[int]:
-    """
-    Répartit 100 points de pourcentage sur des effectifs entiers (méthode des plus grands restes).
+    """Répartit 100 points de pourcentage sur une série d'effectifs (méthode des plus grands restes).
 
-    La somme des pourcentages retournés vaut exactement 100 dès que ``sum(counts) > 0``.
+    Garantit que la somme des pourcentages obtenus vaut toujours exactement 100 %.
     """
     counts = [int(max(0, c)) for c in counts]
     total = sum(counts)
@@ -61,13 +68,13 @@ def int_percents_largest_remainder(counts: Sequence[int]) -> list[int]:
 
 
 def format_partition_pct_strings(counts: Sequence[int]) -> list[str]:
-    """Même logique que ``int_percents_largest_remainder``, avec suffixe ``%``."""
+    """Applique `int_percents_largest_remainder` et ajoute le symbole '%' (ex: ['60 %', '40 %'])."""
     return [f"{p} %" for p in int_percents_largest_remainder(counts)]
 
 
 def tab_counts_to_pct_strings(nbs: Sequence[int]) -> list[str]:
-    """Tableau « Nombre / Taux » : taux entiers dont la somme vaut 100 % des lignes."""
+    """Convertit une liste de comptages bruts en chaînes de pourcentages entiers pour les tableaux PDF."""
     counts = [int(max(0, x)) for x in nbs]
     if not counts or sum(counts) <= 0:
         return ["n.d."] * len(counts)
-    return format_partition_pct_strings(counts)
+    return format_partition_pct_strings(counts)

@@ -16,7 +16,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+EXTENSION QGIS - POINT D'ENTRÉE DU PLUGIN (`__init__.py`)
+========================================================================================
+Ce fichier d'initialisation constitue le point d'entrée officiel chargé par le gestionnaire
+d'extensions de QGIS.
+
+Fonctions principales :
+  1. `classFactory(iface)` : fonction standard appelée par QGIS pour instancier la classe du plugin.
+  2. `install_dependencies(iface)` : vérificateur automatique des dépendances Python requises
+     (Pandas, ReportLab, FastAPI, PyYAML, GeoPandas) déclenchant une boîte de dialogue
+     d'installation assistée via `pip` en cas de composant manquant.
+========================================================================================
+"""
 import sys
 import os
 import subprocess

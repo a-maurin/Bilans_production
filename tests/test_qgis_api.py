@@ -15,7 +15,14 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+TEST UNITAIRE : INITIALISATION DE L'API PYQGIS (`test_qgis_api.py`)
+========================================================================================
+Ce fichier de test valide le bon chargement et l'initialisation de l'API PyQGIS (`QgsApplication`)
+et la manipulation de couches mémoires vectorielles sous l'environnement OSGeo4W.
+========================================================================================
+"""
 import os
 from qgis.core import QgsApplication, QgsProject, QgsVectorLayer, QgsLegendPatchShape, QgsStyle
 

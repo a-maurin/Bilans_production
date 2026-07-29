@@ -15,8 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""API publique du moteur profilé des bilans."""
+"""
+========================================================================================
+MODULE : POINT D'ENTRÉE DU MOTEUR D'ANALYSIS (`core/engine/__init__.py`)
+========================================================================================
+Ce fichier d'initialisation expose l'API publique du moteur de génération d'OFBilan.
+
+Fonctions et classes exportées :
+  - `list_profiles()` : liste des profils de bilan actifs.
+  - `resolve_profile_ids()` : résolution des profils par identifiant ou index.
+  - `run_profile()` / `run_profiles_batch()` : exécution simple ou par lot des bilans.
+  - `SectionRegistry` : registre central des fonctions de rendu des sections.
+========================================================================================
+"""
 
 from core.engine.catalogue_profils import list_profiles, resolve_profile_ids
 from core.engine.registre_sections_pdf import SectionRegistry

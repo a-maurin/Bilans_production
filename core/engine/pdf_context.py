@@ -15,9 +15,21 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Modélisation du contexte de génération PDF."""
+"""
+========================================================================================
+MODULE : CONTEXTE DE GENERATION PDF (`pdf_context.py`)
+========================================================================================
+Ce module définit la classe dataclass `PdfContext` qui sert de conteneur d'état unique
+transmis à l'ensemble des générateurs de sections lors de l'assemblage d'un rapport PDF.
 
+Composants encapsulés :
+  1. `builder` : l'instance active du constructeur de PDF (`PDFReportBuilder`).
+  2. Configurations et paramètres d'affichage (profil, gabarit, diffusion, thèmes).
+  3. Métriques et chiffres clés globaux (localisations, opérations, PEJ, PA, PVe).
+  4. DataFrames de données (agrégations par domaine, thème, usager, période).
+  5. Chemins et configurations d'agencement des cartes cartographiques.
+========================================================================================
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

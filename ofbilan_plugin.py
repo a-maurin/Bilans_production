@@ -16,7 +16,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+EXTENSION QGIS - INTERFACE DU PLUGIN (`ofbilan_plugin.py`)
+========================================================================================
+Ce fichier implémente la classe principale `OFBilanPlugin` requise par l'architecture QGIS.
+
+Rôles principaux :
+  1. `initGui()` : enregistrement du bouton "Lancer OFBilan Explorer" dans la barre d'outils
+     et le menu Extensions de QGIS.
+  2. `run()` : démarrage en arrière-plan du serveur Web Python (`serveur.py`) sans bloquer
+     l'interface utilisateur QGIS, puis ouverture automatique du navigateur web.
+  3. `unload()` : nettoyage des boutons et arrêt propre du serveur web à la fermeture de QGIS.
+========================================================================================
+"""
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox

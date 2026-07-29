@@ -15,8 +15,19 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Schéma UI et accès aux valeurs YAML (profils + présentation PDF)."""
+"""
+========================================================================================
+MODULE : SCHEMA ET ACCES AUX DONNEES YAML (`config_profils_schema.py`)
+========================================================================================
+Ce module régit la lecture, l'analyse et la validation du fichier de schéma `schema_ui.yaml`.
+
+Rôles principaux :
+  1. `FieldSpec` / `SectionSpec` : dataclasses décrivant chaque champ du formulaire de configuration
+     (intitulé, aide bulle, type de composant visuel, condition de visibilité).
+  2. `load_schema_ui()` : chargement dynamique de la définition des formulaires.
+  3. `dump_profile_yaml()` : sérialisation propre du YAML en préservant la mise en forme et l'ordre.
+========================================================================================
+"""
 from __future__ import annotations
 
 from copy import deepcopy

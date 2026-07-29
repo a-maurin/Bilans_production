@@ -16,15 +16,17 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Empaquette ref/programme/ pour transmission à un autre poste (hors Git).
+========================================================================================
+SCRIPT DE EMBALLAGE DISTRIBUTION : REFERENTIELS PROGRAMME (`pack_ref_distribution.py`)
+========================================================================================
+Ce script empaquette l'arborescence des référentiels officiels (`ref/programme/`)
+pour la distribution autonome ou le transfert inter-postes.
 
-Crée : distribution/Bilans_ref_<AAAAMMJJ>/ref/  + LISEZMOI_REF.md
-
-Usage :
-    python scripts/pack_ref_distribution.py
-    python scripts/pack_ref_distribution.py --output "D:\\Transfert\\Bilans_ref"
+Output :
+  Dossier `distribution/Bilans_ref_<AAAAMMJJ>/` contenant les gabarits, le fichier
+  `LISEZMOI_REF.md` et les données cartographiques de base.
+========================================================================================
 """
 from __future__ import annotations
 

@@ -15,7 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+OUTIL DE REFERENTIEL : COMPLETION DE LA TABLE DE CONCORDANCE SNC (`complete_concordance_snc.py`)
+========================================================================================
+Ce module automatise la mise à jour et la complétion de la table de concordance
+entre les référentiels de contrôle 2023 et 2024 (`concordance_snc_2023_vers_2024.csv`).
+
+Fonctions clés :
+  1. `normaliser_texte()` : nettoyage unicode, suppression des accents et des mots vides (stop words).
+  2. Complétion automatique des entrées manquantes pour garantir la rétro-compatibilité des bilans pluriannuels.
+========================================================================================
+"""
 import csv
 import os
 import re

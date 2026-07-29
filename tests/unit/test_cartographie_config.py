@@ -28,6 +28,7 @@ from core.common.cartographie_config import (
     expected_map_filenames_for_selection,
     parse_cartography_catalog,
     resolve_cartes_selection,
+    resolve_map_file_for_catalog_entry,
     resolve_map_profiles_for_batch,
     resolve_qgis_profile_id,
     resolve_qgis_profile_ids,
@@ -217,3 +218,11 @@ def test_collect_bilan_carto_override_keywords() -> None:
     override = collect_bilan_carto_override(profile)
     assert override["keywords"] == ["pollution", "urbaine"]
     assert "theme" in override["keyword_columns"]
+
+
+def test_resolve_map_file_for_catalog_entry_brochure(tmp_path: Path) -> None:
+    brochure_file = tmp_path / "carte_global_domaines_brochure.png"
+    brochure_file.write_bytes(b"dummy")
+    entry = {"id": "global_domaines", "fichier": "carte_global_domaines.png"}
+    resolved = resolve_map_file_for_catalog_entry(entry, target_dir=tmp_path)
+    assert resolved == brochure_file

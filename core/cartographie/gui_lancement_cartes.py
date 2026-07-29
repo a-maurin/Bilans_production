@@ -17,17 +17,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
 """
-Petite interface graphique de lancement pour la production cartographique.
+========================================================================================
+MODULE : DIALOGUE DE LANCEMENT DE LA CONFIGURATION (`gui_lancement_cartes.py`)
+========================================================================================
+Ce module fournit une petite boîte de dialogue d'accueil PyQt permettant de lancer
+l'interface graphique de configuration des cartes (`gui_config_cartes.py`).
 
-Cette fenêtre sert uniquement à ouvrir l'interface de paramétrage des cartes.
-La génération des cartes se fait ensuite en mode batch (scripts ou .bat),
-sans interaction, à partir des réglages enregistrés.
-
-À exécuter avec le Python de QGIS (OSGeo4W), par exemple via lancer_osgeo4w.bat.
+Rôle :
+  Initialiser correctement l'application `QgsApplication` avec le support GUI avant
+  d'afficher l'interface d'édition de la symbologie cartographique.
+========================================================================================
 """
-
 from __future__ import annotations
 
 import os

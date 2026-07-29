@@ -15,9 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Agrégations dédiées au profil synthese_activite_PA_PJ."""
+"""
+========================================================================================
+MODULE : CALCULS D'AGREGATION DE SYNTHESE PA / PJ (`synthese_aggregations.py`)
+========================================================================================
+Ce module regroupe les fonctions de calcul statistique pour le profil de bilan
+`synthese_activite_PA_PJ`.
 
+Rôles :
+  1. Calcul des effectifs d'usagers contrôlés par thème et par domaine.
+  2. Décompte des dossiers de procédures administratives (PA) et judiciaires (PEJ).
+  3. Ventilation des infractions par qualification et type d'usager.
+  4. Export des CSV d'agrégation de synthèse dans le sous-dossier de sortie.
+========================================================================================
+"""
 from __future__ import annotations
 
 from pathlib import Path

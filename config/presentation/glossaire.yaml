@@ -1,3 +1,14 @@
+# ========================================================================================
+# REPERTOIRE DU GLOSSAIRE ET DES ABREVIATIONS INSTITUTIONNELLES (`glossaire.yaml`)
+# ========================================================================================
+# Ce fichier définit le dictionnaire des sigles, acronymes et abréviations métier utilisés
+# dans l'ensemble des rapports PDF d'OFBilan (section Annexes & Méthodologie).
+#
+# Rôles pédagogiques :
+#   1. `header` : libellés des en-têtes de colonnes du tableau glossaire ("Abréviation", "Signification").
+#   2. `abbreviations` : liste filtrée dynamiquement par le moteur (ex: OSCEAN, PVe, PEJ, PA, PNF, TUB, NATINF).
+# ========================================================================================
+
 schema_version: 1
 
 # Configuration du glossaire utilisé dans les bilans PDF.

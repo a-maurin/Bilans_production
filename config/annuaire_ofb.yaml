@@ -1,3 +1,18 @@
+# ========================================================================================
+# ANNUAIRE INSTITUTIONNEL DES SERVICES OFB (`annuaire_ofb.yaml`)
+# ========================================================================================
+# Ce fichier sert de référentiel officiel pour les coordonnées et libellés des services OFB.
+#
+# Rôles pédagogiques :
+#   1. `departements` : répertorie le nom officiel, l'adresse, le code postal, la ville,
+#      l'adresse email et le téléphone de chaque Service Départemental (SD).
+#   2. `regions` : répertorie l'intitulé officiel de chaque Direction Régionale (DR).
+#   3. `national` : coordonnées du siège national de l'OFB à Paris.
+#
+# Ces informations sont injectées dynamiquement dans les pieds de page, notices et cartouches
+# des rapports PDF générés par OFBilan.
+# ========================================================================================
+
 departements:
   "21":
     nom: "Service départemental de la Côte-d'Or"

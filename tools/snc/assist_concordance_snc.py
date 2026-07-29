@@ -15,7 +15,18 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
+"""
+========================================================================================
+OUTIL DE REFERENTIEL : ASSISTANCE A LA CONCORDANCE SNC (`assist_concordance_snc.py`)
+========================================================================================
+Ce module assiste la correspondance entre les anciennes et nouvelles typologies de la
+Stratégie Nationale de Contrôle (SNC) / plans de contrôle OSCEAN.
+
+Méthode :
+  Utilise un algorithme de comparaison floue de chaînes de caractères (`SequenceMatcher`)
+  pour proposer des correspondances automatiques entre les codes de 2023 et 2024.
+========================================================================================
+"""
 import csv
 import os
 from difflib import SequenceMatcher

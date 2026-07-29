@@ -15,8 +15,16 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Ouverture d'un chemin (fichier/dossier) via l'application système par défaut."""
+"""
+========================================================================================
+MODULE : OUVERTURE DU GESTIONNAIRE DE FICHIERS SYSTEME (`reveal_in_file_manager.py`)
+========================================================================================
+Ce module fournit la fonction utilitaire `reveal_path_in_file_manager` qui ouvre
+automatiquement un dossier ou un fichier généré (ex: rapport PDF, classeur Excel)
+dans l'explorateur de fichiers natif de l'utilisateur (Windows Explorer, macOS Finder,
+Linux File Manager).
+========================================================================================
+"""
 from __future__ import annotations
 
 import logging
@@ -30,11 +38,16 @@ logger = logging.getLogger("ofbilan.reveal")
 
 def reveal_path_in_file_manager(path: Path) -> None:
     """
-    Ouvre ``path`` avec l'application système par défaut.
+    Ouvre un fichier ou répertoire dans l'explorateur de fichiers du système d'exploitation.
 
-    Ne fait rien sous CI, si ``BILANS_OPEN_OUTPUT_DIR`` vaut 0/false/no/off,
-    ou en cas d'échec (log warning, pas d'exception propagée).
+    Fonctionnement :
+      - Windows : utilise `os.startfile()`.
+      - macOS : utilise la commande shell `open`.
+      - Linux : utilise la commande shell `xdg-open`.
+      - Sécurité : l'exécution est ignorée dans les environnements d'intégration continue (CI)
+        ou si la variable d'environnement `BILANS_OPEN_OUTPUT_DIR` est désactivée.
     """
+    # Ne rien faire lors des tests automatisés en environnement de CI
     if os.environ.get("CI"):
         return
     flag = os.environ.get("BILANS_OPEN_OUTPUT_DIR", "").strip().lower()
@@ -56,4 +69,4 @@ def reveal_path_in_file_manager(path: Path) -> None:
         else:
             subprocess.run(["xdg-open", str(resolved)], check=False)
     except Exception as exc:
-        logger.warning("Impossible d'ouvrir le chemin %s : %s", resolved, exc)
+        logger.warning("Impossible d'ouvrir le chemin %s : %s", resolved, exc)

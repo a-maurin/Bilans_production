@@ -15,8 +15,20 @@
 # doit clairement indiquer qu'elle a été altérée et ne doit en aucun cas supprimer le nom
 # de l'auteur original (Aguirre MAURIN).
 
-#
-"""Utilitaires partagés pour les bilans (filtrage, résumés, détection colonnes)."""
+"""
+========================================================================================
+MODULE : UTILITAIRES ET REGLES METIERS DU PLUGIN (`utilitaires_metier.py`)
+========================================================================================
+Ce module rassemble la logique métier principale du traitement des données de police OFB.
+
+Domaines couverts :
+  1. Résolution des périmètres administratifs (Départements, Régions, BMI, Parc National).
+  2. Traitement et consolidation des catégories d'usagers contrôlés (parsing des effectifs multi-usagers).
+  3. Consolidation au niveau fiche de contrôle (`fc_id`) pour éviter les doublons d'effectifs.
+  4. Fonctions d'agrégation statistique (Domaines, Thèmes, Résultats, PEJ, PA, PVe).
+  5. Classification et filtrage des résultats de contrôles et zonages réglementaires (PNF, TUB).
+========================================================================================
+"""
 import functools
 import logging
 import re
@@ -33,8 +45,13 @@ _BMI_YAML_PATH = _PROJECT_ROOT / "config" / "referentiel_bmi.yaml"
 logger = logging.getLogger(__name__)
 
 
+# ========================================================================================
+# CHARGEMENT DES REFERENTIELS TERRITORIAUX (REGIONS ET BMI)
+# ========================================================================================
+
 @functools.lru_cache(maxsize=1)
 def _load_regions_config() -> dict:
+    """Charge le référentiel des régions et départements associés."""
     if not _REGIONS_YAML_PATH.exists():
         return {}
     with open(_REGIONS_YAML_PATH, "r", encoding="utf-8") as f:
@@ -42,6 +59,7 @@ def _load_regions_config() -> dict:
 
 @functools.lru_cache(maxsize=1)
 def _load_bmi_config() -> dict:
+    """Charge le référentiel des Brigades de Lespaces Maritimes et Interdépartementales (BMI)."""
     if not _BMI_YAML_PATH.exists():
         return {}
     with open(_BMI_YAML_PATH, "r", encoding="utf-8") as f:
@@ -54,11 +72,7 @@ def get_bmi_filters(code: str) -> dict:
 
 
 def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
-    """
-    Renvoie la liste des codes départements correspondant au périmètre.
-    echelle: "departement", "region", "national", ou "bmi"
-    code: ex: "21", "27", "FR", "BMI-NEC"
-    """
+    """Retourne la liste des départements rattachés au périmètre choisi (Département, Région, BMI, National)."""
     echelle_norm = str(echelle).strip().lower()
     code_norm = str(code).strip()
     if echelle_norm == "departement":
@@ -80,6 +94,7 @@ def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
 
 
 def get_region_name(code: str) -> str:
+    """Retourne le nom officiel d'une région depuis son code."""
     cfg = _load_regions_config()
     names = cfg.get("REGION_NAMES", {})
     code_norm = str(code).strip()
@@ -89,6 +104,7 @@ def get_region_name(code: str) -> str:
 
 
 def get_perimetre_name(echelle: str, code: str) -> str:
+    """Retourne le nom complet d'un périmètre d'étude."""
     echelle_norm = str(echelle).strip().lower()
     code_norm = str(code).strip()
     if echelle_norm == "departement":
@@ -103,7 +119,7 @@ def get_perimetre_name(echelle: str, code: str) -> str:
 
 
 def resolve_carto_dept_code(echelle: str, code: str, *, default: str = "21") -> str:
-    """Département (ou région/BMI) de référence pour l'étendue cartographique QGIS."""
+    """Détermine le code départemental principal pour le chargement des couches cartographiques."""
     echelle_norm = str(echelle).strip().lower()
     code_norm = str(code).strip()
     if echelle_norm == "departement":
@@ -120,13 +136,12 @@ def _norm_key(s: str) -> str:
     return (s or "").strip().lower()
 
 
-def series_as_python_str(series: pd.Series) -> pd.Series:
-    """
-    Série texte en dtype object (hors backend PyArrow).
+# ========================================================================================
+# MANIPULATION ROBUSTE DES SERIES ET CODES INSEE
+# ========================================================================================
 
-    Sous le Python QGIS, ``astype(str)`` peut produire ``string[pyarrow]`` et faire
-    échouer ``str.contains`` (RE2 / ``match_substring_regex`` absent).
-    """
+def series_as_python_str(series: pd.Series) -> pd.Series:
+    """Convertit une série Pandas en chaîne de caractères classique Python (compatible PyArrow QGIS)."""
     def _clean_str(v):
         if pd.isna(v): return ""
         if isinstance(v, float) and v.is_integer(): return str(int(v))
@@ -140,7 +155,7 @@ def series_str_contains(
     *,
     regex: bool = False,
 ) -> pd.Series:
-    """Recherche insensible à la casse via ``re`` (compatible Python QGIS / PyArrow)."""
+    """Effectue une recherche textuelle insensible à la casse."""
     s = series_as_python_str(series)
     if regex:
         cre = re.compile(pat, re.IGNORECASE)
@@ -150,11 +165,7 @@ def series_str_contains(
 
 
 def count_operations_controle(df: pd.DataFrame, mask: pd.Series | None = None) -> int:
-    """
-    Nombre d'opérations de contrôle (fiches d'intervention uniques).
-    
-    Identifié par la colonne `fc_id`.
-    """
+    """Compte le nombre d'opérations uniques de contrôle (`fc_id`)."""
     if "fc_id" not in df.columns or df.empty:
         return 0
     if mask is not None:
@@ -163,13 +174,17 @@ def count_operations_controle(df: pd.DataFrame, mask: pd.Series | None = None) -
 
 
 def extract_insee_code_series(series: pd.Series) -> pd.Series:
-    """Code INSEE 5 chiffres par valeur, ou ``pd.NA`` (sans ``str.extract`` / PyArrow)."""
+    """Extrait et normalise les codes INSEE à 5 chiffres depuis une série Pandas."""
     return series_as_python_str(series).map(lambda val: _normalize_insee_code(val) or pd.NA)
 
 
+# ========================================================================================
+# MAPPING ET NORMALISATION DES TYPES D'USAGERS CONTROLES
+# ========================================================================================
+
 @functools.lru_cache(maxsize=1)
 def _load_types_usagers_mapping() -> dict[tuple[str, str, str], str]:
-    """Charge ref/programme/tables_reference/types_usagers.csv (mapping type_usager)."""
+    """Charge la table de correspondance `types_usagers.csv`."""
     if not _TYPES_USAGERS_PATH.exists():
         return {}
     df = pd.read_csv(_TYPES_USAGERS_PATH, sep=";", dtype=str, encoding="utf-8")
@@ -188,9 +203,7 @@ def _load_types_usagers_mapping() -> dict[tuple[str, str, str], str]:
 
 @functools.lru_cache(maxsize=1)
 def _canonical_type_usager_aliases() -> dict[str, str]:
-    """
-    Libellés déjà au format catégorie cible (référentiel), pour PEJ/PA (champ USAGER).
-    """
+    """Indexe les sous-catégories vers les 6 types usagers cibles."""
     aliases: dict[str, str] = {}
     for (_, _, _), tu in _load_types_usagers_mapping().items():
         aliases[_norm_key(tu)] = tu
@@ -200,7 +213,7 @@ def _canonical_type_usager_aliases() -> dict[str, str]:
 
 
 def format_type_usager_display(label: str) -> str:
-    """Libellé affiché dans les PDF (ex. « Autre » → « Autre usager »)."""
+    """Formatage propre des intitulés d'usagers pour les tableaux PDF."""
     s = str(label or "").strip()
     if s == "Autre":
         return "Autre usager"
@@ -208,16 +221,7 @@ def format_type_usager_display(label: str) -> str:
 
 
 def _parse_type_usager_tokens(valeur_source: str) -> list[tuple[str, int]]:
-    """
-    Parse une valeur OSCEAN de type_usager.
-
-    Format observé :
-    - \"Collectivité\" (sans effectif explicite)
-    - \"Particulier (...) 6\"
-    - \"Agriculteur ... 1, Collectivité 1, Particulier ... 1\"
-
-    Renvoie une liste de (valeur_source_sans_effectif, effectif_int).
-    """
+    """Décompose une chaîne d'effectifs multi-usagers (ex: 'Agriculteur 2, Particulier 1')."""
     if pd.isna(valeur_source):
         return []
     s = str(valeur_source).strip()
@@ -236,8 +240,12 @@ def _parse_type_usager_tokens(valeur_source: str) -> list[tuple[str, int]]:
     return out
 
 
+# ========================================================================================
+# CONSOLIDATION INTRA-FC_ID POUR LES EFFECTIFS ET INDICATEURS USAGERS
+# ========================================================================================
+
 def _is_missing_effectif_value(value: Any) -> bool:
-    """Vrai si la valeur est absente pour une consolidation d'effectifs."""
+    """Vérifie si une donnée d'effectif est vide ou absente."""
     if value is None:
         return True
     try:
@@ -251,7 +259,7 @@ def _is_missing_effectif_value(value: Any) -> bool:
 
 
 def _stable_non_empty_group_values(values: pd.Series) -> list[Any]:
-    """Liste stable de valeurs distinctes non vides observées dans un groupe."""
+    """Retourne la liste ordonnée des valeurs non vides observées."""
     out: list[Any] = []
     seen: set[tuple[str, str]] = set()
     for value in values:
@@ -267,7 +275,7 @@ def _stable_non_empty_group_values(values: pd.Series) -> list[Any]:
 
 
 def _date_score_for_effectif_row(value: Any) -> tuple[int, int]:
-    """Score de récence d'une date pour arbitrer un conflit intra-fc_id."""
+    """Arbitre les conflits de données en privilégiant la ligne la plus récente."""
     if _is_missing_effectif_value(value):
         return (0, 0)
     try:
@@ -280,7 +288,7 @@ def _date_score_for_effectif_row(value: Any) -> tuple[int, int]:
 
 
 def _score_effectif_group_row(row: pd.Series, order_col: str) -> tuple[int, int, int]:
-    """Score de sélection d'une ligne représentative du groupe."""
+    """Calcule le score de priorité d'une ligne dans le groupe."""
     has_date, date_value = _date_score_for_effectif_row(row.get("date_ctrl"))
     row_order = int(row.get(order_col, 0) or 0)
     return (has_date, date_value, -row_order)
@@ -292,7 +300,7 @@ def _score_effectif_group_value(
     source_table: str,
     order_col: str,
 ) -> tuple[int, int, int, int]:
-    """Score de sélection d'une valeur métier au sein d'un groupe ``fc_id``."""
+    """Donne la priorité aux valeurs usagers qualifiées par rapport aux catégories 'Autre'."""
     value = row.get(col)
     normalized = value.strip() if isinstance(value, str) else value
     informative = 0
@@ -309,7 +317,7 @@ def _pick_effectif_group_value(
     source_table: str,
     order_col: str,
 ) -> Any:
-    """Choisit la meilleure valeur non vide pour une colonne d'un groupe ``fc_id``."""
+    """Sélectionne la valeur la plus pertinente d'un groupe."""
     candidates = group.loc[~group[col].map(_is_missing_effectif_value)].copy()
     if candidates.empty:
         return None
@@ -331,14 +339,7 @@ def _consolide_lignes_effectifs_par_fc_id(
     colonnes_metier: list[str],
     source_table: str = "point_ctrl",
 ) -> pd.DataFrame:
-    """
-    Consolide les lignes OSCEAN au niveau ``fc_id`` pour les seules métriques d'effectifs.
-
-    Quand plusieurs localisations portent la même fiche, les champs d'effectifs
-    (``type_usager`` et dimensions associées) ne doivent être lus qu'une seule
-    fois. En cas de valeurs contradictoires dans un groupe ``fc_id``, la
-    première valeur non vide est conservée et un avertissement est journalisé.
-    """
+    """Consolide les contrôles par `fc_id` pour éviter les doublons lors des agrégations d'effectifs."""
     if df.empty or _norm_key(source_table) != "point_ctrl" or "fc_id" not in df.columns:
         return df
 
@@ -383,7 +384,7 @@ def _consolide_lignes_effectifs_par_fc_id(
 
 
 def map_type_usager(source_table: str, source_champ: str, valeur_source: str) -> str:
-    """Mappe une valeur source vers un type d’usager (6 catégories cibles). Fallback : 'Autre'."""
+    """Mappe une valeur source vers l'une des 6 catégories du référentiel usagers."""
     mapping = _load_types_usagers_mapping()
     key = (_norm_key(source_table), _norm_key(source_champ), _norm_key(valeur_source))
     if key in mapping:
@@ -395,7 +396,7 @@ def map_type_usager(source_table: str, source_champ: str, valeur_source: str) ->
 
 
 def resolve_type_usager_champ(df: pd.DataFrame) -> str | None:
-    """Colonne type d'usager dans un jeu PEJ/PA/contrôles (casse et alias OSCEAN)."""
+    """Recherche le nom réel de la colonne contenant le type d'usager."""
     for name in ("type_usager", "USAGER", "TYPE_USAGER", "TYPE USAGER"):
         if name in df.columns:
             return name
@@ -403,14 +404,7 @@ def resolve_type_usager_champ(df: pd.DataFrame) -> str | None:
 
 
 def serie_type_usager(df: pd.DataFrame, source_table: str, source_champ: str) -> pd.Series:
-    """
-    Déduit un type d’usager \"dominant\" par ligne à partir d’un champ source (ex. point_ctrl.type_usager).
-
-    Règle :
-    - si la ligne contient une seule catégorie → cette catégorie mappée ;
-    - si plusieurs catégories → celle avec l'effectif max ; en cas d'égalité → 'Autre' ;
-    - si vide → 'Autre'.
-    """
+    """Détermine la catégorie d'usager dominante pour chaque ligne du tableau."""
     if source_champ not in df.columns:
         return pd.Series(["Autre"] * len(df), index=df.index, dtype="object")
 
@@ -418,15 +412,12 @@ def serie_type_usager(df: pd.DataFrame, source_table: str, source_champ: str) ->
         toks = _parse_type_usager_tokens(val)
         if not toks:
             return "Autre"
-        # mapper chaque libellé vers une des 6 catégories
         mapped = [(map_type_usager(source_table, source_champ, lab), n) for lab, n in toks]
-        # regrouper par catégorie (si doublons)
         agg: dict[str, int] = {}
         for cat, n in mapped:
             agg[cat] = agg.get(cat, 0) + int(n or 0)
         if len(agg) == 1:
             return next(iter(agg.keys()))
-        # dominant
         max_n = max(agg.values())
         top = [k for k, v in agg.items() if v == max_n]
         return top[0] if len(top) == 1 else "Autre"
@@ -434,19 +425,16 @@ def serie_type_usager(df: pd.DataFrame, source_table: str, source_champ: str) ->
     return df[source_champ].apply(_dominant)
 
 
+# ========================================================================================
+# FONCTIONS D'AGREGATION PAR USAGERS, DOMAINES ET THEMES
+# ========================================================================================
+
 def agg_nb_localisations_par_type_usager(
     df: pd.DataFrame,
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Nombre de contrôles par catégorie type d'usager.
-
-    La catégorie retenue est la catégorie dominante (``serie_type_usager``), et
-    non la somme des effectifs multi-usagers du champ source. Si ``fc_id`` est
-    disponible sur ``point_ctrl``, chaque fiche de contrôle contribue une seule
-    fois.
-    """
+    """Calcule le nombre de localisations contrôlées par usager dominant."""
     if source_champ not in df.columns or df.empty:
         return pd.DataFrame(columns=["type_usager", "nb"])
 
@@ -466,19 +454,7 @@ def agg_effectifs_usagers(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Agrège les effectifs d'usagers par catégorie du référentiel.
-
-    Pour chaque ligne de *df*, le champ *source_champ* est parsé
-    (ex. « Particulier 6, Collectivité 1 »).  Chaque libellé est mappé
-    vers une catégorie du référentiel et l'effectif associé est sommé. Si
-    ``fc_id`` est disponible sur ``point_ctrl``, la somme est consolidée une
-    seule fois par fiche de contrôle.
-
-    Retourne un DataFrame avec colonnes ``type_usager``, ``nb`` et ``nb_operations``.
-    Le total de ``nb`` peut dépasser ``len(df)`` (un point peut contribuer
-    à plusieurs catégories).
-    """
+    """Somme les effectifs d'usagers en prenant en compte les contrôles multi-usagers."""
     if source_champ not in df.columns:
         return pd.DataFrame(columns=["type_usager", "nb", "nb_operations"])
 
@@ -526,17 +502,7 @@ def agg_effectifs_usagers_par_domaine(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Tableau croisé (type_usager, domaine) basé sur les effectifs.
-
-    Pour chaque ligne de *df*, décompose *source_champ* en (catégorie, effectif)
-    et ajoute l'effectif dans la cellule (catégorie, domaine du point). Si
-    ``fc_id`` est disponible sur ``point_ctrl``, chaque fiche ne contribue
-    qu'une seule fois.
-
-    Retourne un DataFrame en format « long » (type_usager, domaine, nb)
-    ou en format « large » (type_usager en index, domaines en colonnes).
-    """
+    """Construit la matrice (Type usager × Domaine) pour les effectifs d'usagers."""
     if source_champ not in df.columns:
         return pd.DataFrame(columns=["type_usager"])
 
@@ -572,12 +538,7 @@ def agg_effectifs_usagers_par_theme(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Effectifs par type d'usager × thème (format long : type_usager, theme, nb).
-
-    Chaque libellé d'usager sur une fiche est compté avec son effectif chiffré
-    (contrôles multi-usagers : plusieurs effectifs pour une même localisation).
-    """
+    """Construit la matrice (Type usager × Thème) pour les effectifs d'usagers."""
     if source_champ not in df.columns:
         return pd.DataFrame(columns=["type_usager", "theme", "nb"])
     theme_col = col_theme if col_theme in df.columns else None
@@ -620,14 +581,7 @@ def agg_controles_par_type_usager_domaine(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Nombre de contrôles par type d'usager et par domaine.
-
-    Pour chaque point de contrôle, on identifie les catégories de type_usager
-    présentes (via le référentiel) et on incrémente une fois par catégorie
-    (peu importe l'effectif associé). Si ``fc_id`` est disponible sur
-    ``point_ctrl``, chaque fiche contribue une seule fois.
-    """
+    """Calcule le nombre de localisations par (type_usager × domaine)."""
     if source_champ not in df.columns:
         return pd.DataFrame(columns=["type_usager", "domaine", "nb_localisations"])
 
@@ -674,11 +628,7 @@ def agg_controles_par_type_usager_theme(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Nombre de contrôles par type d'usager et par thème.
-
-    Même logique que agg_controles_par_type_usager_domaine mais avec la colonne thème.
-    """
+    """Calcule le nombre de localisations par (type_usager × thème)."""
     if source_champ not in df.columns:
         return pd.DataFrame(columns=["type_usager", "theme", "nb_localisations"])
 
@@ -727,7 +677,7 @@ def _agg_resultats_par_type_usager_dimension(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """Résultats par type d'usager × dimension (domaine ou thème), via classify_resultat_controle."""
+    """Croise les résultats (Conforme/Infraction/Manquement) par type d'usager et dimension géographique ou thématique."""
     base_cols = [
         "type_usager",
         col_dim,
@@ -805,7 +755,7 @@ def agg_resultats_par_type_usager_domaine(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """Résultats des contrôles par type d'usager × domaine (Conforme / Manquement / Infraction / En attente)."""
+    """Ventile les résultats de contrôle par type d'usager et domaine."""
     return _agg_resultats_par_type_usager_dimension(
         df,
         col_domaine,
@@ -823,7 +773,7 @@ def agg_resultats_par_type_usager_theme(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """Résultats des contrôles par type d'usager × thème (même logique que par domaine)."""
+    """Ventile les résultats de contrôle par type d'usager et thème."""
     return _agg_resultats_par_type_usager_dimension(
         df,
         col_theme,
@@ -840,6 +790,7 @@ def agg_resultat_counts_par_type_usager(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
+    """Nombre de contrôles par catégorie de résultat et type d'usager."""
     if source_champ not in df.columns or col_resultat not in df.columns:
         return pd.DataFrame(
             columns=[
@@ -878,12 +829,11 @@ def agg_resultat_counts_par_type_usager(
             d = counts.setdefault(cat, {k: 0 for k in buckets})
             d[b] += 1
             continue
-        
-        # Un compte par catégorie
+
         cats = set()
         for lab, n in toks:
             cats.add(map_type_usager(source_table, source_champ, lab))
-        
+
         for cat in cats:
             d = counts.setdefault(cat, {k: 0 for k in buckets})
             d[b] += 1
@@ -904,7 +854,7 @@ def count_multi_usager_controles(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> int:
-    """Nombre de contrôles multi-usagers, consolidés par ``fc_id`` si disponible."""
+    """Compte le nombre de fiches de contrôle impliquant au moins deux catégories d'usagers."""
     if source_champ not in df.columns or df.empty:
         return 0
     work_df = _consolide_lignes_effectifs_par_fc_id(df, [source_champ], source_table=source_table)
@@ -919,13 +869,7 @@ def agg_resultat_effectifs_par_type_usager(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Résultats des contrôles par type d'usager, pondérés par effectif.
-
-    Même ventilation que ``agg_resultat_counts_par_type_usager``, mais chaque
-    catégorie d'usager reçoit l'effectif chiffré de la fiche (et non +1 par
-    localisation).
-    """
+    """Ventilation des effectifs d'usagers selon le résultat du contrôle."""
     if source_champ not in df.columns or col_resultat not in df.columns:
         return pd.DataFrame(
             columns=[
@@ -980,8 +924,12 @@ def agg_resultat_effectifs_par_type_usager(
     return pd.DataFrame(rows)
 
 
+# ========================================================================================
+# PROCEDURES D'ENQUETE ET SUITES ADMINISTRATIVES (PEJ ET PA)
+# ========================================================================================
+
 def is_filled_procedure_code(value: Any) -> bool:
-    """Vrai si la valeur est un code de procédure renseigné (hors NaN / vide / « nan »)."""
+    """Vérifie si un identifiant de procédure judiciaire ou administrative est renseigné."""
     if value is None:
         return False
     if isinstance(value, float) and pd.isna(value):
@@ -997,7 +945,7 @@ def is_filled_procedure_code(value: Any) -> bool:
 
 
 def resultat_induit_pa(value: Any) -> bool:
-    """True si le libellé de résultat implique une PA (contient « manquement »)."""
+    """Détermine si un résultat de contrôle implique l'ouverture d'une procédure administrative (Manquement)."""
     s = str(value or "").strip().lower()
     if not s or s in ("nan", "none", "<na>"):
         return False
@@ -1005,12 +953,12 @@ def resultat_induit_pa(value: Any) -> bool:
 
 
 def mask_resultat_induit_pa(resultat: pd.Series) -> pd.Series:
-    """Masque booléen : une PA est induite pour chaque résultat contenant « manquement »."""
+    """Masque booléen des contrôles générant une procédure administrative."""
     return resultat.map(resultat_induit_pa)
 
 
 def filter_points_induisant_pa(point: pd.DataFrame) -> pd.DataFrame:
-    """Contrôles dont le champ code_pa est renseigné (valeur non nulle/non vide)."""
+    """Filtre les contrôles assortis d'un code de procédure administrative."""
     if point is None or point.empty or "code_pa" not in point.columns:
         return point.iloc[0:0].copy() if point is not None and not point.empty else pd.DataFrame()
     return point.loc[point["code_pa"].map(is_filled_procedure_code)].copy()
@@ -1021,7 +969,7 @@ def count_pa_induites_par_controles(
     *,
     mask: pd.Series | None = None,
 ) -> int:
-    """Nombre de PA = contrôles dont le champ code_pa est renseigné."""
+    """Compte le nombre de procédures administratives issues des contrôles."""
     if point is None or point.empty or "code_pa" not in point.columns:
         return 0
     sub = point.loc[mask] if mask is not None else point
@@ -1031,10 +979,7 @@ def count_pa_induites_par_controles(
 
 
 def points_as_pa_lignes(point: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convertit les contrôles à manquement en lignes « procédure PA »
-    (domaine / thème / type d'usager) pour les agrégations chapitre Procédures.
-    """
+    """Extrait les caractéristiques des contrôles générant une PA pour les intégrer au chapitre Procédures."""
     sub = filter_points_induisant_pa(point)
     cols = ["DOMAINE", "THEME", "type_usager", "DC_ID", "DATE_REF"]
     if sub.empty:
@@ -1079,13 +1024,7 @@ def agg_procedures_par_type_usager_domaine(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Procédures (PEJ / PA / PVe) par type d'usager × domaine.
-
-    - PEJ : une procédure est comptée si col_code_pej est non vide pour le point.
-    - PA : contrôle dont le résultat contient « manquement » (ou col_code_pa si pas de résultat).
-    - PVe : sans lien explicite PVe dans point_ctrl, nb_pve reste à 0.
-    """
+    """Ventile l'ensemble des procédures (PEJ/PA/PVe) par type d'usager et domaine."""
     if source_champ not in df.columns:
         return pd.DataFrame(
             columns=["type_usager", "domaine", "nb_pej", "nb_pa", "nb_pve"]
@@ -1096,7 +1035,7 @@ def agg_procedures_par_type_usager_domaine(
         dom = str(row.get(col_domaine, "Hors domaine") or "Hors domaine")
         has_pej = is_filled_procedure_code(row.get(col_code_pej))
         has_pa = is_filled_procedure_code(row.get(col_code_pa))
-        has_pve = False  # nécessite les données PVe jointes ; 0 par défaut
+        has_pve = False
 
         toks = _parse_type_usager_tokens(row.get(source_champ))
         if not toks:
@@ -1146,9 +1085,7 @@ def agg_procedures_par_type_usager_theme(
     source_table: str = "point_ctrl",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Procédures (PEJ / PA / PVe) par type d'usager × thème.
-    """
+    """Ventile l'ensemble des procédures (PEJ/PA/PVe) par type d'usager et thème."""
     if source_champ not in df.columns:
         return pd.DataFrame(
             columns=["type_usager", "theme", "nb_pej", "nb_pa", "nb_pve"]
@@ -1206,12 +1143,7 @@ def count_procedures_liees_controle_sur_points(
     *,
     mask: pd.Series | None = None,
 ) -> tuple[int, int]:
-    """
-    Compte les procédures liées aux contrôles sur la période.
-
-    - PEJ : champ ``code_pej`` renseigné sur le point.
-    - PA : champ ``code_pa`` renseigné sur le point.
-    """
+    """Compte séparément les PEJ et PA engagées directement après un contrôle."""
     if point is None or point.empty:
         return 0, 0
     sub = point.loc[mask] if mask is not None else point
@@ -1266,11 +1198,7 @@ def agg_procedures_dossiers_par_domaine(
     source_table: str = "pej",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """
-    Toutes les procédures (dossiers PEJ / PA), y compris saisines hors contrôle PA.
-
-    À utiliser pour le chapitre « Procédures » (tableaux par domaine).
-    """
+    """Agrège l'intégralité des dossiers de procédures (PEJ et PA) par domaine d'intervention."""
     counts: dict[tuple[str | None, str], dict[str, int]] = {}
 
     def _add_rows(df: pd.DataFrame, field: str) -> None:
@@ -1324,7 +1252,7 @@ def agg_procedures_dossiers_par_theme(
     source_table: str = "pej",
     source_champ: str = "type_usager",
 ) -> pd.DataFrame:
-    """Toutes les procédures (dossiers PEJ / PA) par thème."""
+    """Agrège l'intégralité des dossiers de procédures (PEJ et PA) par thème d'intervention."""
     counts: dict[tuple[str | None, str], dict[str, int]] = {}
 
     def _add_rows(df: pd.DataFrame, field: str) -> None:
@@ -1372,15 +1300,19 @@ def agg_procedures_dossiers_par_theme(
     return pd.DataFrame(rows)
 
 
+# ========================================================================================
+# FILTRAGE PAR DATE ET REGLES METIERS SPECIFIQUES (CHASSE, NATINF)
+# ========================================================================================
+
 def filtre_periode(
     df: pd.DataFrame, col_date: str, date_deb: pd.Timestamp, date_fin: pd.Timestamp
 ) -> pd.DataFrame:
-    """Filtre le DataFrame sur la plage de dates."""
+    """Filtre les données sur la plage temporelle du bilan."""
     return df[(df[col_date] >= date_deb) & (df[col_date] <= date_fin)].copy()
 
 
 def resume_resultat(s: pd.Series) -> str:
-    """Consolide le résultat d'un dossier à partir des résultats de ses points."""
+    """Synthétise le résultat global d'une opération à partir des résultats de ses localisations."""
     vals = s.dropna()
     if vals.empty:
         return "Inconnu"
@@ -1393,19 +1325,19 @@ def resume_resultat(s: pd.Series) -> str:
 
 
 def est_chasse_thematique(theme: str, type_action: str) -> bool:
-    """Vérifie si le thème ou l'action concerne la chasse."""
+    """Détecte les actions relatives à la police de la chasse."""
     t = (theme or "").lower()
     a = (type_action or "").lower()
     return ("chasse" in t) or ("chasse" in a) or ("police de la chasse" in t)
 
 
 def est_chasse_point(row: pd.Series) -> bool:
-    """Détermine si un point de contrôle concerne la chasse."""
+    """Indique si un point de contrôle relève du thème Chasse."""
     return est_chasse_thematique(row.get("theme"), row.get("type_actio"))
 
 
 def contient_natinf(s: str, natinf_list: List[str]) -> bool:
-    """Vérifie si la chaîne contient l'un des codes NATINF (format X_Y ou isolé)."""
+    """Vérifie si une chaîne contient l'un des codes d'infractions NATINF cibles."""
     s = str(s) if pd.notna(s) else ""
     for code in natinf_list:
         pattern = rf"\b{code}\b"
@@ -1415,23 +1347,13 @@ def contient_natinf(s: str, natinf_list: List[str]) -> bool:
 
 
 def count_controles_non_conformes_oscean(resultat: pd.Series) -> int:
-    """
-    Compte les contrôles non conformes OSCEAN : résultat « Infraction » ou « Manquement ».
-
-    Aligné sur la logique métier : un contrôle non conforme peut révéler l'un ou l'autre ;
-    le total des non-conformes est la somme des deux catégories (une ligne = un contrôle).
-    """
+    """Compte les contrôles non conformes (Infraction ou Manquement)."""
     r = classify_resultat_controle_series(resultat)
     return int(r.isin(("Infraction", "Manquement")).sum())
 
 
 def classify_resultat_controle(value: Any) -> str:
-    """
-    Regroupe le libellé OSCEAN en catégories du tableau « Résultats des contrôles » (2.2).
-
-    Seuls Conforme, Infraction et Manquement sont conservés tels quels ; tout le reste
-    (vide, inconnu, autre libellé) est compté comme « En attente ».
-    """
+    """Normalise un libellé de résultat vers l'un des 4 statuts : Conforme, Infraction, Manquement, En attente."""
     s = str(value or "").strip()
     if not s or s.lower() in ("nan", "none", "<na>"):
         return "En attente"
@@ -1446,16 +1368,12 @@ def classify_resultat_controle(value: Any) -> str:
 
 
 def classify_resultat_controle_series(resultat: pd.Series) -> pd.Series:
-    """Applique :func:`classify_resultat_controle` ligne à ligne."""
+    """Applique `classify_resultat_controle` sur une série Pandas."""
     return resultat.map(classify_resultat_controle)
 
 
 def build_tab_resultats(point: pd.DataFrame) -> pd.DataFrame:
-    """
-    Tableau synthétique exporté (resultat, nb, taux) avec catégories normalisées.
-
-    Aligné sur :func:`classify_resultat_controle` (inclut « En attente »).
-    """
+    """Génère le tableau de synthèse des résultats de contrôles (Effectifs et Taux %)."""
     nb_total = len(point)
     if nb_total == 0 or "resultat" not in point.columns:
         return pd.DataFrame(columns=["resultat", "nb", "taux"])
@@ -1475,6 +1393,10 @@ def build_tab_resultats(point: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ========================================================================================
+# CLASSIFICATION ZONAGE SPATIAL (PNF, TUB, COEUR / AIRE)
+# ========================================================================================
+
 ZONE_LECTEUR_COEUR = "Coeur de parc"
 ZONE_LECTEUR_AIRE = "Aire d'adhésion"
 ZONE_LECTEUR_TUB = "Zone TUB"
@@ -1493,7 +1415,7 @@ ZONE_PEJ_LECTEUR_TABLE_ORDER: tuple[str, ...] = (
 
 
 def coalesced_insee_series(df: pd.DataFrame) -> pd.Series:
-    """Code INSEE normalisé (5 chiffres) par ligne, colonnes usuelles combinées."""
+    """Combines les différentes colonnes INSEE possibles pour extraire le code commune à 5 chiffres."""
     if df is None or df.empty:
         return pd.Series(pd.NA, index=df.index, dtype="string")
     out = pd.Series(pd.NA, index=df.index, dtype="string")
@@ -1505,6 +1427,7 @@ def coalesced_insee_series(df: pd.DataFrame) -> pd.Series:
 
 
 def _normalize_insee_code(insee: Any) -> str | None:
+    """Normalise un code INSEE au format strict 5 chiffres."""
     if insee is None or (isinstance(insee, float) and pd.isna(insee)):
         return None
     s = str(insee).strip()
@@ -1524,7 +1447,7 @@ def zone_lecteur_label(
     insee: Any,
     tub_codes: set[str] | set,
 ) -> str:
-    """Libellé lecteur (une zone) : priorité cœur / aire SIG, puis TUB, sinon hors PNF/TUB."""
+    """Retourne la zone réglementaire exclusive (Cœur PNF, Aire d'adhésion, Zone TUB, Hors PNF/TUB)."""
     if pnf_zone_sig is not None and not (isinstance(pnf_zone_sig, float) and pd.isna(pnf_zone_sig)):
         sig = str(pnf_zone_sig).strip()
         if sig == "Coeur_PNF":
@@ -1546,7 +1469,7 @@ def classify_zone_lecteur_series(
     *,
     pnf_zone_col: str = "pnf_zone_sig",
 ) -> pd.Series:
-    """Série de libellés lecteur (4 zones exclusives) pour chaque ligne."""
+    """Associe à chaque ligne d'un DataFrame sa zone réglementaire exclusive."""
     tub = {str(c).zfill(5) for c in tub_codes}
     insee = coalesced_insee_series(df)
     out = pd.Series(ZONE_LECTEUR_HORS, index=df.index, dtype="string")
@@ -1563,7 +1486,7 @@ def classify_zone_lecteur_series(
 
 
 def format_zone_lecteur_counts(zones: pd.Series, mask: pd.Series) -> str:
-    """Format « Label : n, … » pour les zones avec n > 0."""
+    """Formate les comptes de contrôles par zone sous forme de texte 'Zone : n, ...'."""
     sub = zones.loc[mask]
     parts: list[str] = []
     for label in ZONE_LECTEUR_ORDER:
@@ -1574,7 +1497,7 @@ def format_zone_lecteur_counts(zones: pd.Series, mask: pd.Series) -> str:
 
 
 def zone_lecteur_counts_for_pdf_cell(text: str) -> str:
-    """Présentation PDF : une zone par ligne (``<br/>``), sans modifier les données agrégées."""
+    """Formate le texte de zone pour insertion dans une cellule de tableau PDF (`<br/>`)."""
     from xml.sax.saxutils import escape
 
     raw = str(text or "").strip()
@@ -1593,7 +1516,7 @@ def build_tab_resultats_controles(
     zone_lecteur_4_zones: bool = False,
     tub_codes: set[str] | set | None = None,
 ) -> pd.DataFrame:
-    """Construit le tableau synthétique « Résultats des contrôles » (section 2.2)."""
+    """Construit le tableau détaillé des résultats de contrôles avec répartition spatiale."""
     nb_total = len(point)
     if nb_total == 0 or "resultat" not in point.columns:
         return pd.DataFrame(columns=["resultat", "nb", "taux"])
@@ -1701,11 +1624,7 @@ ZONE_LABEL_DEPARTEMENT_HORS = "Département (hors zone TUB/PNF)"
 
 
 def build_zone_pej_from_proc_detail_lecteur(pej_detail: pd.DataFrame) -> pd.DataFrame:
-    """
-    Tableau « PEJ par zone » (profil lecteur 4 zones) dérivé du détail procédures.
-    Les lignes sans localisation exploitable (``n.d.``) sont regroupées sous
-    « Localisation en attente ».
-    """
+    """Agrège les PEJ par zone réglementaire à partir du tableau détaillé des procédures."""
     if pej_detail is None or pej_detail.empty or "coeur_hors_coeur" not in pej_detail.columns:
         return pd.DataFrame(columns=["zone", "nb"])
     ch = pej_detail["coeur_hors_coeur"].astype(str).str.strip()
@@ -1718,14 +1637,14 @@ def build_zone_pej_from_proc_detail_lecteur(pej_detail: pd.DataFrame) -> pd.Data
 
 
 def zone_table_display_label(zone: str) -> str:
-    """Libellé PDF/affichage pour la colonne zone (clé interne « Département » inchangée)."""
+    """Formate l'intitulé des zones d'étude pour la restitution PDF."""
     if str(zone).strip() == ZONE_KEY_DEPARTEMENT:
         return ZONE_LABEL_DEPARTEMENT_HORS
     return str(zone)
 
 
 def _mask_hors_tub_pnf(insee: pd.Series, tub_codes: set, pnf_codes: set) -> pd.Series:
-    """Communes ni en zone TUB ni en zone PNF (décompte ensembliste, sans double soustraction)."""
+    """Masque des communes n'appartenant ni au périmètre TUB ni au périmètre PNF."""
     return ~insee.isin(tub_codes) & ~insee.isin(pnf_codes)
 
 
@@ -1735,7 +1654,7 @@ def _zone_summary(
     tub_codes: set,
     pnf_codes: set,
 ) -> pd.DataFrame:
-    """Calcule nb_total, nb_conforme, nb_non_conforme pour dept hors TUB/PNF, TUB et PNF."""
+    """Synthétise les contrôles et les taux de non-conformité par zone (Hors PNF/TUB, TUB, PNF)."""
     insee = df[col_insee].astype(str).str.zfill(5)
     rows = []
 
@@ -1798,7 +1717,7 @@ def _zone_count(
     tub_codes: set,
     pnf_codes: set,
 ) -> pd.DataFrame:
-    """Compte simple par zone (pour PVe / PEJ sans colonne 'resultat')."""
+    """Compte le nombre de dossiers par zone (pour les procédures PVe ou PEJ)."""
     insee = df[col_insee].astype(str).str.zfill(5)
     rows = [
         {
@@ -1812,7 +1731,7 @@ def _zone_count(
 
 
 def _load_csv_opt(out_dir: Path, name: str) -> pd.DataFrame | None:
-    """Charge un CSV optionnel ; retourne None si absent ou illisible."""
+    """Charge un fichier CSV optionnel s'il existe dans le répertoire de sortie."""
     p = out_dir / name
     if not p.exists():
         return None
@@ -1824,6 +1743,7 @@ def _load_csv_opt(out_dir: Path, name: str) -> pd.DataFrame | None:
         return pd.read_csv(p, sep=";", encoding="latin-1")
 
 
+# Dictionnaire statique des noms de départements français
 DEPT_NAMES: dict[str, str] = {
     "01": "Ain", "02": "Aisne", "03": "Allier", "04": "Alpes-de-Haute-Provence",
     "05": "Hautes-Alpes", "06": "Alpes-Maritimes", "07": "Ardèche", "08": "Ardennes",
@@ -1856,7 +1776,7 @@ DEPT_NAMES: dict[str, str] = {
 
 
 def get_dept_name(code: str) -> str:
-    """Renvoie le nom du département pour un code donné, ou le nom de la région si c'est une région."""
+    """Retourne le nom d'un département à partir de son numéro d'INSEE."""
     c = str(code).strip()
     if c in DEPT_NAMES:
         return DEPT_NAMES[c]
@@ -1867,11 +1787,11 @@ def get_dept_name(code: str) -> str:
 
 
 def _detect_insee_column(communes: Any) -> str:
-    """Détecte la colonne contenant le code INSEE dans une couche communes."""
+    """Détecte le nom de la colonne INSEE dans un GeoDataFrame de communes."""
     candidats = ["INSEE", "INSEE_COM", "CODE_INSEE", "INSEE_COMM", "INSEECO"]
     for col in candidats:
         if col in communes.columns:
             return col
     raise ValueError(
         "Impossible de trouver une colonne INSEE dans la couche communes."
-    )
+    )

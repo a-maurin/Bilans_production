@@ -409,29 +409,39 @@ def chart_pie_legend_right(
     if total:
         pcts = int_percents_largest_remainder([int(v) for v in values])
         if legend_percent_only:
-            legend_labels = [f"{textwrap.fill(lb, width=25)}\n{pcts[i]} %" for i, lb in enumerate(labels)]
+            legend_labels = [
+                f"{textwrap.fill(lb, width=45, break_long_words=False, break_on_hyphens=False)}\n$\\mathbf{{{pcts[i]}\\ \\%}}$"
+                for i, lb in enumerate(labels)
+            ]
         else:
             legend_labels = [
-                f"{textwrap.fill(lb, width=25)}\n{v} ({pcts[i]} %)" for i, (lb, v) in enumerate(zip(labels, values))
+                f"{textwrap.fill(lb, width=45, break_long_words=False, break_on_hyphens=False)}\n{v} ($\\mathbf{{{pcts[i]}\\ \\%}}$)"
+                for i, (lb, v) in enumerate(zip(labels, values))
             ]
     else:
         legend_labels = (
-            [f"{textwrap.fill(lb, width=25)}\n0 %" for lb in labels]
+            [
+                f"{textwrap.fill(lb, width=45, break_long_words=False, break_on_hyphens=False)}\n$\\mathbf{{0\\ \\%}}$"
+                for lb in labels
+            ]
             if legend_percent_only
-            else [f"{textwrap.fill(lb, width=25)}\n0 (0 %)" for lb in labels]
+            else [
+                f"{textwrap.fill(lb, width=45, break_long_words=False, break_on_hyphens=False)}\n0 ($\\mathbf{{0\\ \\%}}$)"
+                for lb in labels
+            ]
         )
-    fig_w = 6.4 * figure_scale
-    fig_h = max(2.2, 0.32 * len(labels) + 0.8) * figure_scale
+    fig_w = 4.4 * figure_scale
+    fig_h = 2.6 * figure_scale
     fig, (ax_pie, ax_leg) = plt.subplots(
         1,
         2,
         figsize=(fig_w, fig_h),
-        gridspec_kw={"width_ratios": [1.35, 1.0], "wspace": 0.05},
+        gridspec_kw={"width_ratios": [1.0, 1.5], "wspace": 0.05},
     )
     if donut:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.25, wedgeprops=dict(width=0.45, edgecolor="white"))
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.2, wedgeprops=dict(width=0.45, edgecolor="white"))
     else:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.25)
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.2)
     ax_pie.set_aspect("equal")
     if str(title).strip():
         ax_pie.set_title(
@@ -452,7 +462,7 @@ def chart_pie_legend_right(
         handletextpad=0.45,
         labelspacing=0.55,
     )
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.92 if not str(title).strip() else 0.86, bottom=0.04)
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.98 if not str(title).strip() else 0.90, bottom=0.02)
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
 
 

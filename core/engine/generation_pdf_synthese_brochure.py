@@ -570,7 +570,7 @@ def _build_treemap_placeholder_banner(builder: PDFReportBuilder, outer_w: float)
     )
     return encadre_section(
         outer_w,
-        "TEMPS PASSÉS PAR THÉMATIQUES",
+        "Temps passé par thèmes du plan de contrôle",
         [body_tbl],
         builder.styles,
     )
@@ -662,7 +662,7 @@ class BrochureResultatPastilles(Flowable):
         canv.saveState()
         canv.setFont("Helvetica-Bold", 10)
         canv.setFillColor(rl_colors.HexColor("#1E293B"))
-        canv.drawCentredString(w / 2.0, self.height - 10, f"{self.n_ops} OPERATIONS DE CONTROLES")
+        canv.drawCentredString(w / 2.0, self.height - 5, f"{self.n_ops} OPERATIONS DE CONTROLES")
 
         cx_list = [w * 0.20, w * 0.50, w * 0.80]
         cy = 30.0
@@ -1094,11 +1094,11 @@ def _generate_srp_r27_brochure_pdf(
                 tmp_dir,
                 "srp_pie_usagers.png",
                 legend_percent_only=True,
-                figure_scale=0.72,
+                figure_scale=0.85,
                 legend_fontsize=8.0,
             )
         )
-        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=40.0 * mm, scale_to_fill=True)
+        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=42.0 * mm, scale_to_fill=True)
         if img:
             pie_body = [img]
     if not pie_body:

@@ -34,6 +34,13 @@ Un moteur de rendu pour automatiser vos rapports d'activité :
 *   **Déploiement simplifié** : Installation rapide depuis le gestionnaire d'extensions QGIS.
 *   **Moteur cartographique robuste** : Exploitation native des capacités de rendu de QGIS pour les exports statiques.
 
+## 📋 Prérequis Système
+
+* **Système d'exploitation** : Windows 10 / 11 (64-bit)
+* **QGIS** : **QGIS 3.22 LTR ou supérieur** (Recommandé : QGIS 3.28 LTR, 3.34 LTR, 3.40+).
+* **Environnement Python** : **Python $\ge$ 3.8** (embarqué nativement dans QGIS $\ge$ 3.22).
+> ⚠️ **Incompatibilité** : Les versions anciennes de QGIS (ex: **QGIS 3.10 LTR** et **QGIS 3.16 LTR**) basées sur Python 3.7 ne sont pas supportées (absence de la fonction `os.add_dll_directory` requise par les dépendances géospatiales `geopandas` et `fiona`).
+
 ---
 
 ## ⚙️ Installation et Configuration

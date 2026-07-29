@@ -131,8 +131,33 @@ def install_dependencies(iface):
             
     return True
 
+def check_python_version(iface):
+    """Vérifie que la version de Python est au moins 3.8 (QGIS >= 3.22 LTR)."""
+    if sys.version_info < (3, 8):
+        msg = (
+            f"OFBilan nécessite Python 3.8+ et QGIS 3.22 LTR ou supérieur.\n\n"
+            f"Votre version actuelle : Python {sys.version_info.major}.{sys.version_info.minor}\n\n"
+            f"Les anciennes versions de QGIS (3.10, 3.16, etc.) sous Python 3.7 ne sont pas compatibles "
+            f"avec les dépendances géospatiales du plugin (GeoPandas / Fiona)."
+        )
+        QgsMessageLog.logMessage(msg, "OFBilan", Qgis.Critical)
+        if iface and iface.mainWindow():
+            QMessageBox.critical(iface.mainWindow(), "Version QGIS incompatible", msg)
+        return False
+    return True
+
 def classFactory(iface):
     """Point d'entrée du plugin pour QGIS."""
+    if not check_python_version(iface):
+        class DummyPlugin:
+            def __init__(self, iface):
+                self.iface = iface
+            def initGui(self):
+                pass
+            def unload(self):
+                pass
+        return DummyPlugin(iface)
+
     from .ofbilan_plugin import OFBilanPlugin
     
     # On vérifie les dépendances avant d'instancier le plugin

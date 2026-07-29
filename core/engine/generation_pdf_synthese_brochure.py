@@ -116,7 +116,7 @@ _BROCHURE_MAX_THEMES = 5  # Maximum 5 thématiques affichées dans les tableaux 
 _BROCHURE_MAX_PROC_THEMES = 7  # Maximum 7 thématiques dans le tableau des procédures (PEJ/PA)
 _BROCHURE_MAX_PVE_NATINF = 9  # Maximum 9 infractions NATINF affichées dans la liste PV/E
 
-# Encombres et hauteurs fixes (en millimètres) utilisées pour calculer l'espace disponible en Page 2
+# Encombrements et hauteurs fixes (en millimètres) utilisées pour calculer l'espace disponible en Page 2
 _PAGE2_ENCADRE_OVERHEAD_MM = 14.0  # Hauteur occupée par les en-têtes et bordures d'un encadré en page 2
 _PAGE2_TABLE_ROW_MM = 5.4  # Hauteur estimée d'une ligne de tableau
 _PAGE2_TABLE_FOOTER_MM = 10.0  # Hauteur du pied de tableau
@@ -653,7 +653,7 @@ class BrochureResultatPastilles(Flowable):
         self.pct_conf = int(pct_conf)
         self.pct_manq = int(pct_manq)
         self.pct_inf = int(pct_inf)
-        self.height = 85.0
+        self.height = 70.0
 
     def draw(self):
         """Dessine les cercles et textes vectoriels directement sur le canevas PDF."""
@@ -662,10 +662,10 @@ class BrochureResultatPastilles(Flowable):
         canv.saveState()
         canv.setFont("Helvetica-Bold", 10)
         canv.setFillColor(rl_colors.HexColor("#1E293B"))
-        canv.drawCentredString(w / 2.0, self.height - 12, f"{self.n_ops} OPERATIONS DE CONTROLES")
+        canv.drawCentredString(w / 2.0, self.height - 10, f"{self.n_ops} OPERATIONS DE CONTROLES")
 
         cx_list = [w * 0.20, w * 0.50, w * 0.80]
-        cy = 42.0
+        cy = 30.0
         r = 18.0
 
         pastilles = [
@@ -1049,11 +1049,11 @@ def _generate_srp_r27_brochure_pdf(
         ])
     )
     builder.story.append(sep_tbl)
-    builder.story.append(Spacer(1, 3 * mm))
+    builder.story.append(Spacer(1, 1.5 * mm))
 
     # ── CALCUL DES COLONNES DE PAGE 1 ──
     gap_w = 6.0 * mm
-    left_w = (avail_w - gap_w) * 0.45
+    left_w = (avail_w - gap_w) * 0.4
     right_w = avail_w - gap_w - left_w
 
     treemap_panel = _build_treemap_placeholder_banner(builder, left_w)
@@ -1078,7 +1078,7 @@ def _generate_srp_r27_brochure_pdf(
                             resolved_maps.append(p)
                             break
 
-    maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=68.0) if resolved_maps else []
+    maps_body = _build_maps_body(builder, resolved_maps, inner_w=right_w, max_height_mm=82.0) if resolved_maps else []
     if not maps_body:
         maps_body = [Paragraph("<i>Carte non disponible</i>", builder.styles["BodySmall"])]
     map_panel = encadre_section(right_w, "Résultats des contrôles", maps_body, builder.styles)
@@ -1094,11 +1094,11 @@ def _generate_srp_r27_brochure_pdf(
                 tmp_dir,
                 "srp_pie_usagers.png",
                 legend_percent_only=True,
-                figure_scale=0.62,
+                figure_scale=0.72,
                 legend_fontsize=8.0,
             )
         )
-        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=45.0 * mm, scale_to_fill=True)
+        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=40.0 * mm, scale_to_fill=True)
         if img:
             pie_body = [img]
     if not pie_body:
@@ -1130,10 +1130,11 @@ def _generate_srp_r27_brochure_pdf(
     p1_tbl.setStyle(
         TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("VALIGN", (2, 1), (2, 1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
         ])
     )
     builder.story.append(p1_tbl)
@@ -2114,4 +2115,4 @@ def _generate_synthese_brochure_pdf(
     )
 
     # Génération effective du fichier PDF
-    builder.build()
+    builder.build()

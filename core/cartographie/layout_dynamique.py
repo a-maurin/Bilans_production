@@ -123,8 +123,8 @@ def build_dynamic_layout(prof, proj: QgsProject, title_text: str) -> QgsPrintLay
     try:
         from qgis.core import QgsScaleBarSettings
         scalebar.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeFitWidth)
-        scalebar.setMinimumBarWidth(30)
-        scalebar.setMaximumBarWidth(80)
+        scalebar.setMinimumBarWidth(7.5)
+        scalebar.setMaximumBarWidth(20.0)
     except Exception:
         scalebar.applyDefaultSize()
     scalebar.setStyle('Double Box')

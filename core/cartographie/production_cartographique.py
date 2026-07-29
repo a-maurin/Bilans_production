@@ -49,9 +49,10 @@ SYMBOLOGIES_YAML = PARAM_DIR / "symbologies.yaml"
 
 # Logger principal du module
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    _log_fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    logging.basicConfig(level=logging.INFO, format=_log_fmt, datefmt="%H:%M:%S")
+
+# Dimensions fixes (en mm) de l'élément carte QGIS pour le format brochure
+BROCHURE_MAP_WIDTH_MM = 200.0
+BROCHURE_MAP_HEIGHT_MM = 103.0
 
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
 OUT_DIR_CARTES = PROJECT_ROOT / "data" / "out" / "generateur_de_cartes"
@@ -1981,7 +1982,13 @@ def export_layout(
             item.setUnits(QgsUnitTypes.DistanceKilometers)
             item.setNumberOfSegmentsLeft(0)
             item.setNumberOfSegments(2)
-            item.setUnitsPerSegment(10.0)
+            try:
+                from qgis.core import QgsScaleBarSettings
+                item.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeFitWidth)
+                item.setMinimumBarWidth(7.5)
+                item.setMaximumBarWidth(20.0)
+            except Exception:
+                item.setUnitsPerSegment(10.0)
             item.update()
         elif isinstance(item, QgsLayoutItemLegend):
             # Supprimer la légende native QGIS car nous la générons avec Pillow post-export
@@ -2093,18 +2100,86 @@ def export_layout(
 
     is_brochure_mode_active = bool(items_a_masquer or getattr(prof, "items_masques", None))
     if is_brochure_mode_active:
+        try:
+            from qgis.core import QgsLayoutSize
+            page = layout.pageCollection().page(0)
+            if page:
+                page.setPageSize(QgsLayoutSize(BROCHURE_MAP_WIDTH_MM, BROCHURE_MAP_HEIGHT_MM))
+        except Exception:
+            pass
         for item in layout.items():
             if isinstance(item, QgsLayoutItemMap):
                 try:
                     from qgis.core import QgsLayoutPoint, QgsLayoutSize
-                    item.attemptMove(QgsLayoutPoint(1, 1))
-                    item.attemptResize(QgsLayoutSize(295, 208))
+                    item.attemptMove(QgsLayoutPoint(0, 0))
+                    item.attemptResize(QgsLayoutSize(BROCHURE_MAP_WIDTH_MM, BROCHURE_MAP_HEIGHT_MM))
                 except Exception:
                     pass
             elif isinstance(item, QgsLayoutItemScaleBar):
                 try:
-                    from qgis.core import QgsLayoutPoint
-                    item.attemptMove(QgsLayoutPoint(5, 190))
+                    from qgis.core import QgsLayoutPoint, QgsScaleBarSettings
+                    item.setVisibility(True)
+                    item.attemptMove(QgsLayoutPoint(6, BROCHURE_MAP_HEIGHT_MM - 12))
+                    item.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeFitWidth)
+                    item.setMinimumBarWidth(7.5)
+                    item.setMaximumBarWidth(20.0)
+                    font = item.font()
+                    font.setPointSize(7)
+                    item.setFont(font)
+                    item.setHeight(3.0)
+                    item.setBoxSpace(1.0)
+                    item.setLabelBarSpace(1.0)
+                except Exception:
+                    pass
+            elif isinstance(item, QgsLayoutItemLegend):
+                try:
+                    from qgis.core import QgsLayoutPoint, QgsLegendStyle
+                    from qgis.PyQt.QtGui import QColor
+                    item.setVisibility(True)
+                    item.setBackgroundEnabled(True)
+                    item.setBackgroundColor(QColor(255, 255, 255, 220))
+                    try:
+                        item.setTitle("")
+                    except Exception:
+                        pass
+                    for s_type in (QgsLegendStyle.Title, QgsLegendStyle.Group, QgsLegendStyle.Subgroup, QgsLegendStyle.SymbolLabel):
+                        try:
+                            f = item.rstyle(s_type).font()
+                            f.setPointSizeF(5.5)
+                            item.rstyle(s_type).setFont(f)
+                        except Exception:
+                            try:
+                                st = item.style(s_type)
+                                f = st.font()
+                                f.setPointSizeF(5.5)
+                                st.setFont(f)
+                                item.setStyle(s_type, st)
+                            except Exception:
+                                pass
+
+                    item.setSymbolWidth(3.5)
+                    item.setSymbolHeight(2.5)
+                    item.setBoxSpace(1.0)
+                    item.setColumnSpace(1.5)
+                    item.setSymbolSpace(1.0)
+                    try:
+                        item.updateLegend()
+                    except Exception:
+                        pass
+                    item.refreshComponentSize()
+                    leg_w = item.sizeWithUnits().width()
+                    item.attemptMove(QgsLayoutPoint(BROCHURE_MAP_WIDTH_MM - leg_w - 3, 3))
+                except Exception as leg_err:
+                    logger.warning("Ajustement légende brochure : %s", leg_err)
+            elif isinstance(item, QgsLayoutItemPicture):
+                try:
+                    item_id = (item.id() or "").lower()
+                    pic_path = (getattr(item, "picturePath", lambda: "")() or "").lower()
+                    if any(k in item_id or k in pic_path for k in ("nord", "north", "fleche", "arrow")):
+                        from qgis.core import QgsLayoutPoint, QgsLayoutSize
+                        item.setVisibility(True)
+                        item.attemptMove(QgsLayoutPoint(6, BROCHURE_MAP_HEIGHT_MM - 24))
+                        item.attemptResize(QgsLayoutSize(10, 10))
                 except Exception:
                     pass
 
@@ -3209,15 +3284,32 @@ def _draw_legend_on_image(image_path, legend_data):
         logger.error("Erreur d'ouverture de l'image %s : %s", image_path.name, e)
         return
 
-    padding = 30
-    rect_size = 35
-    line_spacing = 50
-    title_spacing = 55
-    section_spacing = 20
+    is_brochure = "_brochure" in image_path.name.lower()
+
+    if is_brochure:
+        padding = 12
+        rect_size = 16
+        line_spacing = 24
+        title_spacing = 0
+        section_spacing = 8
+        font_title_sz = 14
+        font_text_sz = 13
+        line_step_text = 18
+        line_step_item = 22
+    else:
+        padding = 30
+        rect_size = 35
+        line_spacing = 50
+        title_spacing = 55
+        section_spacing = 20
+        font_title_sz = 35
+        font_text_sz = 28
+        line_step_text = 35
+        line_step_item = 35
 
     try:
-        font_title = ImageFont.truetype("arialbd.ttf", 35)
-        font_text = ImageFont.truetype("arial.ttf", 28)
+        font_title = ImageFont.truetype("arialbd.ttf", font_title_sz)
+        font_text = ImageFont.truetype("arial.ttf", font_text_sz)
     except IOError:
         font_title = ImageFont.load_default()
         font_text = ImageFont.load_default()
@@ -3226,17 +3318,17 @@ def _draw_legend_on_image(image_path, legend_data):
 
     max_w = 0
     total_h = padding * 2
-    
+
     for group in legend_data:
         title = group.get("title")
-        if title:
+        if title and not is_brochure:
             if hasattr(font_title, "getbbox"):
                 w = font_title.getbbox(title)[2] - font_title.getbbox(title)[0]
             else:
                 w = font_title.getsize(title)[0]
             max_w = max(max_w, w)
             total_h += title_spacing
-        
+
         for item in group.get("items", []):
             label = item["label"]
             lines = textwrap.wrap(label, width=30) if len(label) > 30 else [label]
@@ -3247,37 +3339,33 @@ def _draw_legend_on_image(image_path, legend_data):
                 else:
                     w = font_text.getsize(line)[0]
                 max_item_w = max(max_item_w, w)
-            max_w = max(max_w, rect_size + 15 + max_item_w)
-            total_h += line_spacing + (len(lines) - 1) * 35
-            
+            max_w = max(max_w, rect_size + (10 if is_brochure else 15) + max_item_w)
+            total_h += line_spacing + (len(lines) - 1) * line_step_item
+
         total_h += section_spacing
-        
+
     total_h -= section_spacing
     total_w = max_w + padding * 2
 
     img_w, img_h = img.size
 
-    # Positionnement de la légende dans la zone droite de la carte
-    start_x = int(img_w * 0.62)
+    # Positionnement de la légende dans le coin supérieur droit
     right_margin = 15
-    if start_x + total_w > img_w - right_margin:
-        start_x = img_w - total_w - right_margin
-    
-    # Marge haute optimale
-    margin_top = int(img_h * (10 / 210))
+    start_x = img_w - total_w - right_margin
+    margin_top = 15 if is_brochure else int(img_h * (10 / 210))
     start_y = margin_top
-    
-    if start_y + total_h > img_h - int(img_h * (15 / 210)):
+
+    if not is_brochure and start_y + total_h > img_h - int(img_h * (15 / 210)):
         start_y = max(margin_top, img_h - total_h - int(img_h * (15 / 210)))
 
     overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    
+
     rect_coords = [start_x, start_y, start_x + total_w, start_y + total_h]
-    overlay_draw.rectangle(rect_coords, fill=(255, 255, 255, 220), outline=(100, 100, 100, 255), width=2)
-    
+    overlay_draw.rectangle(rect_coords, fill=(255, 255, 255, 220), outline=(100, 100, 100, 255), width=1 if is_brochure else 2)
+
     cur_y = start_y + padding
-    
+
     def hex_to_rgb(hex_str):
         hex_str = hex_str.lstrip('#')
         if len(hex_str) == 6:
@@ -3288,16 +3376,16 @@ def _draw_legend_on_image(image_path, legend_data):
 
     for group in legend_data:
         title = group.get("title")
-        if title:
+        if title and not is_brochure:
             overlay_draw.text((start_x + padding, cur_y), title, font=font_title, fill=(0, 0, 0, 255))
             cur_y += title_spacing
-            
+
         for item in group.get("items", []):
             rgb = hex_to_rgb(item["color"])
             shape = item.get("shape", "square")
             lines = textwrap.wrap(item["label"], width=30) if len(item["label"]) > 30 else [item["label"]]
             box_coords = [start_x + padding, cur_y, start_x + padding + rect_size, cur_y + rect_size]
-            
+
             if shape == "circle":
                 overlay_draw.ellipse(box_coords, fill=rgb, outline=(0, 0, 0, 255), width=1)
             elif shape == "diamond":
@@ -3319,9 +3407,9 @@ def _draw_legend_on_image(image_path, legend_data):
             else:
                 overlay_draw.rectangle(box_coords, fill=rgb, outline=(0, 0, 0, 255), width=1)
             for j, line in enumerate(lines):
-                overlay_draw.text((start_x + padding + rect_size + 15, cur_y - 2 + j * 35), line, font=font_text, fill=(0, 0, 0, 255))
-            cur_y += line_spacing + (len(lines) - 1) * 35
-            
+                overlay_draw.text((start_x + padding + rect_size + (10 if is_brochure else 15), cur_y - (1 if is_brochure else 2) + j * line_step_text), line, font=font_text, fill=(0, 0, 0, 255))
+            cur_y += line_spacing + (len(lines) - 1) * line_step_item
+
         cur_y += section_spacing
 
     img = Image.alpha_composite(img, overlay)

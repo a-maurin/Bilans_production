@@ -576,6 +576,15 @@ input:checked+.slider:before {
     transition: width 0.3s ease;
 }
 
+.progress-bar.finished {
+    animation: none;
+}
+
+.progress-bar.error {
+    animation: none;
+    background-color: #D95C4A;
+}
+
 @keyframes progress-stripes {
     0% { background-position: 1rem 0; }
     100% { background-position: 0 0; }

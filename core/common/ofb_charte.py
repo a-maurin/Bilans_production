@@ -546,12 +546,13 @@ class Spinner:
 
         import logging
         is_debug = False
-        logger = logging.getLogger("ofbilan")
-        for h in logger.handlers:
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
-                if h.level <= logging.DEBUG:
-                    is_debug = True
-                    break
+        for logger_name in ("ofbilan", "core"):
+            logger = logging.getLogger(logger_name)
+            for h in logger.handlers:
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
+                    if h.level <= logging.DEBUG:
+                        is_debug = True
+                        break
         if is_debug:
             return self
 
@@ -568,19 +569,17 @@ class Spinner:
 
         import logging
         is_debug = False
-        logger = logging.getLogger("ofbilan")
-        for h in logger.handlers:
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
-                if h.level <= logging.DEBUG:
-                    is_debug = True
-                    break
+        for logger_name in ("ofbilan", "core"):
+            logger = logging.getLogger(logger_name)
+            for h in logger.handlers:
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
+                    if h.level <= logging.DEBUG:
+                        is_debug = True
+                        break
         if is_debug:
             return
 
         self._stop_event.set()
         self._thread.join()
-        sys.stdout.write("\r" + " " * len(self.message) + "\r")
-        sys.stdout.flush()
-gne
         sys.stdout.write("\r" + " " * len(self.message) + "\r")
         sys.stdout.flush()

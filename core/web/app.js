@@ -605,6 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultCard.classList.add('hidden');
 
         // Reset progress bar
+        progressBar.classList.remove('finished', 'error');
         progressBar.style.width = '0%';
         percentText.textContent = '0%';
         statusText.textContent = 'Lancement du traitement...';
@@ -639,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Collect parameters from form
+        const debugCheckbox = document.getElementById('set-tech-debug');
         const params = {
             profil: inputProfil.value,
             'date-deb': document.getElementById('date-deb').value,
@@ -656,7 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
             brochure: document.getElementById('brochure').checked,
             diffusion: document.getElementById('diffusion').value,
             preset: document.getElementById('preset').value,
-            gabarit: selectGabarit && selectGabarit.value ? selectGabarit.value : null
+            gabarit: selectGabarit && selectGabarit.value ? selectGabarit.value : null,
+            mode_debug: debugCheckbox ? debugCheckbox.checked : false
         };
 
         // Call backend API
@@ -681,6 +684,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             isRunning = false;
                             btnGenerate.disabled = false;
                             btnGenerate.textContent = "Génération du Bilan";
+
+                            if (consoleOutput.textContent.includes('[ERREUR]')) {
+                                progressBar.classList.remove('finished');
+                                progressBar.classList.add('error');
+                            } else {
+                                progressBar.classList.remove('error');
+                                progressBar.classList.add('finished');
+                            }
 
                             if (consoleOutput.textContent.includes('[SUCCESS]')) {
                                 resultCard.classList.remove('hidden');
@@ -715,6 +726,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 consoleOutput.scrollTop = consoleOutput.scrollHeight;
                 setProgress(100, "Erreur de connexion");
                 statusText.style.color = "#D95C4A";
+                progressBar.classList.remove('finished');
+                progressBar.classList.add('error');
             });
     });
 

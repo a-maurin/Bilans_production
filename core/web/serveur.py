@@ -489,6 +489,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 elif params.get("brochure") is False:
                     cmd.append("--no-brochure")
 
+                if params.get("mode_debug") or params.get("debug"):
+                    cmd.append("--debug")
+
                 # Désactiver l'ouverture automatique du PDF sous Windows lors du run de la GUI
                 cmd.append("--no-open")
 

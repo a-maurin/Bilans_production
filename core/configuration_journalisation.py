@@ -21,35 +21,36 @@ import sys
 from pathlib import Path
 
 
-def configure_logging(console_level: int = logging.WARNING) -> None:
+def configure_logging(console_level: int = logging.ERROR) -> None:
     """
     Configure le logging pour les scripts de bilans.
 
-    - Le logger 'ofbilan' est réglé sur DEBUG pour propager tous les messages.
-    - Le StreamHandler (console) filtre selon console_level (WARNING par défaut).
+    - Les loggers 'ofbilan' et 'core' sont réglés sur DEBUG pour tout enregistrer.
+    - Le StreamHandler (console) filtre selon console_level (ERROR par défaut en mode normal).
     - Sortie console : stderr
     """
-    logger = logging.getLogger("ofbilan")
-    
-    # Si déjà configuré, on ajuste simplement le niveau console existant
-    if logger.handlers:
-        for h in logger.handlers:
+    for logger_name in ("ofbilan", "core"):
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.DEBUG)
+        
+        # Ajustement des handlers existants
+        for h in list(logger.handlers):
             if not isinstance(h, logging.FileHandler):
                 h.setLevel(console_level)
-        logger.setLevel(logging.DEBUG)
-        return
 
-    logger.setLevel(logging.DEBUG)
+        if not any(not isinstance(h, logging.FileHandler) for h in logger.handlers):
+            sh = logging.StreamHandler(sys.stderr)
+            sh.setLevel(console_level)
+            formatter = logging.Formatter("%(levelname)s - %(message)s")
+            sh.setFormatter(formatter)
+            logger.addHandler(sh)
 
-    # Handler console
-    sh = logging.StreamHandler(sys.stderr)
-    sh.setLevel(console_level)
-    formatter = logging.Formatter("%(levelname)s - %(message)s")
-    sh.setFormatter(formatter)
-    logger.addHandler(sh)
+        logger.propagate = False
 
-    # Empêcher la propagation au root logger pour éviter les doublons si basicConfig est utilisé
-    logger.propagate = False
+    # Neutraliser l'affichage console bruyant sur le root logger en mode normal
+    root_logger = logging.getLogger()
+    if console_level >= logging.WARNING:
+        root_logger.setLevel(logging.ERROR)
 
 
 def add_file_handler(out_dir: Path) -> None:
@@ -57,13 +58,6 @@ def add_file_handler(out_dir: Path) -> None:
     Ajoute un FileHandler pour enregistrer tous les logs techniques (DEBUG)
     dans un fichier 'debug_run.log' situé dans out_dir.
     """
-    logger = logging.getLogger("ofbilan")
-
-    # Éviter d'ajouter plusieurs FileHandlers identiques
-    for h in logger.handlers:
-        if isinstance(h, logging.FileHandler):
-            return
-
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         log_file = out_dir / "debug_run.log"
@@ -72,13 +66,17 @@ def add_file_handler(out_dir: Path) -> None:
                 log_file.unlink()
             except Exception:
                 pass
-        
-        fh = logging.FileHandler(log_file, encoding="utf-8")
-        fh.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
+
+        for logger_name in ("ofbilan", "core"):
+            logger = logging.getLogger(logger_name)
+            has_fh = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+            if not has_fh:
+                fh = logging.FileHandler(log_file, encoding="utf-8")
+                fh.setLevel(logging.DEBUG)
+                formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+                fh.setFormatter(formatter)
+                logger.addHandler(fh)
     except Exception as e:
-        # En cas d'erreur de création du dossier ou du fichier, on n'interrompt pas le programme
+        logger = logging.getLogger("ofbilan")
         logger.warning("Impossible de créer le fichier journal de debug dans %s : %s", out_dir, e)
 

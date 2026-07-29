@@ -409,16 +409,16 @@ def chart_pie_legend_right(
     if total:
         pcts = int_percents_largest_remainder([int(v) for v in values])
         if legend_percent_only:
-            legend_labels = [f"{lb}\n{pcts[i]} %" for i, lb in enumerate(labels)]
+            legend_labels = [f"{textwrap.fill(lb, width=25)}\n{pcts[i]} %" for i, lb in enumerate(labels)]
         else:
             legend_labels = [
-                f"{lb}\n{v} ({pcts[i]} %)" for i, (lb, v) in enumerate(zip(labels, values))
+                f"{textwrap.fill(lb, width=25)}\n{v} ({pcts[i]} %)" for i, (lb, v) in enumerate(zip(labels, values))
             ]
     else:
         legend_labels = (
-            [f"{lb}\n0 %" for lb in labels]
+            [f"{textwrap.fill(lb, width=25)}\n0 %" for lb in labels]
             if legend_percent_only
-            else [f"{lb}\n0 (0 %)" for lb in labels]
+            else [f"{textwrap.fill(lb, width=25)}\n0 (0 %)" for lb in labels]
         )
     fig_w = 6.4 * figure_scale
     fig_h = max(2.2, 0.32 * len(labels) + 0.8) * figure_scale
@@ -426,12 +426,12 @@ def chart_pie_legend_right(
         1,
         2,
         figsize=(fig_w, fig_h),
-        gridspec_kw={"width_ratios": [1.1, 1.35], "wspace": 0.05},
+        gridspec_kw={"width_ratios": [1.35, 1.0], "wspace": 0.05},
     )
     if donut:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, wedgeprops=dict(width=0.45, edgecolor="white"))
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.25, wedgeprops=dict(width=0.45, edgecolor="white"))
     else:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie)
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.25)
     ax_pie.set_aspect("equal")
     if str(title).strip():
         ax_pie.set_title(

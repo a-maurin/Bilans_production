@@ -1747,6 +1747,9 @@ class PDFReportBuilder:
                     if type(flowable).__name__ == "KeepTogether":
                         for sub in getattr(flowable, "_content", []):
                             if hasattr(sub, "text"):
+                                f.write(f"    SubText: {sub.text[:100]}\n")
+        except Exception:
+            pass
         try:
             self.doc.multiBuild(self.story)
         finally:

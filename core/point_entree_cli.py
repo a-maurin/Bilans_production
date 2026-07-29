@@ -313,7 +313,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # Configuration du logging selon l'option --debug
-    console_level = logging.DEBUG if args.debug else logging.WARNING
+    console_level = logging.DEBUG if args.debug else logging.ERROR
     configure_logging(console_level)
 
     if args.list_gabarits:

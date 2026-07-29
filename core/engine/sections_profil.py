@@ -566,9 +566,10 @@ def render_sec31(ctx: PdfContext) -> None:
         and not pve_natinf.empty
         and is_block_enabled(ctx.presentation_cfg, "sec31.show_table", True)
     ):
-        col_widths = [ctx.avail_w * 0.85, ctx.avail_w * 0.15]
+        col_widths = [ctx.avail_w * 0.46, ctx.avail_w * 0.36, ctx.avail_w * 0.18]
         natinf_label_w = col_widths[0]
-        tbl = [["Nature d'infraction (NATINF)", "Nombre PVe"]]
+        theme_label_w = col_widths[1]
+        tbl = [["Nature d'infraction (NATINF)", "Thème SNC", "Nombre PVe"]]
         for _, row in pve_natinf.head(15).iterrows():
             libelle = row.get("libelle_natinf") or row.get("LIBELLE_NATINF") or ""
             code = str(row.get("numero_natinf") or row.get("natinf") or "").strip()
@@ -576,9 +577,13 @@ def render_sec31(ctx: PdfContext) -> None:
                 nature = f"{code} – {libelle}" if code else libelle
             else:
                 nature = code or "-"
+            theme_val = str(row.get("theme_snc") or row.get("THEME_SNC") or row.get("theme") or "Infractions hors périmètre SNC").strip()
+            if theme_val in ["", "Hors thème", "Non Classé / Hors SNC", "nan", "None"]:
+                theme_val = "Infractions hors périmètre SNC"
             tbl.append(
                 [
                     truncate_text_to_width(str(nature), natinf_label_w),
+                    truncate_text_to_width(theme_val, theme_label_w),
                     str(int(row["nb"])),
                 ]
             )
@@ -586,7 +591,7 @@ def render_sec31(ctx: PdfContext) -> None:
             tbl,
             caption="Analyse des NATINF relevées (PVe)",
             col_widths=col_widths,
-            col_aligns=["LEFT", "RIGHT"],
+            col_aligns=["LEFT", "LEFT", "RIGHT"],
         )
     elif ctx.show_placeholder:
         ctx.builder.add_paragraph("Aucune infraction PVe sur la période.")

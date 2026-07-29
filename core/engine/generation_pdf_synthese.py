@@ -239,14 +239,19 @@ def _build_pve_natinf_table_rows(
     head: int = 12,
     label_col_width_pt: float | None = None,
 ) -> list[list[str]]:
-    tbl = [["Nature d'infraction (NATINF)", "Nombre de PVe"]]
+    tbl = [["Nature d'infraction (NATINF)", "Thème SNC", "Nombre de PVe"]]
     for _, row in pve_natinf.head(head).iterrows():
         nature = _format_pve_natinf_label(row)
+        theme = str(row.get("theme_snc") or row.get("THEME_SNC") or row.get("theme") or "Infractions hors périmètre SNC").strip()
+        if theme in ["", "Hors thème", "Non Classé / Hors SNC", "nan", "None"]:
+            theme = "Infractions hors périmètre SNC"
         if label_col_width_pt is not None and label_col_width_pt > 0:
-            nature = truncate_text_to_width(nature, label_col_width_pt)
+            nature = truncate_text_to_width(nature, label_col_width_pt * 0.6)
+            theme = truncate_text_to_width(theme, label_col_width_pt * 0.4)
         else:
-            nature = _truncate_with_dash(str(nature), 52)
-        tbl.append([nature, str(int(row["nb"]))])
+            nature = _truncate_with_dash(str(nature), 38)
+            theme = _truncate_with_dash(str(theme), 30)
+        tbl.append([nature, theme, str(int(row["nb"]))])
     return tbl
 
 

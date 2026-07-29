@@ -275,7 +275,7 @@ def _flatten_key_figures(figure_rows: list[list[tuple[str, str]]]) -> list[tuple
 _BROCHURE_THEME_COL_FRACS = [0.64, 0.12, 0.24]  # Thème (64%) | Valeur (12%) | Pourcentage (24%)
 _BROCHURE_RESULT_COL_FRACS = [0.60, 0.12, 0.28]  # Résultat (60%) | Valeur (12%) | Taux (28%)
 _BROCHURE_PROC_COL_FRACS = [0.58, 0.21, 0.21]  # Thème (58%) | PEJ (21%) | PA (21%)
-_BROCHURE_PVE_NATINF_COL_FRACS = [0.76, 0.24]  # Libellé NATINF (76%) | Nombre (24%)
+_BROCHURE_PVE_NATINF_COL_FRACS = [0.44, 0.38, 0.18]  # Libellé NATINF (44%) | Thème SNC (38%) | Nombre (18%)
 
 
 def _build_rows_resultats_brochure(tr: pd.DataFrame | None) -> list[list[str]]:
@@ -464,25 +464,30 @@ def _format_pve_natinf_label(row: pd.Series) -> str:
 def _build_pve_natinf_table_brochure(
     pve_natinf: pd.DataFrame | None, inner_w: float, *, max_rows: int
 ) -> Table:
-    """Génère le tableau des infractions PV/E les plus fréquentes (Codes NATINF et volumes)."""
+    """Génère le tableau des infractions PV/E les plus fréquentes (Codes NATINF, Thème SNC et volumes)."""
     col_widths = col_widths_from_fracs(inner_w, _BROCHURE_PVE_NATINF_COL_FRACS)
     label_w = col_widths[0]
+    theme_w = col_widths[1]
     cap = max(1, min(int(max_rows), _BROCHURE_MAX_PVE_NATINF))
     rows: list[list[str]] = []
     if pve_natinf is not None and not pve_natinf.empty:
         for _, row in pve_natinf.head(cap).iterrows():
+            theme_val = str(row.get("theme_snc") or row.get("THEME_SNC") or row.get("theme") or "Infractions hors périmètre SNC").strip()
+            if theme_val in ["", "Hors thème", "Non Classé / Hors SNC", "nan", "None"]:
+                theme_val = "Infractions hors périmètre SNC"
             rows.append(
                 [
                     truncate_text_to_width(_format_pve_natinf_label(row), label_w),
+                    truncate_text_to_width(theme_val, theme_w),
                     str(int(row["nb"])),
                 ]
             )
     else:
-        rows.append(["—", "0"])
+        rows.append(["—", "—", "0"])
     return brochure_table(
         rows,
         col_widths=col_widths,
-        col_aligns=["LEFT", "RIGHT"],
+        col_aligns=["LEFT", "LEFT", "RIGHT"],
         split_by_row=False,
         header_row=False,
     )
@@ -1612,12 +1617,15 @@ def _generate_synthese_brochure_pdf(
     if proc_theme is None or proc_theme.empty:
         pej_t = _load_csv_fallback(out_dir, [f"pej_{profil_id}_par_theme.csv", "pej_global_par_theme.csv"])
         pa_t = _load_csv_fallback(out_dir, [f"pa_{profil_id}_par_theme.csv", "pa_global_par_theme.csv"])
-        if pej_t is not None or pa_t is not None:
+        pve_t = _load_csv_fallback(out_dir, [f"pve_{profil_id}_par_theme.csv", "pve_global_par_theme.csv"])
+        if pej_t is not None or pa_t is not None or pve_t is not None:
             frames = []
             if pej_t is not None and not pej_t.empty and "theme" in pej_t.columns:
                 frames.append(pej_t)
             if pa_t is not None and not pa_t.empty and "theme" in pa_t.columns:
                 frames.append(pa_t)
+            if pve_t is not None and not pve_t.empty and "theme" in pve_t.columns:
+                frames.append(pve_t)
             if frames:
                 merged = frames[0]
                 for f in frames[1:]:
@@ -2097,7 +2105,7 @@ def _generate_synthese_brochure_pdf(
             pve_body,
             builder.styles,
             variant="default",
-            col_headers=["Nb"],
+            col_headers=["Thème SNC", "Nb"],
             col_width_fracs=_BROCHURE_PVE_NATINF_COL_FRACS,
         )
         _append_page2_row(builder, [proc_panel, pve_panel], [proc_w, bottom_gap, pve_w])

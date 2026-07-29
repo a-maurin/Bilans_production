@@ -503,15 +503,15 @@ def render_sec3_procedures(ctx: PdfContext) -> None:
 
     if ctx.nb_pve > 0:
         if pve_natinf is not None and not pve_natinf.empty:
-            natinf_label_w = ctx.avail_w * 0.72
+            natinf_label_w = ctx.avail_w * 0.46
             ctx.builder.add_table(
                 _build_pve_natinf_table_rows(
                     pve_natinf,
                     label_col_width_pt=natinf_label_w,
                 ),
                 caption=pdf_metric_caption("Principales natures d'infraction (NATINF)", "proc"),
-                col_widths=[natinf_label_w, ctx.avail_w * 0.28],
-                col_aligns=["LEFT", "RIGHT"],
+                col_widths=[natinf_label_w, ctx.avail_w * 0.34, ctx.avail_w * 0.20],
+                col_aligns=["LEFT", "LEFT", "RIGHT"],
                 keep_together=True,
             )
         if pve_classe is not None and not pve_classe.empty:

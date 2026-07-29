@@ -38,6 +38,7 @@ import pandas as pd
 
 from core.common.chargeurs_donnees import (
     load_natinf_ref,
+    load_concordance_natinf_snc,
     load_communes_noms,
 )
 from core.common.utilitaires_metier import (
@@ -455,10 +456,84 @@ def analyse_pve_global(pve: pd.DataFrame, out_dir: Path) -> None:
             .reset_index()
         )
         natinf_ref = load_natinf_ref(_ROOT)
+        pve_par_natinf["numero_natinf"] = pve_par_natinf["natinf"].astype(str).str.extract(r"(\d+)", expand=False)
         if not natinf_ref.empty:
-            pve_par_natinf["numero_natinf"] = pve_par_natinf["natinf"].astype(str).str.extract(r"(\d+)", expand=False)
             pve_par_natinf = pve_par_natinf.merge(natinf_ref, on="numero_natinf", how="left")
+        df_conc = load_concordance_natinf_snc(_ROOT)
+        if not df_conc.empty:
+            pve_par_natinf["numero_natinf_clean"] = pve_par_natinf["numero_natinf"].fillna("").astype(str).str.strip().str.lstrip("0")
+            pve_par_natinf = pve_par_natinf.merge(
+                df_conc[["numero_natinf", "domaine_snc", "theme_snc", "action_snc"]],
+                left_on="numero_natinf_clean",
+                right_on="numero_natinf",
+                how="left",
+                suffixes=("", "_conc"),
+            )
+            fallback_snc = "Infractions hors périmètre SNC"
+            invalid_vals = ["", "Non Classé / Hors SNC", "Hors thème", "Hors domaine", "Hors action", "nan", "None"]
+            pve_par_natinf["theme_snc"] = pve_par_natinf["theme_snc"].fillna(fallback_snc).astype(str).replace(invalid_vals, fallback_snc)
+            pve_par_natinf["domaine_snc"] = pve_par_natinf["domaine_snc"].fillna(fallback_snc).astype(str).replace(invalid_vals, fallback_snc)
         pve_par_natinf.to_csv(out_dir / "pve_global_par_natinf.csv", sep=";", index=False)
+
+    # Agrégation des PVe par Domaine, Thème et Action de contrôle (SNC)
+    dom_col = next((c for c in ("domaine", "DOMAINE", "domaine_snc", "DOMAINE_SNC") if c in pve.columns), None)
+    theme_col = next((c for c in ("theme", "THEME", "theme_snc", "THEME_SNC") if c in pve.columns), None)
+    act_col = next((c for c in ("action", "ACTION", "action_snc", "ACTION_SNC") if c in pve.columns), None)
+
+    fallback_snc = "Infractions hors périmètre SNC"
+    invalid_vals = ["", "Non Classé / Hors SNC", "Hors thème", "Hors domaine", "Hors action", "nan", "None"]
+
+    pve_df = pve.copy() if not pve.empty else pd.DataFrame()
+
+    if not pve_df.empty:
+        if dom_col:
+            pve_df["_dom_clean"] = pve_df[dom_col].fillna(fallback_snc).astype(str).replace(invalid_vals, fallback_snc)
+        else:
+            pve_df["_dom_clean"] = fallback_snc
+
+        if theme_col:
+            pve_df["_theme_clean"] = pve_df[theme_col].fillna(fallback_snc).astype(str).replace(invalid_vals, fallback_snc)
+        else:
+            pve_df["_theme_clean"] = fallback_snc
+
+        if act_col:
+            pve_df["_act_clean"] = pve_df[act_col].fillna(fallback_snc).astype(str).replace(invalid_vals, fallback_snc)
+        else:
+            pve_df["_act_clean"] = fallback_snc
+
+        # pve_global_par_theme.csv (domaine;theme;nb_pve)
+        pve_par_theme = (
+            pve_df.groupby(["_dom_clean", "_theme_clean"], as_index=False)
+            .size()
+            .rename(columns={"_dom_clean": "domaine", "_theme_clean": "theme", "size": "nb_pve"})
+            .sort_values(by="nb_pve", ascending=False)
+        )
+
+        # pve_global_par_domaine.csv (domaine;nb_pve)
+        pve_par_domaine = (
+            pve_df["_dom_clean"]
+            .value_counts()
+            .rename_axis("domaine")
+            .to_frame("nb_pve")
+            .reset_index()
+        )
+
+        # pve_global_par_action.csv (action;nb_pve)
+        pve_par_action = (
+            pve_df["_act_clean"]
+            .value_counts()
+            .rename_axis("action")
+            .to_frame("nb_pve")
+            .reset_index()
+        )
+    else:
+        pve_par_theme = pd.DataFrame(columns=["domaine", "theme", "nb_pve"])
+        pve_par_domaine = pd.DataFrame(columns=["domaine", "nb_pve"])
+        pve_par_action = pd.DataFrame(columns=["action", "nb_pve"])
+
+    pve_par_theme.to_csv(out_dir / "pve_global_par_theme.csv", sep=";", index=False)
+    pve_par_domaine.to_csv(out_dir / "pve_global_par_domaine.csv", sep=";", index=False)
+    pve_par_action.to_csv(out_dir / "pve_global_par_action.csv", sep=";", index=False)
 
     pve_detail = _build_global_proc_detail(
         pve, "PVe", ["INF-ID"], ["INF-DATE-MIF", "INF-DATE-INTG", "INF-DATE", "INF-DATE-I", "INF_DATE", "DATE_FAITS"], ["COMMUNE_LIB", "INF-LIEU", "COMMUNE", "NOM_COM", "INF-INSEE", "INSEE_DEP"], ["INF-NATINF"], ["DOMAINE"]

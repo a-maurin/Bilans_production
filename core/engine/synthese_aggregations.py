@@ -55,7 +55,7 @@ _PREFIX = "synthese"
 
 
 def _col_theme(df: pd.DataFrame) -> str | None:
-    for name in ("THEME", "theme"):
+    for name in ("THEME", "theme", "THEME_SNC", "theme_snc"):
         if name in df.columns:
             return name
     return None
@@ -210,20 +210,23 @@ def procedures_par_theme(
     point: pd.DataFrame,
     echelle: str,
     code: str,
+    pve: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """§ 2.3 : PEJ et PA par thème OSCEAN (les PVe sont traités au § 4)."""
+    """§ 2.3 : PEJ, PA et PVe par thème SNC."""
     del pa  # PA : dérivées des fiches contrôle uniquement (voir _pa_par_theme_depuis_controles)
     pej_d = _pej_perimetre(pej, echelle, code)
     pej_t = _counts_par_theme(pej_d, "nb_pej")
     pa_t = _pa_par_theme_depuis_controles(point)
-    out = _merge_theme_counts([(pej_t, "nb_pej"), (pa_t, "nb_pa")])
-    for col in ("nb_pej", "nb_pa"):
+    pve_t = _counts_par_theme(pve, "nb_pve") if pve is not None and not pve.empty else pd.DataFrame(columns=["theme", "nb_pve"])
+    out = _merge_theme_counts([(pej_t, "nb_pej"), (pa_t, "nb_pa"), (pve_t, "nb_pve")])
+    for col in ("nb_pej", "nb_pa", "nb_pve"):
         if col not in out.columns:
             out[col] = 0
         else:
             out[col] = out[col].fillna(0).astype(int)
     if not out.empty:
-        out = out.sort_values(["nb_pej", "nb_pa"], ascending=False, kind="stable")
+        out["nb_total"] = out["nb_pej"] + out["nb_pa"] + out["nb_pve"]
+        out = out.sort_values(["nb_total", "nb_pej", "nb_pa", "nb_pve"], ascending=False, kind="stable")
     return out.reset_index(drop=True)
 
 
@@ -471,7 +474,7 @@ def run_synthese_aggregations(
     res_usager = agg_resultat_effectifs_par_type_usager(point)
 
     act_theme = activite_police_par_theme(point, pej, echelle, code)
-    proc_theme = procedures_par_theme(pej, pa, point, echelle, code)
+    proc_theme = procedures_par_theme(pej, pa, point, echelle, code, pve=pve)
     act_ut = activite_usager_par_theme(point, pej, echelle, code)
     act_u = activite_par_type_usager(point, pej, echelle, code)
     proc_ut = procedures_usager_par_theme(pej, pa, point, echelle, code)

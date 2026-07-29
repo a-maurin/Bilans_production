@@ -2275,6 +2275,29 @@ def load_pve(
             )
 
     df = enrich_pve_positions_from_pnf_commune_centroids(root, df, log=logger)
+
+    # Garantie d'enrichissement thématique NATINF -> Domaine / Thème / Action SNC
+    if "theme" not in df.columns and "THEME" not in df.columns:
+        try:
+            df_conc = load_concordance_natinf_snc(root)
+            if not df_conc.empty:
+                nat_col = next((c for c in df.columns if any(k in c.upper() for k in ["NATINF", "INF-NATINF", "NUMERO_NATINF", "CODE_NATINF"])), None)
+                if nat_col:
+                    df["numero_natinf_clean"] = df[nat_col].astype(str).str.strip().str.lstrip("0")
+                    df = df.merge(df_conc, left_on="numero_natinf_clean", right_on="numero_natinf", how="left")
+                    
+                    fallback_val = "Non Classé / Hors SNC"
+                    df["DOMAINE"] = df["domaine_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["THEME"] = df["theme_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["ACTION"] = df["action_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["DOMAINE_SNC"] = df["DOMAINE"]
+                    df["THEME_SNC"] = df["THEME"]
+                    df["ACTION_SNC"] = df["ACTION"]
+                    df["domaine"] = df["DOMAINE"]
+                    df["theme"] = df["THEME"]
+        except Exception as exc:
+            logger.warning("Échec de la jointure concordance NATINF / SNC sur PVe : %s", exc)
+
     return df
 
 

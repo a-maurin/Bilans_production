@@ -235,8 +235,8 @@ class BrochureEncadre(Flowable):
             "BrochureEncTitle",
             parent=self.styles["BodyText"],
             fontName=f"{self.styles['BodyText'].fontName}-Bold",
-            fontSize=9.5,
-            leading=11.5,
+            fontSize=10,
+            leading=12.5,
             textColor=_CLR_WHITE,
             alignment=TA_LEFT,
         )
@@ -444,7 +444,7 @@ def brochure_totaux_band(text_html: str, width: float, styles) -> Table:
         "BrochureTotauxBand",
         parent=styles["BodyText"],
         fontName=f"{styles['BodyText'].fontName}-Bold",
-        fontSize=9,
+        fontSize=8.5,
         leading=11,
         textColor=_CLR_PRIMARY,
         alignment=TA_RIGHT,
@@ -503,16 +503,16 @@ def kpi_encadre(
         val_style = ParagraphStyle(
             "BrochureKpiHeroVal",
             parent=styles["KeyFigure"],
-            fontSize=22,
-            leading=26,
+            fontSize=20,
+            leading=24,
             textColor=rl_colors.HexColor(COLOR_PRIMARY),
             alignment=TA_CENTER,
         )
         lbl_style = ParagraphStyle(
             "BrochureKpiHeroLbl",
             parent=styles["KeyFigureLabel"],
-            fontSize=8,
-            leading=10,
+            fontSize=7.5,
+            leading=9.5,
             textColor=_CLR_GREY,
             alignment=TA_CENTER,
         )
@@ -522,16 +522,16 @@ def kpi_encadre(
         val_style = ParagraphStyle(
             "BrochureKpiVal",
             parent=styles["KeyFigure"],
-            fontSize=16,
-            leading=19,
+            fontSize=15,
+            leading=18,
             textColor=rl_colors.HexColor(COLOR_PRIMARY),
             alignment=TA_CENTER,
         )
         lbl_style = ParagraphStyle(
             "BrochureKpiLbl",
             parent=styles["KeyFigureLabel"],
-            fontSize=7,
-            leading=8.5,
+            fontSize=7.5,
+            leading=9.5,
             textColor=_CLR_GREY,
             alignment=TA_CENTER,
         )
@@ -561,8 +561,8 @@ def note_encadre(width: float, html: str, styles) -> BrochureEncadre:
     ps = ParagraphStyle(
         "BrochureNote",
         parent=styles["BodySmall"],
-        fontSize=8,
-        leading=10.5,
+        fontSize=7.5,
+        leading=9.5,
         textColor=_CLR_GREY,
     )
     return BrochureEncadre(

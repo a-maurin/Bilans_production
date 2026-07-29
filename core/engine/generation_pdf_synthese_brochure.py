@@ -1011,8 +1011,8 @@ def _generate_srp_r27_brochure_pdf(
         "SRPHeaderTitle",
         parent=builder.styles["BodyText"],
         fontName=f"{builder.styles['BodyText'].fontName}-Bold",
-        fontSize=13,
-        leading=16,
+        fontSize=16,
+        leading=20,
         textColor=COLOR_PRIMARY,
     )
     year_val = date_fin.year
@@ -1094,8 +1094,9 @@ def _generate_srp_r27_brochure_pdf(
                 tmp_dir,
                 "srp_pie_usagers.png",
                 legend_percent_only=True,
+                donut=True,
                 figure_scale=0.85,
-                legend_fontsize=8.0,
+                legend_fontsize=8.5,
             )
         )
         img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=42.0 * mm, scale_to_fill=True)
@@ -1279,8 +1280,8 @@ def _append_bandeau(builder: PDFReportBuilder, dept: str, period: str) -> None:
         "BrochureBandeauTitle",
         parent=builder.styles["BodyText"],
         fontName=f"{builder.styles['BodyText'].fontName}-Bold",
-        fontSize=13,
-        leading=16,
+        fontSize=16,
+        leading=20,
         textColor=rl_colors.white,
     )
     bandeau = BrochureBandeau(

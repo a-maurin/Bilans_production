@@ -1952,6 +1952,32 @@ def load_natinf_ref(root: Path) -> pd.DataFrame:
     return pd.DataFrame(columns=["numero_natinf", "libelle_natinf"])
 
 
+def load_concordance_natinf_snc(root: Path) -> pd.DataFrame:
+    """
+    Charge la table de concordance des NATINF pour la source PVe :
+    (numero_natinf -> domaine_snc, theme_snc, action_snc).
+    Fichier recherché en priorité dans ref/programme/tables_reference/concordance_natinf_snc.csv.
+    """
+    for path in (
+        ref_programme(root) / "tables_reference" / "concordance_natinf_snc.csv",
+        ref_programme(root) / "concordance_natinf_snc.csv",
+        root / "data" / "ref" / "concordance_natinf_snc.csv",
+    ):
+        if not path.exists():
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8", errors="ignore")
+            sep = ";" if ";" in raw.split("\n")[0] else ","
+            df = pd.read_csv(path, sep=sep, dtype=str, encoding="utf-8", on_bad_lines="skip")
+            if "numero_natinf" in df.columns:
+                df["numero_natinf"] = df["numero_natinf"].astype(str).str.strip().str.lstrip("0")
+                return df
+        except Exception:
+            continue
+    return pd.DataFrame(columns=["numero_natinf", "libelle_natinf", "domaine_snc", "theme_snc", "action_snc", "statut"])
+
+
+
 def enrich_pve_positions_from_pnf_commune_centroids(
     root: Path,
     df: pd.DataFrame,
@@ -2177,6 +2203,27 @@ def load_pve(
         if "INF-DATE-INTG" in df.columns:
             df["INF-DATE-INTG"] = safe_to_datetime(df["INF-DATE-INTG"])
             
+        # Jointure avec la table de concordance NATINF -> Domaine / Thème / Action SNC
+        try:
+            df_conc = load_concordance_natinf_snc(root)
+            if not df_conc.empty:
+                nat_col = next((c for c in df.columns if any(k in c.upper() for k in ["NATINF", "INF-NATINF", "NUMERO_NATINF", "CODE_NATINF"])), None)
+                if nat_col:
+                    df["numero_natinf_clean"] = df[nat_col].astype(str).str.strip().str.lstrip("0")
+                    df = df.merge(df_conc, left_on="numero_natinf_clean", right_on="numero_natinf", how="left")
+                    
+                    fallback_val = "Non Classé / Hors SNC"
+                    df["DOMAINE"] = df["domaine_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["THEME"] = df["theme_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["ACTION"] = df["action_snc"].fillna(fallback_val).replace("", fallback_val)
+                    df["DOMAINE_SNC"] = df["DOMAINE"]
+                    df["THEME_SNC"] = df["THEME"]
+                    df["ACTION_SNC"] = df["ACTION"]
+                    df["domaine"] = df["DOMAINE"]
+                    df["theme"] = df["THEME"]
+        except Exception as exc:
+            logger.warning("Échec de la jointure concordance NATINF / SNC sur PVe : %s", exc)
+
         _PVE_RAW_CACHE[path] = df.copy()
 
     if echelle is not None and code is not None:

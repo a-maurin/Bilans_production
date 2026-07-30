@@ -165,6 +165,7 @@ def test_resultat_effectifs_par_type_usager_journalise_conflit_fc_id(caplog) -> 
 
     import logging
 
+    logging.getLogger("core").propagate = True
     with caplog.at_level(logging.WARNING):
         out = agg_resultat_effectifs_par_type_usager(point)
 

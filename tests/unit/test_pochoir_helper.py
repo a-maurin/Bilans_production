@@ -131,6 +131,7 @@ def test_map_dept_marker_roundtrip(tmp_path, monkeypatch):
 def test_warn_if_unknown_carto_dept(require_admin_shp, caplog):
     import logging
 
+    logging.getLogger("core").propagate = True
     with caplog.at_level(logging.WARNING, logger="core.cartographie.pochoir_helper"):
         assert warn_if_unknown_carto_dept("25", project_root=PROJECT_ROOT)
         assert not warn_if_unknown_carto_dept("999", project_root=PROJECT_ROOT)

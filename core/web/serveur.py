@@ -313,7 +313,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
 
-        if parsed_path == "/api/gabarits":
+        if parsed_path in ("/api/gabarits", "/api/gabarits/list"):
             try:
                 from core.common.chargeur_gabarits import list_gabarits
                 gabarits = list_gabarits(SRC_DIR)
@@ -327,6 +327,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
+        if parsed_path in ("/api/gabarit/detail", "/api/gabarits/detail"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                qs = parse_qs(urlparse(self.path).query)
+                gid = (qs.get("id") or ["gabarit_defaut"])[0]
+                from core.common.chargeur_gabarits import load_gabarit, is_system_gabarit
+                import yaml
+                data = load_gabarit(gid, SRC_DIR)
+                if data:
+                    is_sys = is_system_gabarit(gid, SRC_DIR)
+                    raw_yaml = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+                    resp = {"success": True, "data": data, "is_system": is_sys, "raw_yaml": raw_yaml}
+                    status_code = 200
+                else:
+                    resp = {"success": False, "error": f"Gabarit '{gid}' introuvable."}
+                    status_code = 404
+                self.send_response(status_code)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
             return
 
         if parsed_path == "/api/profils":
@@ -1325,6 +1353,65 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+        elif self.path in ("/api/gabarits/save", "/api/gabarit/save"):
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                params = json.loads(post_data.decode('utf-8'))
+                g_data = params.get("gabarit") or params
+                file_stem = params.get("file_stem")
+                from core.common.chargeur_gabarits import save_user_gabarit
+                ok, clean_id, errors = save_user_gabarit(g_data, file_stem=file_stem)
+                resp = {"success": ok, "gabarit_id": clean_id, "errors": errors}
+                self.send_response(200 if ok else 400)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
+        elif self.path in ("/api/gabarits/delete", "/api/gabarit/delete"):
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                params = json.loads(post_data.decode('utf-8'))
+                gid = params.get("gabarit_id") or params.get("id")
+                from core.common.chargeur_gabarits import delete_user_gabarit
+                ok, msg = delete_user_gabarit(gid, SRC_DIR)
+                resp = {"success": ok, "message": msg}
+                self.send_response(200 if ok else 400)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
+        elif self.path in ("/api/gabarits/import", "/api/gabarit/import"):
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                params = json.loads(post_data.decode('utf-8'))
+                yaml_content = params.get("yaml_content", "")
+                file_stem = params.get("file_stem")
+                from core.common.chargeur_gabarits import import_gabarit_content
+                ok, clean_id, errors = import_gabarit_content(yaml_content, file_stem=file_stem)
+                resp = {"success": ok, "gabarit_id": clean_id, "errors": errors}
+                self.send_response(200 if ok else 400)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
         else:
             super().do_POST()
 

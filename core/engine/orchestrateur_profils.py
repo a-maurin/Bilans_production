@@ -709,8 +709,8 @@ def _run_global_profile_via_yaml(
             g_data = load_gabarit(gabarit_id_opt) if gabarit_id_opt else None
             is_brochure_mode = (
                 bool(options.get("brochure"))
-                or (g_data and g_data.get("layout") in ("brochure", "brochure_custom"))
-                or gabarit_id_opt == "srp_r27"
+                or (g_data and bool(g_data.get("layout")))
+                or gabarit_id_opt in ("srp_r27", "gabarit_defaut", "brochure_defaut")
             )
             ensure_maps_for_profiles(
                 map_profiles,
@@ -856,8 +856,8 @@ def _finalize_cartes_selection(
         is_brochure_mode = (
             bool((cli_options or {}).get("brochure"))
             or bool(resolved_opts.get("brochure"))
-            or (g_data and g_data.get("layout") in ("brochure", "brochure_custom"))
-            or gabarit_id_opt == "srp_r27"
+            or (g_data and bool(g_data.get("layout")))
+            or gabarit_id_opt in ("srp_r27", "gabarit_defaut", "brochure_defaut")
         )
         ensure_maps_for_profiles(
             selection,

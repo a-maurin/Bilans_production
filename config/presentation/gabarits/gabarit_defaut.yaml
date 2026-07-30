@@ -1,29 +1,25 @@
 # ========================================================================================
-# GABARIT DE PRESENTATION : SERVICE REGIONAL POLICE BFC (`srp_r27.yaml`)
+# GABARIT DE PRESENTATION : INSTITUTIONNEL PAR DEFAUT (`gabarit_defaut.yaml`)
 # ========================================================================================
-# Ce fichier régit le gabarit visuel sur-mesure pour le Service Régional de Police (SRP)
-# de Bourgogne-Franche-Comté (Région R27).
+# Ce fichier régit le gabarit de présentation par défaut pour l'édition des bilans et brochures PDF.
 #
 # Explication des clés pour les non-spécialistes :
-#   - `gabarit_id` : identifiant unique du gabarit répertorié par le moteur d'édition Web/CLI.
-#   - `layout.pages` : grille de widgets personnalisée pour le SRP R27.
-#   - `title` : ligne de sous-titre fixe ("Service Régional Police – BFC").
-#   - `sections.order` : ordre personnalisé d'enchaînement des chapitres dans le rapport PDF.
+#   - `gabarit_id` : identifiant unique du gabarit (répertorié dans les menus Web/CLI).
+#   - `layout.pages` : grille déclarative de widgets répartis sur 2 pages.
+#   - `cible` : `les_deux` (s'applique aussi bien au bilan PDF qu'à la brochure PDF).
+#   - `sections.order` : ordre d'enchaînement des chapitres dans le document.
 # ========================================================================================
 
 version: 1
-gabarit_id: srp_r27
-label: "R27 - Service Régional Police (BFC)"
-description: "Gabarit de présentation avec mise en page brochure condensée pour le SRP Bourgogne-Franche-Comté"
+gabarit_id: gabarit_defaut
+label: "Gabarit institutionnel par défaut"
+description: "Gabarit de présentation synthétique institutionnelle par défaut de l'OFB"
 
 cible: les_deux
-organisation:
-  code_region: r27
-  service: srp
 
 title:
   line2_mode: fixed
-  line2_fixed: "Service Régional Police – BFC"
+  line2_fixed: "Bilan Synthétique Institutionnel"
 
 sections:
   order:
@@ -58,7 +54,7 @@ layout:
             - width: "50%"
               widget:
                 type: section_group
-                sections: [sec1, sec2, sec4]
+                sections: [sec1, sec2]
     - page_number: 2
       rows:
         - columns:
@@ -67,5 +63,4 @@ layout:
                 type: theme_breakdown_table
             - width: "50%"
               widget:
-                type: section_group
-                sections: [sec3, sec6]
+                type: evolution_chart

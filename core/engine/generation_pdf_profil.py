@@ -276,7 +276,7 @@ def _generate_pdf_content(
     )
     layout_mode = str((resolved_presentation_cfg or {}).get("layout_mode", "standard")).strip()
     is_brochure_req = bool((cli_options or {}).get("brochure"))
-    if is_brochure_req or layout_mode in ("brochure", "brochure_custom") or gabarit_id in ("srp_r27", "brochure_defaut"):
+    if is_brochure_req or layout_mode in ("brochure", "brochure_custom") or gabarit_id in ("srp_r27", "gabarit_defaut", "brochure_defaut"):
         from core.engine.generation_pdf_synthese_brochure import (
             generate_synthese_brochure_pdf_report,
         )
@@ -292,7 +292,7 @@ def _generate_pdf_content(
             output_filename=output_filename,
             diffusion=diffusion,
             cartes=cartes,
-            gabarit=gabarit_id or "brochure_defaut",
+            gabarit=gabarit_id or "gabarit_defaut",
         )
         return
 

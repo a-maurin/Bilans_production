@@ -14,6 +14,7 @@ from core.common.chargeur_gabarits import (
     load_gabarit,
     is_gabarit_compatible,
     resolve_gabarit_for_service,
+    validate_gabarit_schema,
 )
 
 
@@ -32,7 +33,8 @@ def test_load_gabarit_valid_and_missing():
     g_srp = load_gabarit("srp_r27")
     assert g_srp is not None
     assert g_srp["gabarit_id"] == "srp_r27"
-    assert g_srp["layout"] == "brochure_custom"
+    assert isinstance(g_srp["layout"], dict)
+    assert g_srp["layout"].get("type") == "grid"
 
     # Inexistant -> None avec log warning gracieux
     g_unknown = load_gabarit("gabarit_inexistant_xyz")
@@ -58,13 +60,148 @@ def test_resolve_gabarit_for_service():
     assert resolved_none is None
 
 
-def test_list_gabarits_finds_brochure_defaut():
+def test_list_gabarits_finds_gabarit_defaut():
     gabarits = list_gabarits()
     ids = [g["gabarit_id"] for g in gabarits]
-    assert "brochure_defaut" in ids
+    assert "gabarit_defaut" in ids
 
-    g_defaut = load_gabarit("brochure_defaut")
+    g_defaut = load_gabarit("gabarit_defaut")
     assert g_defaut is not None
-    assert g_defaut["gabarit_id"] == "brochure_defaut"
-    assert g_defaut["layout"] == "brochure"
+    assert g_defaut["gabarit_id"] == "gabarit_defaut"
+    assert isinstance(g_defaut["layout"], dict)
+    assert g_defaut["layout"].get("type") == "grid"
+
+    # Vérification de l'alias de rétrocompatibilité
+    g_alias = load_gabarit("brochure_defaut")
+    assert g_alias is not None
+    assert g_alias["gabarit_id"] == "gabarit_defaut"
+
+
+def test_validate_gabarit_schema_valid_and_invalid():
+    # Valide
+    valid_data = {
+        "gabarit_id": "test_g",
+        "layout": {
+            "type": "grid",
+            "pages": [
+                {
+                    "page_number": 1,
+                    "rows": [
+                        {
+                            "columns": [
+                                {
+                                    "width": "100%",
+                                    "widget": {"type": "map"},
+                                }
+                            ]
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    ok, errors = validate_gabarit_schema(valid_data)
+    assert ok is True
+    assert len(errors) == 0
+
+    # Invalide : widget type inconnu
+    invalid_data = {
+        "gabarit_id": "test_bad",
+        "layout": {
+            "type": "grid",
+            "pages": [
+                {
+                    "page_number": 1,
+                    "rows": [
+                        {
+                            "columns": [
+                                {
+                                    "width": "100%",
+                                    "widget": {"type": "type_widget_inconnu"},
+                                }
+                            ]
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    ok_bad, errors_bad = validate_gabarit_schema(invalid_data)
+    assert ok_bad is False
+    assert len(errors_bad) > 0
+    assert "non reconnu" in errors_bad[0]
+
+
+def test_user_gabarit_lifecycle(tmp_path, monkeypatch):
+    from core.common.chargeur_gabarits import (
+        is_system_gabarit,
+        save_user_gabarit,
+        delete_user_gabarit,
+        import_gabarit_content,
+        get_user_gabarits_dir,
+    )
+
+    # Mock user directory to temporary directory for isolated test
+    monkeypatch.setattr("core.common.chargeur_gabarits.get_user_gabarits_dir", lambda: tmp_path)
+
+    # 1. Vérifier qu'un gabarit système est reconnu en tant que tel et ne peut pas être supprimé
+    assert is_system_gabarit("gabarit_defaut") is True
+    ok_del_sys, msg_del_sys = delete_user_gabarit("gabarit_defaut")
+    assert ok_del_sys is False
+    assert "lecture seule" in msg_del_sys.lower() or "système" in msg_del_sys.lower()
+
+    # 2. Sauvegarde d'un gabarit utilisateur
+    sample_gabarit = {
+        "gabarit_id": "mon_gabarit_test",
+        "label": "Gabarit Test Unitaire",
+        "description": "Gabarit temporaire de test",
+        "cible": "brochure",
+        "layout": {
+            "type": "grid",
+            "pages": [
+                {
+                    "page_number": 1,
+                    "rows": [
+                        {
+                            "columns": [
+                                {"width": "100%", "widget": {"type": "stat_kpi_grid"}}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    ok_save, gid, errors_save = save_user_gabarit(sample_gabarit)
+    assert ok_save is True
+    assert gid == "mon_gabarit_test"
+    assert (tmp_path / "mon_gabarit_test.yaml").exists()
+
+    # 3. Importation via chaîne YAML
+    yaml_str = """
+gabarit_id: gabarit_importe
+label: Gabarit Importé Test
+cible: les_deux
+layout:
+  type: grid
+  pages:
+    - page_number: 1
+      rows:
+        - columns:
+            - width: "100%"
+              widget:
+                type: map
+"""
+    ok_imp, imp_id, errors_imp = import_gabarit_content(yaml_str)
+    assert ok_imp is True
+    assert imp_id == "gabarit_importe"
+    assert (tmp_path / "gabarit_importe.yaml").exists()
+
+    # 4. Suppression du gabarit utilisateur créé
+    ok_del, msg_del = delete_user_gabarit("mon_gabarit_test")
+    assert ok_del is True
+    assert not (tmp_path / "mon_gabarit_test.yaml").exists()
+
+
 

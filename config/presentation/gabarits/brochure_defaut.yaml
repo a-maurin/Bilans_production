@@ -1,23 +1,15 @@
 # ========================================================================================
-# GABARIT DE PRESENTATION : BROCHURE INSTITUTIONNELLE PAR DEFAUT (`brochure_defaut.yaml`)
+# ALIAS RÉTROCOMPATIBILITÉ : BROCHURE DEFAULT (`brochure_defaut.yaml`)
 # ========================================================================================
-# Ce fichier régit le gabarit de présentation par défaut pour l'édition des brochures PDF.
-#
-# Explication des clés pour les non-spécialistes :
-#   - `gabarit_id` : identifiant unique du gabarit (répertorié dans les menus Web/CLI).
-#   - `layout` : format d'affichage (`brochure` pour le rendu synthétique 2 pages A4 paysage).
-#   - `cible` : `les_deux` (s'applique aussi bien au bilan PDF qu'à la brochure PDF).
-#   - `sections.order` : ordre d'enchaînement des chapitres dans le document.
+# Ce fichier redirige vers gabarit_defaut.yaml pour assurer la rétrocompatibilité.
 # ========================================================================================
 
 version: 1
-gabarit_id: brochure_defaut
-label: "Gabarit Brochure par défaut"
+gabarit_id: gabarit_defaut
+label: "Gabarit institutionnel par défaut"
 description: "Gabarit de présentation synthétique institutionnelle par défaut de l'OFB"
 
 cible: les_deux
-
-layout: brochure
 
 title:
   line2_mode: fixed
@@ -39,3 +31,30 @@ cartographie:
     - bandeau_logos_ofb
     - logo_ofb_bas_droite
     - bandeau_source
+
+layout:
+  type: grid
+  pages:
+    - page_number: 1
+      rows:
+        - columns:
+            - width: "100%"
+              widget:
+                type: stat_kpi_grid
+        - columns:
+            - width: "50%"
+              widget:
+                type: map
+            - width: "50%"
+              widget:
+                type: section_group
+                sections: [sec1, sec2]
+    - page_number: 2
+      rows:
+        - columns:
+            - width: "50%"
+              widget:
+                type: theme_breakdown_table
+            - width: "50%"
+              widget:
+                type: evolution_chart

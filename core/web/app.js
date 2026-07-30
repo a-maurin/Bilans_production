@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error('Erreur chargement profils:', err));
 
-    let userDefaultGabarit = 'brochure_defaut';
+    let userDefaultGabarit = 'gabarit_defaut';
 
     fetch('/api/settings')
         .then(res => res.json())

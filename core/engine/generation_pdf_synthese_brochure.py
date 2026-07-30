@@ -1588,7 +1588,7 @@ def _generate_synthese_brochure_pdf(
         _ROOT, scope=scope, profile_id=profil_id, diffusion=diffusion, gabarit_id=gabarit
     )
     presentation_cfg = resolved.get("effective", {}) if isinstance(resolved, dict) else {}
-    gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit or "brochure_defaut"
+    gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit or "gabarit_defaut"
 
     # Récupération de la configuration du territoire et du nom affiché
     cfg = BilanConfig.from_strings(

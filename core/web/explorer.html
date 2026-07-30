@@ -1023,9 +1023,12 @@ Composants principaux :
                                 id="set-geo-annee" value="2024"></div>
                         <div class="form-group">
                             <label for="set-geo-gabarit">Gabarit de présentation par défaut</label>
-                            <select id="set-geo-gabarit">
-                                <option value="">Automatique (par profil)</option>
-                            </select>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                                <select id="set-geo-gabarit" style="flex: 1 1 auto; width: 0; min-width: 0; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                                    <option value="">Automatique (par profil)</option>
+                                </select>
+                                <button type="button" onclick="openGabaritEditorModal()" style="flex: 0 0 auto; width: auto; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);" title="Configurer le gabarit sélectionné">⚙️ Éditer le gabarit</button>
+                            </div>
                         </div>
                     </div>
                     <div class="card" style="margin: 0;">
@@ -1092,6 +1095,131 @@ Composants principaux :
             </div>
         </div>
     </div>
+
+    <!-- Modal Éditeur de Gabarit -->
+    <div id="gabarit-editor-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 9999999; display: none; justify-content: center; align-items: center;">
+        <div style="background: var(--color-bg-card, #ffffff); border-radius: 8px; width: 950px; max-width: 95vw; height: 85vh; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,0.3); overflow: hidden;">
+            
+            <!-- Toast Notification Banner -->
+            <div id="gab-editor-toast" style="display:none; padding:8px 16px; font-size:13px; text-align:center; transition:all 0.3s ease;"></div>
+
+            <!-- Header -->
+            <div style="padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h2 style="margin: 0; font-size: 18px; color: #1e293b;">⚙️ Éditeur de Gabarit de Présentation</h2>
+                    <span id="gab-system-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600;">🔒 Système</span>
+                </div>
+                <button type="button" onclick="closeGabaritEditorModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">&times;</button>
+            </div>
+
+            <!-- Actions Toolbar -->
+            <div style="padding: 10px 20px; border-bottom: 1px solid #e2e8f0; background: #ffffff; display: flex; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 10px; overflow-x: auto;">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: nowrap;">
+                    <button type="button" onclick="saveGabaritAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#334155; cursor:pointer; white-space:nowrap;">💾 Enregistrer</button>
+                    <button type="button" onclick="saveGabaritAsAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#334155; cursor:pointer; white-space:nowrap;">📋 Enregistrer sous</button>
+                    <button type="button" onclick="triggerImportGabarit()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#334155; cursor:pointer; white-space:nowrap;">📥 Importer</button>
+                    <input type="file" id="gab-file-import-input" accept=".yaml,.yml" style="display:none;" onchange="handleImportFile(this)">
+                    <button type="button" onclick="exportGabaritAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#334155; cursor:pointer; white-space:nowrap;">📤 Exporter</button>
+                    <button type="button" id="btn-gab-delete" onclick="deleteGabaritAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #fca5a5; background:#ffffff; color:#ef4444; cursor:pointer; white-space:nowrap;">🗑️ Supprimer</button>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: nowrap;">
+                    <button type="button" onclick="resetGabaritAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; font-size:12px; font-weight:500; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#334155; cursor:pointer; white-space:nowrap;">🔄 Réinitialiser</button>
+                    <button type="button" onclick="testPdfGabaritAction()" style="display:inline-flex; align-items:center; height:34px; padding:0 14px; font-size:12px; font-weight:600; border-radius:6px; border:none; background:#3b82f6; color:#ffffff; cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(59,130,246,0.2);">📄 Tester le PDF</button>
+                </div>
+            </div>
+
+            <!-- Tabs Header -->
+            <div style="display: flex; border-bottom: 1px solid #e2e8f0; background: #f1f5f9; padding: 0 20px;">
+                <button type="button" id="gab-tab-btn-1" onclick="switchGabaritTab(1)" style="padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: bold; color: #3b82f6; border-bottom: 3px solid #3b82f6;">📝 1. Infos & Titres</button>
+                <button type="button" id="gab-tab-btn-2" onclick="switchGabaritTab(2)" style="padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #64748b;">📑 2. Sections & Carte</button>
+                <button type="button" id="gab-tab-btn-3" onclick="switchGabaritTab(3)" style="padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #64748b;">📐 3. Grille Brochure</button>
+                <button type="button" id="gab-tab-btn-4" onclick="switchGabaritTab(4)" style="padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #64748b;">💻 4. Code YAML</button>
+            </div>
+
+            <!-- Panes Container -->
+            <div style="flex: 1; overflow-y: auto; padding: 20px;">
+                <!-- Onglet 1 -->
+                <div id="gab-tab-pane-1" style="display: block;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Identité du Gabarit</h3>
+                            <div class="form-group"><label>Identifiant Technique</label><input type="text" id="gab-id-display" readonly style="background:#f1f5f9; color:#64748b;"></div>
+                            <div class="form-group"><label>Libellé Affiché</label><input type="text" id="gab-label" oninput="onTab1Change()"></div>
+                            <div class="form-group"><label>Description</label><textarea id="gab-description" rows="2" oninput="onTab1Change()"></textarea></div>
+                            <div class="form-group">
+                                <label>Portée (Cible)</label>
+                                <select id="gab-cible" onchange="onTab1Change()">
+                                    <option value="bilan">📘 Bilan complet (rapport long)</option>
+                                    <option value="synthese">📄 Brochure (synthèse condensée)</option>
+                                    <option value="les_deux">📚 Bilan et brochure (les deux)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Titrage & Organisation</h3>
+                            <div class="form-group">
+                                <label>Mode Ligne 2 de Titre</label>
+                                <select id="gab-title-mode" onchange="onTab1Change()">
+                                    <option value="fixed">Titre fixe personnalisé</option>
+                                    <option value="auto">Automatique (Période / Année)</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Texte Fixe Ligne 2</label><input type="text" id="gab-title-fixed" oninput="onTab1Change()" placeholder="ex: Service Régional Police – BFC"></div>
+                            <h4 style="font-size: 12px; margin-top: 15px; margin-bottom: 8px; color: #64748b;">Attribution Automatique par Service (Optionnel)</h4>
+                            <div class="form-group"><label>Code Région</label><input type="text" id="gab-org-region" oninput="onTab1Change()" placeholder="ex: r27"></div>
+                            <div class="form-group"><label>Code Service</label><input type="text" id="gab-org-service" oninput="onTab1Change()" placeholder="ex: srp"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Onglet 2 -->
+                <div id="gab-tab-pane-2" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px;">
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Ordre et Inclusion des Sections</h3>
+                            <p style="font-size: 12px; color: #64748b; margin-bottom: 12px;">Cochez pour inclure la section dans le rapport et utilisez les flèches pour modifier l'ordre d'enchaînement.</p>
+                            <div id="gab-sections-list"></div>
+                        </div>
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Pochoir Cartographique</h3>
+                            <p style="font-size: 12px; color: #64748b; margin-bottom: 12px;">Cochez les éléments visuels à afficher sur la carte.</p>
+                            <div id="gab-carto-masks"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Onglet 3 -->
+                <div id="gab-tab-pane-3" style="display: none;">
+                    <div id="gab-tab3-disabled-notice" style="display:none; padding:15px; background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; color:#b45309; font-size:13px;">
+                        ℹ️ <strong>Remarque :</strong> La portée de ce gabarit est configurée sur <em>Bilan complet</em>. La grille de widgets s'applique uniquement aux formats <em>Brochure</em> et <em>Bilan et brochure</em>.
+                    </div>
+                    <div id="gab-tab3-content">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="font-size: 14px; margin: 0; color: #3b82f6;">Structure des Pages de la Brochure</h3>
+                            <button type="button" class="btn btn-secondary" onclick="addPage()" style="font-size:12px; padding:4px 10px;">➕ Ajouter une page</button>
+                        </div>
+
+                        <div id="gab-pages-editor"></div>
+
+                        <div class="card" style="margin-top: 15px; background: #f8fafc;">
+                            <h4 style="font-size: 13px; margin: 0 0 10px 0; color: #334155;">📐 Aperçu Wireframe Schématique</h4>
+                            <div id="gab-wireframe-container" style="display: flex; gap: 15px; overflow-x: auto; padding: 10px 0;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Onglet 4 -->
+                <div id="gab-tab-pane-4" style="display: none;">
+                    <div id="gab-yaml-error-banner" style="display:none; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-size:12px; margin-bottom:10px; font-family:monospace; white-space:pre-wrap;"></div>
+                    <div class="form-group" style="height: 100%;">
+                        <label style="margin-bottom:6px;">Éditeur de Code YAML Synchrone (Temps réel)</label>
+                        <textarea id="gab-yaml-textarea" oninput="onYamlTextareaInput()" style="width: 100%; height: 350px; font-family: monospace; font-size: 12px; line-height: 1.4; background: #1e293b; color: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #334155; resize: vertical;"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="gabarit_editor.js"></script>
 
     <script>
         // --- Fonctions d'Aide et Tutoriel ---
@@ -1171,7 +1299,7 @@ Composants principaux :
                             });
                         }
                     } catch (eG) { console.error(eG); }
-                    setGeoGab.value = geo.gabarit_defaut || 'brochure_defaut';
+                    setGeoGab.value = geo.gabarit_defaut || 'gabarit_defaut';
                 }
 
                 const ui = data.ui || {};
@@ -1214,7 +1342,7 @@ Composants principaux :
                 geo: {
                     code_geo_defaut: document.getElementById('set-geo-code').value,
                     annee_reference: parseInt(document.getElementById('set-geo-annee').value) || 2024,
-                    gabarit_defaut: document.getElementById('set-geo-gabarit') ? document.getElementById('set-geo-gabarit').value : 'brochure_defaut'
+                    gabarit_defaut: document.getElementById('set-geo-gabarit') ? document.getElementById('set-geo-gabarit').value : 'gabarit_defaut'
                 },
                 ui: {
                     vue_lancement: document.getElementById('set-ui-vue').value,

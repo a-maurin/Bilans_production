@@ -349,7 +349,7 @@ def generate_synthese_pdf_report(
             output_filename=output_filename,
             diffusion=diffusion,
             cartes=cartes,
-            gabarit=gabarit or "brochure_defaut",
+            gabarit=gabarit or "gabarit_defaut",
         )
     else:
         _generate_synthese_pdf(

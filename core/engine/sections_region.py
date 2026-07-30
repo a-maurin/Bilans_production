@@ -36,6 +36,8 @@ import matplotlib.pyplot as plt
 from PIL import Image as PILImage
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.styles import ParagraphStyle
 from core.common.pdf_utils import ofb_table
 from core.engine.pdf_context import PdfContext
 from core.common.utilitaires_metier import get_dept_name
@@ -52,8 +54,9 @@ except ImportError:
 
 def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text: str, styles: dict) -> RLImage | Paragraph:
     """Instancie une RLImage ReportLab en conservant mathématiquement le ratio largeur/hauteur réel."""
+    body_style = styles.get("BodyText", styles.get("Normal"))
     if not img_path.exists():
-        return Paragraph(f"<i>{fallback_text}</i>", styles["Normal"])
+        return Paragraph(f"<i>{fallback_text}</i>", body_style)
     try:
         with PILImage.open(img_path) as im:
             w_px, h_px = im.size
@@ -61,7 +64,7 @@ def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text
         target_h = target_w * aspect
         return RLImage(str(img_path), width=target_w, height=target_h)
     except Exception:
-        return Paragraph(f"<i>{fallback_text}</i>", styles["Normal"])
+        return Paragraph(f"<i>{fallback_text}</i>", body_style)
 
 
 def _shapely_to_pathpatch(geom, transform):
@@ -95,10 +98,10 @@ def _shapely_to_pathpatch(geom, transform):
 def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
     """
     Génère la vignette cartographique épurée du département avec conservation STRICTE du ratio d'aspect
-    (1:1, pas de déformation) et carte de chaleur de la pression de contrôle (Hexbin / Heatmap).
+    (1:1 carré, sans aucune déformation) et carte de chaleur de la pression de contrôle (Hexbin / Heatmap).
     """
     out_path = tmp_dir / img_name
-    fig, ax = plt.subplots(figsize=(2.8 * figure_scale, 2.0 * figure_scale), dpi=150)
+    fig, ax = plt.subplots(figsize=(2.5 * figure_scale, 2.5 * figure_scale), dpi=150)
     fig.patch.set_facecolor('white')
     ax.set_facecolor('#ffffff')
     
@@ -183,23 +186,25 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                 except Exception:
                     pass
 
-                cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.7, aspect=18)
+                cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.25, aspect=12)
                 cbar.set_label('Pression de contrôle (Faible -> Forte)', fontsize=6.5, color='#003366')
                 cbar.ax.tick_params(labelsize=5.5)
 
+            # Emprise carrée (1:1) centrée garantissant des dimensions d'images identiques pour tous les départements
             minx, miny, maxx, maxy = gdf_dept.total_bounds
-            pad_x = (maxx - minx) * 0.05
-            pad_y = (maxy - miny) * 0.05
-            ax.set_xlim(minx - pad_x, maxx + pad_x)
-            ax.set_ylim(miny - pad_y, maxy + pad_y)
+            cx = (minx + maxx) / 2.0
+            cy = (miny + maxy) / 2.0
+            max_span = max(maxx - minx, maxy - miny) * 0.56
+            ax.set_xlim(cx - max_span, cx + max_span)
+            ax.set_ylim(cy - max_span, cy + max_span)
         else:
             ax.text(0.5, 0.5, f"Département {dept_code}", ha='center', va='center', fontsize=9, color='#003366')
     except Exception:
         ax.text(0.5, 0.5, f"Département {dept_code}", ha='center', va='center', fontsize=9, color='#003366')
         
     ax.axis('off')
-    plt.tight_layout(pad=0.1)
-    fig.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
+    fig.tight_layout(pad=0.05)
+    fig.savefig(out_path, dpi=150, facecolor='white')
     plt.close(fig)
     return out_path
 
@@ -238,7 +243,8 @@ def _generate_region_choropleth(
                 legend=True,
                 legend_kwds={
                     "orientation": "horizontal",
-                    "shrink": 0.35,
+                    "shrink": 0.25,
+                    "aspect": 12,
                     "pad": 0.02,
                     "label": "Volume d'opérations de contrôle"
                 }
@@ -342,6 +348,35 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
     ctx.builder.story.append(tbl_carto)
+
+    # Note explicative dynamique bidirectionnelle sous la carte régionale en cas d'écart de comptage
+    somme_dept = sum(dept_counts.values()) if dept_counts else 0
+    total_reg = int(ctx.nb_ops) if ctx.nb_ops else 0
+    if somme_dept > 0 and total_reg > 0 and somme_dept != total_reg:
+        diff = abs(somme_dept - total_reg)
+        str_somme = f"{somme_dept:,}".replace(",", "\u00a0")
+        str_total = f"{total_reg:,}".replace(",", "\u00a0")
+        if somme_dept > total_reg:
+            note_txt = (
+                f"<i>* La somme par département ({str_somme} ops) excède le total régional ({str_total} ops) "
+                f"car {diff} opération(s) inter-départementale(s) sont comptabilisées dans chaque territoire concerné.</i>"
+            )
+        else:
+            note_txt = (
+                f"<i>* La somme par département ({str_somme} ops) est inférieure au total régional ({str_total} ops) "
+                f"car {diff} opération(s) ne sont pas rattachées à un département de la région.</i>"
+            )
+        style_note = ParagraphStyle(
+            "RegMapDynamicNote",
+            parent=ctx.builder.styles.get("BodySmall", ctx.builder.styles["BodyText"]),
+            fontSize=7,
+            leading=8.5,
+            textColor=colors.HexColor("#555555"),
+            alignment=TA_CENTER,
+        )
+        ctx.builder.story.append(Spacer(1, 1))
+        ctx.builder.story.append(Paragraph(note_txt, style_note))
+
     ctx.builder.add_spacer(4)
 
     # Visuel 2 : Diagramme Donut par Domaine (82 % de largeur, Donut agrandi avec légende à droite sur 1 colonne)
@@ -540,7 +575,8 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 )
                 img_pie = _create_proportional_rl_image(Path(pie_path), ctx.avail_w * 0.48, "Graphique indisponible", ctx.builder.styles)
             else:
-                img_pie = Paragraph("<i>Aucune donnée thématique</i>", ctx.builder.styles["Normal"])
+                body_s = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
+                img_pie = Paragraph("<i>Aucune donnée thématique</i>", body_s)
 
             double_visuel_tbl = Table(
                 [[img_vignette, img_pie]],

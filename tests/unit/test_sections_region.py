@@ -95,3 +95,13 @@ def test_sections_region_pipeline(tmp_path: Path):
     assert dept_dir.exists()
     assert (dept_dir / "Fiche_Dept_21.pdf").exists()
     assert (dept_dir / "Fiche_Dept_58.pdf").exists()
+
+def test_dynamic_note_and_vignette_ratio(tmp_path: Path):
+    from core.engine.sections_region import _generate_dept_vignette
+    from PIL import Image
+    vignette = _generate_dept_vignette("21", tmp_path, tmp_path, "vignette_test_21.png")
+    assert vignette.exists()
+    with Image.open(vignette) as im:
+        w, h = im.size
+        # Ratio carré 1:1 parfait
+        assert w == h

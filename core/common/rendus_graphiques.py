@@ -353,8 +353,9 @@ def chart_pie(
         wedges, _ = ax.pie(values, startangle=90, counterclock=False, colors=colors_pie)
     ax.set_aspect("equal")
     if str(title).strip():
+        title_wrapped = textwrap.fill(str(title).strip(), width=55)
         ax.set_title(
-            title,
+            title_wrapped,
             fontsize=CHART_TITLE_FONT_SIZE_REF,
             fontweight="bold",
             color=COLOR_PRIMARY,
@@ -431,7 +432,7 @@ def chart_pie_legend_right(
             ]
         )
     fig_w = 4.4 * figure_scale
-    fig_h = 2.85 * figure_scale
+    fig_h = 3.0 * figure_scale
     fig, (ax_pie, ax_leg) = plt.subplots(
         1,
         2,
@@ -447,12 +448,16 @@ def chart_pie_legend_right(
     ax_pie.set_ylim(-1.85, 1.85)
     ax_pie.axis("off")
     if str(title).strip():
-        ax_pie.set_title(
-            title,
+        title_wrapped = textwrap.fill(str(title).strip(), width=45)
+        fig.suptitle(
+            title_wrapped,
+            x=0.02,
+            y=0.97,
+            ha="left",
+            va="top",
             fontsize=CHART_TITLE_FONT_SIZE_REF - 1,
             fontweight="bold",
             color=COLOR_PRIMARY,
-            pad=6,
         )
     ax_leg.axis("off")
     ax_leg.legend(
@@ -466,7 +471,7 @@ def chart_pie_legend_right(
         handletextpad=0.45,
         labelspacing=0.55,
     )
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.98 if not str(title).strip() else 0.88, bottom=0.02)
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.98 if not str(title).strip() else 0.76, bottom=0.02)
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
 
 
@@ -958,7 +963,7 @@ def _make_map(
         edgecolor="white",
         legend=True,
         ax=ax,
-        legend_kwds={"label": legend_label, "shrink": 0.6, "aspect": 25},
+        legend_kwds={"label": legend_label, "shrink": 0.25, "aspect": 25},
         missing_kwds={"color": "lightgrey", "label": "Aucune donnée"},
         rasterized=True,
     )

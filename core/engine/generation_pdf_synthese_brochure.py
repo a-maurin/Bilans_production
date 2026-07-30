@@ -1742,14 +1742,12 @@ def _generate_synthese_brochure_pdf(
     has_maps = bool(map_paths)
 
     # ── INITIALISATION DU FICHIER PDF ET DU MOTEUR REPORTLAB ──
-    base_name = output_filename or f"brochure_{profil_id}.pdf"
-    stem = Path(base_name).stem
-    if stem.startswith("bilan_"):
-        stem = f"brochure_{stem[6:]}"
-    elif not stem.startswith("brochure_") and not stem.endswith("_brochure"):
-        stem = f"brochure_{stem}"
-    if stem.endswith("_brochure"):
-        stem = stem[:-9]
+    if output_filename:
+        stem = Path(output_filename).stem
+        if stem.startswith("bilan_"):
+            stem = f"brochure_{stem[6:]}"
+    else:
+        stem = f"{profil_id}_brochure"
     pdf_path = apply_diffusion_pdf_suffix(out_dir / f"{stem}.pdf", diffusion)
 
     # Coordonnées du service pour le bas de page

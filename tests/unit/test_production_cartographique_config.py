@@ -68,7 +68,7 @@ def test_depart_attr_condition_int_compat() -> None:
     from core.cartographie.production_cartographique import _depart_attr_condition
 
     assert _depart_attr_condition("num_depart", "89") == '"num_depart" IN (\'89\', \'89\' || \'.0\', 89)'
-    assert _depart_attr_condition("num_depart", "2A") == '"num_depart" = \'2A\''
+    assert _depart_attr_condition("num_depart", "2A") == '"num_depart" IN (\'2A\', \'2A\' || \'.0\')'
 
 
 def test_resolve_map_title_custom_title_main() -> None:

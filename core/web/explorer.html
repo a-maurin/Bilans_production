@@ -1021,6 +1021,12 @@ Composants principaux :
                                 id="set-geo-code" placeholder="ex: 21, r27, FR"></div>
                         <div class="form-group"><label>Année de référence par défaut</label><input type="number"
                                 id="set-geo-annee" value="2024"></div>
+                        <div class="form-group">
+                            <label for="set-geo-gabarit">Gabarit de présentation par défaut</label>
+                            <select id="set-geo-gabarit">
+                                <option value="">Automatique (par profil)</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="card" style="margin: 0;">
                         <h3 style="font-size: 14px; margin-bottom: 10px; color: #3b82f6;">Export & Rapports</h3>
@@ -1150,6 +1156,23 @@ Composants principaux :
                 const geo = data.geo || {};
                 document.getElementById('set-geo-code').value = geo.code_geo_defaut || '';
                 document.getElementById('set-geo-annee').value = geo.annee_reference || 2024;
+                const setGeoGab = document.getElementById('set-geo-gabarit');
+                if (setGeoGab) {
+                    try {
+                        const resG = await fetch('/api/gabarits');
+                        const listG = await resG.json();
+                        setGeoGab.innerHTML = '<option value="">Automatique (par profil)</option>';
+                        if (Array.isArray(listG)) {
+                            listG.forEach(g => {
+                                const opt = document.createElement('option');
+                                opt.value = g.gabarit_id;
+                                opt.textContent = g.label ? `${g.label} (${g.gabarit_id})` : g.gabarit_id;
+                                setGeoGab.appendChild(opt);
+                            });
+                        }
+                    } catch (eG) { console.error(eG); }
+                    setGeoGab.value = geo.gabarit_defaut || 'brochure_defaut';
+                }
 
                 const ui = data.ui || {};
                 document.getElementById('set-ui-vue').value = ui.vue_lancement || 'explorer';
@@ -1190,7 +1213,8 @@ Composants principaux :
                 },
                 geo: {
                     code_geo_defaut: document.getElementById('set-geo-code').value,
-                    annee_reference: parseInt(document.getElementById('set-geo-annee').value) || 2024
+                    annee_reference: parseInt(document.getElementById('set-geo-annee').value) || 2024,
+                    gabarit_defaut: document.getElementById('set-geo-gabarit') ? document.getElementById('set-geo-gabarit').value : 'brochure_defaut'
                 },
                 ui: {
                     vue_lancement: document.getElementById('set-ui-vue').value,

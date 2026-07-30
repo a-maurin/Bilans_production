@@ -940,8 +940,8 @@ class PDFReportBuilder:
             self.story.append(kf_table)
             self.story.append(spacer)
 
-    def append_pending_paragraph(self, text: str, style: str = "BodyText") -> None:
-        para = Paragraph(text, self.styles[style])
+    def append_pending_paragraph(self, text: str | Paragraph, style: str = "BodyText") -> None:
+        para = text if isinstance(text, Paragraph) else Paragraph(text, self.styles[style])
         spacer = Spacer(1, SPACING_XXS)
         if self._pending_section is not None:
             self._pending_section.extend([para, spacer])
@@ -1658,9 +1658,9 @@ class PDFReportBuilder:
     # PARAGRAPHES, ESPACEMENTS ET ELEMENTS DE TEXTE
     # ========================================================================================
 
-    def add_paragraph(self, text: str, style: str = "BodyText") -> None:
+    def add_paragraph(self, text: str | Paragraph, style: str = "BodyText") -> None:
         """Ajoute un paragraphe de texte dans le fil d'impression."""
-        para = Paragraph(text, self.styles[style])
+        para = text if isinstance(text, Paragraph) else Paragraph(text, self.styles[style])
         spacer = Spacer(1, SPACING_XXS)
         if self._pending_section is not None:
             for item in self._pending_section:

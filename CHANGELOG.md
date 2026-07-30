@@ -9,7 +9,7 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 ### Édition PDF et Rapports
 * **Commentaires automatiques** : Système de commentaires introductifs auto-générés s'intercalant avant les tableaux et graphiques (`commentaires_auto.py`).
 * **Gabarits YAML configurables** : Fichier `config/presentation/commentaires_auto.yaml` permettant d'éditer facilement les conditions et templates de texte sans coder (support des balises HTML `<b>`).
-* **Accordage & Formatage FR** : Formatage numérique selon les normes françaises (`1 250`, `31 %`) et gestion automatique des accords singulier/pluriel.
+* **Accords & Formatage FR** : Formatage numérique selon les normes françaises (`1 250`, `31 %`) et gestion automatique des accords singulier/pluriel.
 * **Pilotage & Surcharges** : Interrupteur global dans `pdf_presentation.yaml`, drapeaux CLI (`--commentaires-auto` / `--no-commentaires-auto`) et support des surcharges manuelles (`custom_text`).
 * **Mise en page anti-orphelins** : Insertion souple avec `keepWithNext=True` et espacement compact (1.5 mm) pour éviter les grands espaces vides et préserver les contraintes du format Brochure.
 

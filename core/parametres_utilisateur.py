@@ -33,7 +33,8 @@ DEFAUT_PARAMETRES: Dict[str, Any] = {
     },
     "geo": {
         "code_geo_defaut": "",
-        "annee_reference": 2024
+        "annee_reference": 2024,
+        "gabarit_defaut": "brochure_defaut"
     },
     "ui": {
         "vue_lancement": "explorer",

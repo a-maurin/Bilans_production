@@ -1588,7 +1588,7 @@ def _generate_synthese_brochure_pdf(
         _ROOT, scope=scope, profile_id=profil_id, diffusion=diffusion, gabarit_id=gabarit
     )
     presentation_cfg = resolved.get("effective", {}) if isinstance(resolved, dict) else {}
-    gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit
+    gabarit_id = (resolved.get("gabarit_id") if isinstance(resolved, dict) else None) or gabarit or "brochure_defaut"
 
     # Récupération de la configuration du territoire et du nom affiché
     cfg = BilanConfig.from_strings(
@@ -1742,10 +1742,14 @@ def _generate_synthese_brochure_pdf(
     has_maps = bool(map_paths)
 
     # ── INITIALISATION DU FICHIER PDF ET DU MOTEUR REPORTLAB ──
-    base_name = output_filename or f"{profil_id}.pdf"
+    base_name = output_filename or f"brochure_{profil_id}.pdf"
     stem = Path(base_name).stem
-    if not stem.endswith("_brochure"):
-        stem = f"{stem}_brochure"
+    if stem.startswith("bilan_"):
+        stem = f"brochure_{stem[6:]}"
+    elif not stem.startswith("brochure_") and not stem.endswith("_brochure"):
+        stem = f"brochure_{stem}"
+    if stem.endswith("_brochure"):
+        stem = stem[:-9]
     pdf_path = apply_diffusion_pdf_suffix(out_dir / f"{stem}.pdf", diffusion)
 
     # Coordonnées du service pour le bas de page

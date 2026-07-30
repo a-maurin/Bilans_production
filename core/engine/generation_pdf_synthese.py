@@ -324,7 +324,7 @@ def generate_synthese_pdf_report(
     brochure: bool = False,
     gabarit: str | None = None,
 ) -> None:
-    del chart_preset, brochure
+    del chart_preset
     apply_mpl_style()
     profile = profile or {"id": PROFILE_ID}
     date_deb_ts = pd.to_datetime(date_deb) if date_deb is not None else pd.Timestamp("2025-01-01")
@@ -332,34 +332,37 @@ def generate_synthese_pdf_report(
     echelle_res, code_res = resolve_perimetre_kwargs(
         echelle=echelle, code=code, dept_code=dept_code
     )
-    _generate_synthese_pdf(
-        out_dir,
-        profile=profile,
-        date_deb=date_deb_ts,
-        date_fin=date_fin_ts,
-        echelle=echelle_res,
-        code=code_res,
-        output_filename=output_filename,
-        diffusion=diffusion,
-        cartes=cartes,
-    )
-    from core.engine.generation_pdf_synthese_brochure import (
-        generate_synthese_brochure_pdf_report,
-    )
 
-    generate_synthese_brochure_pdf_report(
-        out_dir,
-        profile=profile,
-        date_deb=date_deb_ts,
-        date_fin=date_fin_ts,
-        echelle=echelle_res,
-        code=code_res,
-        ventilation_mode=ventilation_mode,
-        output_filename=output_filename,
-        diffusion=diffusion,
-        cartes=cartes,
-        gabarit=gabarit,
-    )
+    if brochure:
+        from core.engine.generation_pdf_synthese_brochure import (
+            generate_synthese_brochure_pdf_report,
+        )
+
+        generate_synthese_brochure_pdf_report(
+            out_dir,
+            profile=profile,
+            date_deb=date_deb_ts,
+            date_fin=date_fin_ts,
+            echelle=echelle_res,
+            code=code_res,
+            ventilation_mode=ventilation_mode,
+            output_filename=output_filename,
+            diffusion=diffusion,
+            cartes=cartes,
+            gabarit=gabarit or "brochure_defaut",
+        )
+    else:
+        _generate_synthese_pdf(
+            out_dir,
+            profile=profile,
+            date_deb=date_deb_ts,
+            date_fin=date_fin_ts,
+            echelle=echelle_res,
+            code=code_res,
+            output_filename=output_filename,
+            diffusion=diffusion,
+            cartes=cartes,
+        )
 
 
 def _generate_synthese_pdf(

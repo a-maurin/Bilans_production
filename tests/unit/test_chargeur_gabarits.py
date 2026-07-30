@@ -56,3 +56,15 @@ def test_resolve_gabarit_for_service():
 
     resolved_none = resolve_gabarit_for_service(code_region="r99", code_service="inconnu")
     assert resolved_none is None
+
+
+def test_list_gabarits_finds_brochure_defaut():
+    gabarits = list_gabarits()
+    ids = [g["gabarit_id"] for g in gabarits]
+    assert "brochure_defaut" in ids
+
+    g_defaut = load_gabarit("brochure_defaut")
+    assert g_defaut is not None
+    assert g_defaut["gabarit_id"] == "brochure_defaut"
+    assert g_defaut["layout"] == "brochure"
+

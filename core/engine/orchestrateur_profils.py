@@ -760,10 +760,12 @@ def _run_global_profile_via_yaml(
             safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
             pdf_prefix = f"{pdf_prefix}_{safe_filter}"
 
+        is_brochure_opt = bool(resolved_opts.get("brochure")) or (options and bool(options.get("brochure")))
+        prefix_type = "brochure" if is_brochure_opt else "bilan"
         if code_norm:
-            output_filename = f"bilan_{pdf_prefix}_{code_norm}.pdf"
+            output_filename = f"{prefix_type}_{pdf_prefix}_{code_norm}.pdf"
         else:
-            output_filename = f"bilan_{pdf_prefix}.pdf"
+            output_filename = f"{prefix_type}_{pdf_prefix}.pdf"
         pdf_kwargs: dict = {
             "profile": profile,
             "date_deb": date_deb_ts,

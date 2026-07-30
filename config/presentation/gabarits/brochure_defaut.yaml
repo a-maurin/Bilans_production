@@ -1,0 +1,41 @@
+# ========================================================================================
+# GABARIT DE PRESENTATION : BROCHURE INSTITUTIONNELLE PAR DEFAUT (`brochure_defaut.yaml`)
+# ========================================================================================
+# Ce fichier régit le gabarit de présentation par défaut pour l'édition des brochures PDF.
+#
+# Explication des clés pour les non-spécialistes :
+#   - `gabarit_id` : identifiant unique du gabarit (répertorié dans les menus Web/CLI).
+#   - `layout` : format d'affichage (`brochure` pour le rendu synthétique 2 pages A4 paysage).
+#   - `cible` : `les_deux` (s'applique aussi bien au bilan PDF qu'à la brochure PDF).
+#   - `sections.order` : ordre d'enchaînement des chapitres dans le document.
+# ========================================================================================
+
+version: 1
+gabarit_id: brochure_defaut
+label: "Gabarit Brochure par défaut"
+description: "Gabarit de présentation synthétique institutionnelle par défaut de l'OFB"
+
+cible: les_deux
+
+layout: brochure
+
+title:
+  line2_mode: fixed
+  line2_fixed: "Bilan Synthétique Institutionnel"
+
+sections:
+  order:
+    - sec1
+    - sec2
+    - sec4
+    - sec3
+    - sec6
+
+cartographie:
+  items_masques_brochure:
+    - titre_principal
+    - sous_titre
+    - bandeau_titre
+    - bandeau_logos_ofb
+    - logo_ofb_bas_droite
+    - bandeau_source

@@ -68,6 +68,20 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error('Erreur chargement profils:', err));
 
+    let userDefaultGabarit = 'brochure_defaut';
+
+    fetch('/api/settings')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.geo && data.geo.gabarit_defaut) {
+                userDefaultGabarit = data.geo.gabarit_defaut;
+                if (selectGabarit && !selectGabarit.value) {
+                    selectGabarit.value = userDefaultGabarit;
+                }
+            }
+        })
+        .catch(err => console.error('Erreur chargement settings:', err));
+
     fetch('/api/gabarits')
         .then(res => res.json())
         .then(data => {
@@ -91,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderGabaritsOptions() {
         if (!selectGabarit) return;
         const currentVal = selectGabarit.value;
+        const targetVal = currentVal || userDefaultGabarit;
         const selectedProfil = inputProfil ? inputProfil.value.trim() : '';
 
         selectGabarit.innerHTML = '<option value="">Automatique (par profil)</option>';
@@ -103,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const opt = document.createElement('option');
             opt.value = g.gabarit_id;
             opt.textContent = g.label ? `${g.label} (${g.gabarit_id})` : g.gabarit_id;
-            if (g.gabarit_id === currentVal) {
+            if (g.gabarit_id === targetVal) {
                 opt.selected = true;
             }
             selectGabarit.appendChild(opt);

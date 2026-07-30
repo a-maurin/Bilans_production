@@ -204,9 +204,14 @@ def resolve_items_masques_carte(
     """Détermine la liste des éléments de la carte à masquer (ex: légendes ou logos spécifiques)."""
     g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
     if isinstance(g_carto, dict):
-        res = g_carto.get("items_masques_brochure", g_carto.get("items_masques"))
-        if isinstance(res, list):
-            return [str(x) for x in res]
+        if is_brochure and "items_masques_brochure" in g_carto:
+            res = g_carto.get("items_masques_brochure")
+            if isinstance(res, list):
+                return [str(x) for x in res]
+        elif not is_brochure and "items_masques" in g_carto:
+            res = g_carto.get("items_masques")
+            if isinstance(res, list):
+                return [str(x) for x in res]
 
     p_carto = (profil_data or {}).get("cartographie", {}) if isinstance(profil_data, dict) else {}
     if isinstance(p_carto, dict):

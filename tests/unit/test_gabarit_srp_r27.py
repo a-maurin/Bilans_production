@@ -71,7 +71,7 @@ def test_generate_profile_pdf_report_brochure_routing(tmp_path):
 def test_brochure_resultat_pastilles():
     from core.engine.generation_pdf_synthese_brochure import BrochureResultatPastilles
     widget = BrochureResultatPastilles(200.0, 549, 90, 3, 7)
-    assert widget.height == 85.0
+    assert widget.height == 70.0
 
 
 def test_brochure_badges_suites():

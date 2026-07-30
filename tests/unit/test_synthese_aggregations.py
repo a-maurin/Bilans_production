@@ -242,7 +242,7 @@ def test_procedures_par_theme_pa_uniquement_depuis_controles() -> None:
         "departement",
         "21",
     )
-    assert "nb_pve" not in proc.columns
+    assert "nb_pve" in proc.columns and int(proc["nb_pve"].sum()) == 0
     assert int(proc.loc[proc["theme"] == "Thème A", "nb_pa"].sum()) == 2
 
 

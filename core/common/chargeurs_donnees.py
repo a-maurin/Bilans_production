@@ -73,18 +73,19 @@ def read_vector_attributes(path: Path) -> pd.DataFrame:
         import geopandas as gpd
         gdf = gpd.read_file(path)
         # Extraire coordonnées WGS84 depuis la géométrie si pas déjà en attributs
-        if gdf.geometry is not None and not gdf.geometry.isna().all():
-            try:
-                has_x = any(c in gdf.columns for c in ("x_wgs84", "longitude", "lon", "x"))
-                has_y = any(c in gdf.columns for c in ("y_wgs84", "latitude", "lat", "y"))
-                if not has_x or not has_y:
-                    gdf_wgs84 = gdf.to_crs("EPSG:4326") if (gdf.crs and gdf.crs.to_epsg() != 4326) else gdf
-                    if not has_x:
-                        gdf["x_wgs84"] = gdf_wgs84.geometry.x
-                    if not has_y:
-                        gdf["y_wgs84"] = gdf_wgs84.geometry.y
-            except Exception:
-                pass
+        try:
+            if hasattr(gdf, "geometry") and getattr(gdf, "_geometry_column_name", None) in gdf.columns:
+                if gdf.geometry is not None and not gdf.geometry.isna().all():
+                    has_x = any(c in gdf.columns for c in ("x_wgs84", "longitude", "lon", "x"))
+                    has_y = any(c in gdf.columns for c in ("y_wgs84", "latitude", "lat", "y"))
+                    if not has_x or not has_y:
+                        gdf_wgs84 = gdf.to_crs("EPSG:4326") if (gdf.crs and gdf.crs.to_epsg() != 4326) else gdf
+                        if not has_x:
+                            gdf["x_wgs84"] = gdf_wgs84.geometry.x
+                        if not has_y:
+                            gdf["y_wgs84"] = gdf_wgs84.geometry.y
+        except Exception:
+            pass
         return pd.DataFrame(gdf.drop(columns=["geometry"], errors="ignore"))
     except ImportError:
         from osgeo import ogr

@@ -64,6 +64,11 @@ def test_list_gabarits_finds_gabarit_defaut():
     gabarits = list_gabarits()
     ids = [g["gabarit_id"] for g in gabarits]
     assert "gabarit_defaut" in ids
+    assert "brochure_defaut" not in ids
+
+    alias_gabarits = list_gabarits(include_aliases=True)
+    alias_ids = [g["gabarit_id"] for g in alias_gabarits]
+    assert "brochure_defaut" in alias_ids
 
     g_defaut = load_gabarit("gabarit_defaut")
     assert g_defaut is not None
@@ -202,6 +207,34 @@ layout:
     ok_del, msg_del = delete_user_gabarit("mon_gabarit_test")
     assert ok_del is True
     assert not (tmp_path / "mon_gabarit_test.yaml").exists()
+
+    # 5. Tentative de sauvegarde d'un gabarit système -> création automatique sous *_custom
+    sys_edit_gabarit = dict(sample_gabarit)
+    sys_edit_gabarit["gabarit_id"] = "gabarit_defaut"
+    ok_sys_save, sys_gid, _ = save_user_gabarit(sys_edit_gabarit)
+    assert ok_sys_save is True
+    assert sys_gid == "gabarit_defaut_custom"
+    assert (tmp_path / "gabarit_defaut_custom.yaml").exists()
+
+
+def test_resolve_items_masques_carte_fusion():
+    from core.common.chargeur_gabarits import resolve_items_masques_carte
+
+    profil_data = {
+        "cartographie": {
+            "items_masques_defaut": ["masque_profil_1", "masque_commun"],
+        }
+    }
+    gabarit_data = {
+        "cartographie": {
+            "items_masques": ["masque_gabarit_1", "masque_commun"],
+        }
+    }
+
+    # Fusion additive sans doublons
+    masques = resolve_items_masques_carte(profil_data=profil_data, gabarit_data=gabarit_data, is_brochure=False)
+    assert masques == ["masque_profil_1", "masque_commun", "masque_gabarit_1"]
+
 
 
 

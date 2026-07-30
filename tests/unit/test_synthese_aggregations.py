@@ -163,7 +163,9 @@ def test_resultat_effectifs_par_type_usager_journalise_conflit_fc_id(caplog) -> 
         }
     )
 
-    with caplog.at_level("WARNING", logger="core.common.utilitaires_metier"):
+    import logging
+
+    with caplog.at_level(logging.WARNING):
         out = agg_resultat_effectifs_par_type_usager(point)
 
     assert "Conflit intra-fc_id sur resultat pour fc_id=FC-1" in caplog.text

@@ -18,8 +18,7 @@ description: "Gabarit de présentation synthétique institutionnelle par défaut
 cible: les_deux
 
 title:
-  line2_mode: fixed
-  line2_fixed: "Bilan Synthétique Institutionnel"
+  line2_mode: auto
 
 sections:
   order:

@@ -1611,8 +1611,10 @@ def _generate_synthese_brochure_pdf(
     report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
 
-    # Chargement des tableaux de données CSV avec mécanismes de secours si absents
     act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total", "nb"])
+    if act_theme is not None and not act_theme.empty and "nb_total" not in act_theme.columns and "nb" in act_theme.columns:
+        act_theme["nb_total"] = act_theme["nb"]
+
     proc_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_procedures_par_theme.csv", f"procedures_{profil_id}_par_theme.csv", "procedures_global_par_theme.csv"]), ["nb_pej", "nb_pa", "nb_pve"])
     if proc_theme is None or proc_theme.empty:
         pej_t = _load_csv_fallback(out_dir, [f"pej_{profil_id}_par_theme.csv", "pej_global_par_theme.csv"])
@@ -1642,6 +1644,8 @@ def _generate_synthese_brochure_pdf(
     act_par_type = _sort_desc(
         _load_csv_fallback(out_dir, ["synthese_activite_par_type_usager.csv", f"controles_{profil_id}_par_usager.csv", "controles_global_par_usager.csv"]), ["nb_total", "nb"]
     )
+    if act_par_type is not None and not act_par_type.empty and "nb_total" not in act_par_type.columns and "nb" in act_par_type.columns:
+        act_par_type["nb_total"] = act_par_type["nb"]
     tab_res_ctrl = _load_csv_fallback(out_dir, ["controles_global_resultats_controles.csv", f"controles_{profil_id}_resultats_controles.csv"])
     tab_resultats = _load_csv_fallback(out_dir, ["controles_global_resultats.csv", f"controles_{profil_id}_resultats.csv"])
 
@@ -1836,7 +1840,7 @@ def _generate_synthese_brochure_pdf(
         min_pct=0.01,
         sum_cols=["nb_localisations", "nb_pej_hors_controle", "nb_total"],
     )
-    act_theme_total = int(act_theme["nb_total"].sum()) if act_theme is not None and not act_theme.empty else 0
+    act_theme_total = int(act_theme["nb_total"].sum()) if act_theme is not None and not act_theme.empty and "nb_total" in act_theme.columns else 0
     if act_theme_display is not None and not act_theme_display.empty:
         sub = act_theme_display
         if len(sub) > _BROCHURE_MAX_THEMES:

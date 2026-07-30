@@ -177,7 +177,7 @@ Composants principaux :
                     </div>
 
                     <div class="form-group">
-                        <label for="gabarit">Gabarit de présentation</label>
+                        <label for="gabarit">Gabarit de présentation PDF</label>
                         <select id="gabarit" name="gabarit">
                             <option value="">Automatique (par profil)</option>
                         </select>
@@ -516,7 +516,7 @@ Composants principaux :
                             listG.forEach(g => {
                                 const opt = document.createElement('option');
                                 opt.value = g.gabarit_id;
-                                opt.textContent = g.label ? `${g.label} (${g.gabarit_id})` : g.gabarit_id;
+                                opt.textContent = g.label || g.gabarit_id;
                                 setGeoGab.appendChild(opt);
                             });
                         }

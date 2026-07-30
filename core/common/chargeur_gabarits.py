@@ -166,7 +166,7 @@ def load_gabarit_from_path(file_path: Path) -> dict[str, Any] | None:
         return None
 
 
-def list_gabarits(root: Path | None = None) -> list[dict[str, Any]]:
+def list_gabarits(root: Path | None = None, include_aliases: bool = False) -> list[dict[str, Any]]:
     """Scanne tous les dossiers et retourne la liste des gabarits disponibles avec leurs métadonnées."""
     seen: set[str] = set()
     gabarits: list[dict[str, Any]] = []
@@ -175,6 +175,8 @@ def list_gabarits(root: Path | None = None) -> list[dict[str, Any]]:
         for p in sorted(d.glob("*.yaml")):
             data = load_gabarit_from_path(p)
             if not data:
+                continue
+            if not include_aliases and "alias_of" in data:
                 continue
             gid = data["gabarit_id"]
             if gid in seen:
@@ -208,8 +210,6 @@ def get_user_gabarits_dir() -> Path:
 def is_system_gabarit(gabarit_id: str, root: Path | None = None) -> bool:
     """Indique si un gabarit est un gabarit système d'origine (lecture seule)."""
     gid_clean = str(gabarit_id).strip()
-    if gid_clean == "brochure_defaut":
-        gid_clean = "gabarit_defaut"
 
     base_root = root or PROJECT_ROOT
     sys_dirs = [
@@ -242,6 +242,10 @@ def save_user_gabarit(data: dict[str, Any], file_stem: str | None = None) -> tup
     clean_id = "".join(c for c in gid if c.isalnum() or c in ("_", "-")).lower()
     if not clean_id:
         clean_id = "gabarit_custom"
+
+    # Si c'est un gabarit système, créer une déclinaison utilisateur avec le suffixe _custom
+    if is_system_gabarit(clean_id):
+        clean_id = f"{clean_id}_custom"
 
     data["gabarit_id"] = clean_id
     user_dir = get_user_gabarits_dir()
@@ -304,9 +308,6 @@ def import_gabarit_content(yaml_str: str, file_stem: str | None = None) -> tuple
 def load_gabarit(gabarit_id: str, root: Path | None = None) -> dict[str, Any] | None:
     """Charge la configuration complète d'un gabarit spécifique par son identifiant."""
     gid_clean = str(gabarit_id).strip()
-    # Alias de rétrocompatibilité : brochure_defaut -> gabarit_defaut
-    if gid_clean == "brochure_defaut":
-        gid_clean = "gabarit_defaut"
     if not gid_clean or gid_clean.lower() in ("none", "null", "standard", "default"):
         return None
 
@@ -314,14 +315,22 @@ def load_gabarit(gabarit_id: str, root: Path | None = None) -> dict[str, Any] | 
         candidate = d / f"{gid_clean}.yaml"
         if candidate.exists():
             data = load_gabarit_from_path(candidate)
-            if data and data.get("gabarit_id") == gid_clean:
-                return data
+            if data:
+                if "alias_of" in data:
+                    target_id = str(data["alias_of"]).strip()
+                    return load_gabarit(target_id, root)
+                if data.get("gabarit_id") == gid_clean:
+                    return data
 
         # Recherche par parcours de tous les fichiers YAML si le nom de fichier diffère
         for p in d.glob("*.yaml"):
             data = load_gabarit_from_path(p)
-            if data and data.get("gabarit_id") == gid_clean:
-                return data
+            if data:
+                if data.get("gabarit_id") == gid_clean:
+                    if "alias_of" in data:
+                        target_id = str(data["alias_of"]).strip()
+                        return load_gabarit(target_id, root)
+                    return data
 
     logger.warning(f"Gabarit de présentation introuvable : '{gabarit_id}'. Bascule sur le profil standard.")
     return None
@@ -386,26 +395,39 @@ def resolve_items_masques_carte(
     *,
     is_brochure: bool = False,
 ) -> list[str]:
-    """Détermine la liste des éléments de la carte à masquer (ex: légendes ou logos spécifiques)."""
-    g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
-    if isinstance(g_carto, dict):
-        if is_brochure and "items_masques_brochure" in g_carto:
-            res = g_carto.get("items_masques_brochure")
-            if isinstance(res, list):
-                return [str(x) for x in res]
-        elif not is_brochure and "items_masques" in g_carto:
-            res = g_carto.get("items_masques")
-            if isinstance(res, list):
-                return [str(x) for x in res]
+    """Détermine la liste des éléments de la carte à masquer (fusion additive Gabarit + Profil)."""
+    masques: list[str] = []
 
+    # 1. Éléments masqués par le profil de bilan
     p_carto = (profil_data or {}).get("cartographie", {}) if isinstance(profil_data, dict) else {}
     if isinstance(p_carto, dict):
         if is_brochure and "items_masques_brochure" in p_carto:
             res = p_carto.get("items_masques_brochure")
             if isinstance(res, list):
-                return [str(x) for x in res]
-        res = p_carto.get("items_masques_defaut", p_carto.get("items_masques", []))
-        if isinstance(res, list):
-            return [str(x) for x in res]
+                masques.extend(str(x) for x in res)
+        else:
+            p_def = p_carto.get("items_masques_defaut", p_carto.get("items_masques", []))
+            if isinstance(p_def, list):
+                masques.extend(str(x) for x in p_def)
 
-    return []
+    # 2. Additif : Éléments masqués par le gabarit
+    g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
+    if isinstance(g_carto, dict):
+        if is_brochure and "items_masques_brochure" in g_carto:
+            res = g_carto.get("items_masques_brochure")
+            if isinstance(res, list):
+                masques.extend(str(x) for x in res)
+        elif "items_masques" in g_carto:
+            res = g_carto.get("items_masques")
+            if isinstance(res, list):
+                masques.extend(str(x) for x in res)
+
+    # Conserver l'ordre d'apparition sans doublons
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in masques:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+
+    return result

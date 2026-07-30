@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const opt = document.createElement('option');
             opt.value = g.gabarit_id;
-            opt.textContent = g.label ? `${g.label} (${g.gabarit_id})` : g.gabarit_id;
+            opt.textContent = g.label || g.gabarit_id;
             if (g.gabarit_id === targetVal) {
                 opt.selected = true;
             }

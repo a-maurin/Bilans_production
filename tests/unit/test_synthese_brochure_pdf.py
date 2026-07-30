@@ -273,9 +273,9 @@ def test_resolve_items_masques_carte_hierarchy() -> None:
     res_std = resolve_items_masques_carte(profil_data, gabarit_data, is_brochure=False)
     assert res_std == ["logo_defaut"]
 
-    # 2. Mode brochure avec gabarit -> la liste du gabarit prévaut
+    # 2. Mode brochure avec gabarit -> fusion additive (profil + gabarit)
     res_gab = resolve_items_masques_carte(profil_data, gabarit_data, is_brochure=True)
-    assert res_gab == ["titre_gabarit", "logo_gabarit"]
+    assert res_gab == ["titre_profil", "logo_profil", "titre_gabarit", "logo_gabarit"]
 
     # 3. Mode brochure sans gabarit -> la liste brochure du profil prévaut
     res_prof_brochure = resolve_items_masques_carte(profil_data, None, is_brochure=True)

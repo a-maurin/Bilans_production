@@ -132,9 +132,9 @@ def test_warn_if_unknown_carto_dept(require_admin_shp, caplog):
     import logging
 
     with caplog.at_level(logging.WARNING, logger="core.cartographie.pochoir_helper"):
-        assert warn_if_unknown_carto_dept("25")
-        assert not warn_if_unknown_carto_dept("999")
-    assert any("999" in r.message for r in caplog.records)
+        assert warn_if_unknown_carto_dept("25", project_root=PROJECT_ROOT)
+        assert not warn_if_unknown_carto_dept("999", project_root=PROJECT_ROOT)
+    assert any("999" in r.getMessage() for r in caplog.records)
 
 
 def test_load_department_gdf_region_dissolve_false(require_admin_shp):

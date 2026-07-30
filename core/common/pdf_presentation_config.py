@@ -397,6 +397,7 @@ def resolve_pdf_presentation_config(
     profile_id: str | None = None,
     diffusion: str | None = "interne",
     gabarit_id: str | None = None,
+    is_brochure: bool = False,
 ) -> dict[str, Any]:
     """Calcule la configuration finale effective après empilement des surcharges (scope, profil, gabarit)."""
     raw = load_pdf_presentation_raw_config(root)
@@ -433,7 +434,7 @@ def resolve_pdf_presentation_config(
     if gabarit_id:
         from core.common.chargeur_gabarits import load_gabarit, is_gabarit_compatible
         gabarit_data = load_gabarit(gabarit_id, root)
-        target_cible = "brochure" if scope == "synthese_regionale" else "bilan"
+        target_cible = "brochure" if is_brochure else "bilan"
         if gabarit_data and is_gabarit_compatible(gabarit_data, profile_id=profile_id, cible=target_cible):
             raw_layout = gabarit_data.get("layout", "standard")
             if isinstance(raw_layout, dict):

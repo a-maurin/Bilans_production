@@ -35,14 +35,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Liste des fichiers/dossiers à supprimer définitivement
 TO_REMOVE = [
-    # Doublons et logs
+    # Doublons, scripts scratch et logs
+    ROOT / "read_pdf_scratch.py",
+    ROOT / "test_read_pdf.py",
     ROOT / "tests" / "simulate_api.py",
+    ROOT / "tests" / "test_simulate_api.py",
     ROOT / "core" / "cartographie" / "param" / "profils_cartes.yaml",
     ROOT / "geojson_error.log",
     ROOT / "geojson_success.log",
     ROOT / "temp" / "_compare_pdc_out.json",
     ROOT / "temp" / "geojson_error.log",
     ROOT / "temp" / "geojson_success.log",
+    ROOT / "ofbilan.egg-info",
     # Logs lourds et résidus de tests/scratch/
     ROOT / "tests" / "scratch" / "api_data_debug.log",
     ROOT / "tests" / "scratch" / "serveur_error.log",

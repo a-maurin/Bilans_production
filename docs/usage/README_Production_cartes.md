@@ -27,8 +27,8 @@ Les cartes sont écrites dans `data/out/generateur_de_cartes/`.
 
 À l'export, le moteur applique `src/bilans/cartographie/param/layout_defaults.yaml` :
 
-- gabarit **`carre_210`** : page 210×210 mm (réf. agrainage), carte pleine largeur, **une seule légende** à droite (154–210 mm) ;
-- gabarit **`a4_paysage`** : page 297×210 mm (layouts SD21), légende unique colonne droite ;
+- format de page cartographique QGIS **`carre_210`** : page 210×210 mm (réf. agrainage), carte pleine largeur, **une seule légende** à droite (154–210 mm) ;
+- format de page cartographique QGIS **`a4_paysage`** : page 297×210 mm (layouts SD21), légende unique colonne droite ;
 - sélection du template : `layout_defaults_ref` sur le profil, sinon détection automatique selon la taille de page du layout QGIS ;
 - logos : bandeau haut (`bandeau_logos_ofb`) injecté par Python ; logo RF-OFB bas droite repositionné depuis le YAML (pas de doublon si déjà présent dans le `.qgz`) ;
 - ids titre : mapping `layout_title_ids` (ex. layout agrainage → id label QGIS long).

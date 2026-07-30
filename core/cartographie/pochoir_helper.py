@@ -351,7 +351,7 @@ def write_map_dept_marker(map_png: Path, dept_code: str) -> None:
     marker.write_text(normalize_dept_code(dept_code), encoding="utf-8")
 
 
-def warn_if_unknown_carto_dept(dept_code: str) -> bool:
+def warn_if_unknown_carto_dept(dept_code: str, *, project_root: Optional[Path] = None) -> bool:
     """
     Avertit si le département cartographique est absent du référentiel admin.
 
@@ -361,7 +361,7 @@ def warn_if_unknown_carto_dept(dept_code: str) -> bool:
     if not code:
         logger.warning("Code département cartographie vide — export pochoir impossible.")
         return False
-    shp = get_departements_admin_shp()
+    shp = get_departements_admin_shp(project_root)
     if not shp.exists():
         logger.warning(
             "Shapefile départements introuvable (%s) — impossible de valider le département %s.",
@@ -370,7 +370,7 @@ def warn_if_unknown_carto_dept(dept_code: str) -> bool:
         )
         return False
     try:
-        load_department_gdf(code)
+        load_department_gdf(code, project_root=project_root)
         return True
     except ValueError:
         logger.warning(

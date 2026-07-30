@@ -5,8 +5,9 @@
 # ========================================================================================
 
 version: 1
-gabarit_id: gabarit_defaut
-label: "Gabarit institutionnel par défaut"
+gabarit_id: brochure_defaut
+alias_of: gabarit_defaut
+label: "Gabarit institutionnel par défaut (Alias)"
 description: "Gabarit de présentation synthétique institutionnelle par défaut de l'OFB"
 
 cible: les_deux

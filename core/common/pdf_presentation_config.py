@@ -435,7 +435,11 @@ def resolve_pdf_presentation_config(
         gabarit_data = load_gabarit(gabarit_id, root)
         target_cible = "brochure" if scope == "synthese_regionale" else "bilan"
         if gabarit_data and is_gabarit_compatible(gabarit_data, profile_id=profile_id, cible=target_cible):
-            layout_mode = str(gabarit_data.get("layout", "standard")).strip()
+            raw_layout = gabarit_data.get("layout", "standard")
+            if isinstance(raw_layout, dict):
+                layout_mode = "brochure_custom"
+            else:
+                layout_mode = str(raw_layout).strip()
             gabarit_overrides = {
                 k: v for k, v in gabarit_data.items()
                 if k not in (

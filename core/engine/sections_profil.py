@@ -36,7 +36,8 @@ import pandas as pd
 
 from core.engine.pdf_context import PdfContext
 from core.common.cartographie_config import has_cartography_catalog, expected_map_filenames_for_selection
-from core.common.pdf_presentation_config import is_section_enabled, is_block_enabled, get_block_int, format_proc_detail_caption, slice_proc_detail_for_pdf
+from core.common.pdf_presentation_config import is_section_enabled, is_block_enabled, get_block_int, format_proc_detail_caption, slice_proc_detail_for_pdf, is_commentaires_auto_enabled
+from core.engine.commentaires_auto import build_comment_paragraph
 from core.common.pdf_table_sort import (
     PDF_LABEL_CTRL_LOCATIONS,
     PDF_LABEL_CTRL_LOCATIONS_SHORT,
@@ -383,6 +384,10 @@ def render_sec22theme(ctx: PdfContext) -> None:
         max_rows=20,
     )
     if agg_theme_display is not None and not agg_theme_display.empty:
+        if is_commentaires_auto_enabled(ctx.presentation_cfg):
+            p_comm = build_comment_paragraph("sec21_themes", ctx)
+            if p_comm:
+                ctx.builder.append_pending_paragraph(p_comm)
         tbl = [["Thème", "Opérations", "Localisations", "Taux loc."]]
         for _, row in agg_theme_display.iterrows():
             taux_str = format_pct_int_from_rate(row.get("taux"))
@@ -408,6 +413,10 @@ def render_sec22res(ctx: PdfContext) -> None:
         level=2,
         toc_level=1,
     )
+    if is_commentaires_auto_enabled(ctx.presentation_cfg):
+        p_comm = build_comment_paragraph("sec22_conformite", ctx)
+        if p_comm:
+            ctx.builder.append_pending_paragraph(p_comm)
     use_detail = ctx.tab_resultats_controles is not None and not ctx.tab_resultats_controles.empty
     show_res_table = is_block_enabled(ctx.presentation_cfg, "sec22res.show_table", True)
     show_res_pie = is_block_enabled(ctx.presentation_cfg, "sec22res.show_pie", True)
@@ -822,6 +831,11 @@ def render_sec4(ctx: PdfContext) -> None:
                 (str(nb_multi), "Fiches multi-usagers"),
             ], spacer_after_mm=2.0)
         
+        if is_commentaires_auto_enabled(ctx.presentation_cfg):
+            p_comm = build_comment_paragraph("sec4_usagers", ctx)
+            if p_comm:
+                ctx.builder.append_pending_paragraph(p_comm)
+
         if is_block_enabled(ctx.presentation_cfg, "sec4.show_table_usagers", True):
             tbl_u = [["Type d’usagers", "Opérations", "Localisations", "Taux loc."]]
             nbs_ug = [int(row["nb"]) for _, row in ctx.agg_usager.iterrows()]

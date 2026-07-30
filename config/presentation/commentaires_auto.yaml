@@ -1,0 +1,101 @@
+# =====================================================================
+# GABARITS DE COMMENTAIRES AUTOMATIQUES — OFBilan
+# =====================================================================
+# Ce fichier définit les textes introductifs générés automatiquement
+# avant chaque tableau ou graphique du bilan PDF.
+#
+# REGLES D'EDITION :
+#   - Respectez l'indentation (2 espaces).
+#   - Ne modifiez PAS les variables entre {accolades}.
+#   - Seule la PREMIERE règle dont la condition est VRAIE est retenue.
+#   - Balises HTML autorisées : <b>texte en gras</b>, <i>italique</i>.
+# =====================================================================
+
+sec21_themes:
+  enabled: true
+  rules:
+    - condition: "top_pct_val >= 30"
+      template: >
+        Le thème <b>{top_theme}</b> représente à lui seul <b>{top_pct}</b> des localisations
+        ({top_n_label} sur un total de {total_label}), soit plus du double du deuxième thème
+        (<b>{second_theme}</b>, {second_pct}).
+    - condition: "top_pct_val < 30"
+      template: >
+        L'activité de contrôle est répartie entre plusieurs thèmes.
+        Le premier thème (<b>{top_theme}</b>) concentre <b>{top_pct}</b> des localisations
+        ({top_n_label} sur un total de {total_label}).
+
+sec22_conformite:
+  enabled: true
+  rules:
+    - condition: "nc_pct_val > 20"
+      template: >
+        Sur {total_label} de contrôle, <b>{nc_n_label} présentent une non-conformité</b>
+        (soit <b>{nc_pct}</b> du total), dont {inf_n_label} relevant d'une infraction pénale
+        et {man_n_label} d'un manquement administratif.
+    - condition: "nc_pct_val <= 20"
+      template: >
+        Le taux de non-conformité s'élève à <b>{nc_pct}</b> ({nc_n_label} sur {total_label}),
+        dont {inf_n_label} relevant d'une infraction pénale et {man_n_label} d'un manquement administratif.
+
+sec23_procedures_theme:
+  enabled: true
+  rules:
+    - condition: "top_pej_n_val > 0"
+      template: >
+        S'agissant de l'activité procédurale par thème, <b>{top_pej_theme}</b> enregistre le plus grand nombre
+        de procédures d'enquête judiciaire (<b>{top_pej_n_label}</b>).
+
+sec4_usagers:
+  enabled: true
+  rules:
+    - condition: "top_pct_val >= 50"
+      template: >
+        La catégorie <b>{top_usager}</b> constitue le premier type d'usager contrôlé avec
+        <b>{top_pct}</b> des effectifs ({top_n_label} sur un total de {total_label}).
+        Viennent ensuite les <b>{second_usager}</b> ({second_pct}).
+    - condition: "top_pct_val < 50"
+      template: >
+        Les interventions concernent principalement la catégorie <b>{top_usager}</b>
+        (<b>{top_pct}</b> des effectifs, soit {top_n_label} sur {total_label}).
+
+sec41_usager_theme:
+  enabled: true
+  rules:
+    - condition: "total_val > 0"
+      template: >
+        Pour les <b>{type_usager}</b>, les interventions se concentrent principalement sur le thème
+        <b>{top_theme}</b> (<b>{top_n_label}</b>).
+
+sec42_usager_resultats:
+  enabled: true
+  rules:
+    - condition: "top_nc_n_val > 0"
+      template: >
+        Parmi les usagers contrôlés, la catégorie <b>{top_nc_usager}</b> concentre la plus forte part
+        des non-conformités (<b>{top_nc_n_label}</b>, soit <b>{top_nc_pct}</b> des non-conformités détectées).
+
+sec43_usager_proc:
+  enabled: true
+  rules:
+    - condition: "top_pej_n_val > 0"
+      template: >
+        Au niveau procédural par usager, <b>{top_pej_usager}</b> font l'objet du plus grand nombre
+        de procédures d'enquête judiciaire (<b>{top_pej_n_label}</b>).
+
+sec3_pej_natinf:
+  enabled: true
+  rules:
+    - condition: "top_natinf_n_val > 0"
+      template: >
+        L'analyse des natures d'infraction montre que la NATINF <b>{top_natinf_code}</b>
+        (<i>{top_natinf_lib}</i>) est la plus fréquemment relevée en procédure judiciaire
+        avec <b>{top_natinf_n_label}</b>.
+
+sec3_pve_natinf:
+  enabled: true
+  rules:
+    - condition: "top_pve_n_val > 0"
+      template: >
+        Les procès-verbaux électroniques (PVe) sont principalement motivés par la NATINF <b>{top_pve_code}</b>
+        (<i>{top_pve_lib}</i>) comptabilisant <b>{top_pve_n_label}</b>.

@@ -35,7 +35,8 @@ import pandas as pd
 from reportlab.platypus import Spacer, Paragraph
 
 from core.engine.pdf_context import PdfContext
-from core.common.pdf_presentation_config import is_section_enabled, is_block_enabled
+from core.common.pdf_presentation_config import is_section_enabled, is_block_enabled, is_commentaires_auto_enabled
+from core.engine.commentaires_auto import build_comment_paragraph
 from core.common.pdf_table_sort import (
     PDF_LABEL_CTRL_LOCATIONS,
     PDF_LABEL_CTRL_LOCATIONS_SHORT,
@@ -128,6 +129,10 @@ def render_sec1(ctx: PdfContext) -> None:
         else 0
     )
     if act_theme_display is not None and not act_theme_display.empty:
+        if is_commentaires_auto_enabled(ctx.presentation_cfg):
+            p_comm = build_comment_paragraph("sec21_themes", ctx)
+            if p_comm:
+                ctx.builder.append_pending_paragraph(p_comm)
         tbl = [["Thème", "Contrôles PA", "PEJ hors contrôle PA", "Total"]]
         for _, row in act_theme_display.iterrows():
             nb_row = int(row["nb_total"])
@@ -158,6 +163,10 @@ def render_sec1(ctx: PdfContext) -> None:
         toc_level=1,
     )
     if ctx.tab_resultats_controles is not None and not ctx.tab_resultats_controles.empty:
+        if is_commentaires_auto_enabled(ctx.presentation_cfg):
+            p_comm = build_comment_paragraph("sec22_conformite", ctx)
+            if p_comm:
+                ctx.builder.append_pending_paragraph(p_comm)
         tbl_pdf = _build_rows_resultats_controles_pdf(ctx.tab_resultats_controles)
         pie_data = _resultats_controles_pie_data(ctx.tab_resultats)
         pie_path = None
@@ -241,6 +250,10 @@ def render_sec4_usagers(ctx: PdfContext) -> None:
                     f"{nb_tot} ({pct})",
                 ]
             )
+        if is_commentaires_auto_enabled(ctx.presentation_cfg):
+            p_comm = build_comment_paragraph("sec4_usagers", ctx)
+            if p_comm:
+                ctx.builder.append_pending_paragraph(p_comm)
         ctx.builder.add_table_and_image_keep_together(
             tbl_u,
             table_caption=pdf_metric_caption("Répartition de l'activité par type d'usager", "effectifs"),

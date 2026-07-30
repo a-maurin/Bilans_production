@@ -47,6 +47,7 @@ version: 1
 behavior:
   missing_data_policy: show_placeholder
   unknown_block_policy: ignore
+  commentaires_auto: true
   # diffusion : pilotée par --diffusion (CLI) ; « externe » fusionne profiles._diffusion_externe
 
 defaults:

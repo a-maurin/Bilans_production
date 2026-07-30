@@ -138,3 +138,12 @@ def test_point_A_banner_reset_on_success():
     assert "reset bannière sur succès" in source.lower() or "Point A : reset" in source, (
         "Reset bannière post-succès absent de explorer.js"
     )
+
+
+def test_compare_active_title_mention_in_explorer_js():
+    """
+    Vérifie la présence de la mention (Comparaison années N / N-1) selon l'état de compare-active.
+    """
+    source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
+    assert "compare-active" in source, "Élément compare-active absent de explorer.js"
+    assert "(Comparaison années N / N-1)" in source, "Mention de comparaison (Comparaison années N / N-1) absente de explorer.js"

@@ -354,6 +354,7 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("behavior", {})
     out["behavior"].setdefault("missing_data_policy", "hide_silently")
     out["behavior"].setdefault("unknown_block_policy", "ignore")
+    out["behavior"].setdefault("commentaires_auto", True)
     out.setdefault("defaults", {})
     out.setdefault("scopes", {})
     out.setdefault("profiles", {})
@@ -715,6 +716,21 @@ def is_block_enabled(
     if val is None:
         return default
     return bool(val)
+
+
+def is_commentaires_auto_enabled(
+    effective_cfg: dict[str, Any],
+    default: bool = True,
+) -> bool:
+    """Vérifie l'activation globale de la génération automatisée des commentaires."""
+    if not isinstance(effective_cfg, dict):
+        return default
+    if "commentaires_auto" in effective_cfg:
+        return bool(effective_cfg["commentaires_auto"])
+    behavior = effective_cfg.get("behavior", {})
+    if isinstance(behavior, dict) and "commentaires_auto" in behavior:
+        return bool(behavior["commentaires_auto"])
+    return default
 
 
 def get_block_int(

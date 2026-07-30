@@ -310,6 +310,18 @@ def main() -> int:
         action="store_true",
         help="Lister les gabarits de présentation disponibles.",
     )
+    parser.add_argument(
+        "--commentaires-auto",
+        action="store_true",
+        default=None,
+        help="Activer la génération des commentaires automatiques dans le PDF.",
+    )
+    parser.add_argument(
+        "--no-commentaires-auto",
+        action="store_true",
+        default=None,
+        help="Désactiver la génération des commentaires automatiques dans le PDF.",
+    )
     args = parser.parse_args()
 
     # Configuration du logging selon l'option --debug
@@ -463,6 +475,11 @@ def main() -> int:
 
     if args.no_open:
         cli_options["no_open"] = True
+
+    if args.commentaires_auto:
+        cli_options["commentaires_auto"] = True
+    elif args.no_commentaires_auto:
+        cli_options["commentaires_auto"] = False
 
     if args.gabarit:
         cli_options["gabarit"] = args.gabarit

@@ -3018,9 +3018,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const fullTitle = `${activiteStr} — ${scale} : ${territoryStr} — ${periodeStr}`;
 
+            // Mention de comparaison N / N-1 uniquement pour le titre visuel d'impression (#print-title)
+            const compareActiveEl = document.getElementById('compare-active');
+            let displayTitle = fullTitle;
+            if (compareActiveEl && compareActiveEl.checked) {
+                displayTitle += ' (Comparaison années N / N-1)';
+            }
+
             const titleEl = document.getElementById('print-title');
             if (titleEl) {
-                titleEl.textContent = fullTitle;
+                titleEl.textContent = displayTitle;
             }
 
             // Changer le titre du document pour nommer le PDF généré

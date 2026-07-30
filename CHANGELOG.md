@@ -4,10 +4,26 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 
 ---
 
+## [v1.0.6] - 2026-07-30 : Génération automatisée de commentaires dans les bilans PDF
+
+### Édition PDF et Rapports
+* **Commentaires automatiques** : Système de commentaires introductifs auto-générés s'intercalant avant les tableaux et graphiques (`commentaires_auto.py`).
+* **Gabarits YAML configurables** : Fichier `config/presentation/commentaires_auto.yaml` permettant d'éditer facilement les conditions et templates de texte sans coder (support des balises HTML `<b>`).
+* **Accordage & Formatage FR** : Formatage numérique selon les normes françaises (`1 250`, `31 %`) et gestion automatique des accords singulier/pluriel.
+* **Pilotage & Surcharges** : Interrupteur global dans `pdf_presentation.yaml`, drapeaux CLI (`--commentaires-auto` / `--no-commentaires-auto`) et support des surcharges manuelles (`custom_text`).
+* **Mise en page anti-orphelins** : Insertion souple avec `keepWithNext=True` et espacement compact (1.5 mm) pour éviter les grands espaces vides et préserver les contraintes du format Brochure.
+
+### Outils & Tests
+* **Prévisualisation console** : Script `scripts/test_commentaires_cli.py` pour tester instantanément le rendu des textes sans générer de PDF.
+* **Tests unitaires** : Ajout de la suite de tests `tests/test_commentaires.py`.
+
+---
+
 ## [v1.0.5] - 2026-07-24 : Bilans régionaux, Moteur PDF mutualisé & Purge Legacy
 
 ### Édition PDF et Bilans Régionaux
 * **Refonte des bilans régionaux** : Intégration du dashboard macro synthétique, des cartes de chaleur (heatmaps) et des fiches départementales (1-page & double visuel).
+* **Gabarits de présentation** : Introduction du système de gabarits de présentation PDF déclinables et configurables par service/organisation (`chargeur_gabarits.py`).
 * **Mutualisation PDF & LayerResolver** : Unification du moteur d'exportation PDF et résolution dynamique des couches QGIS en fonction des rôles métiers (`LayerResolver`).
 * **Feuilles de style & Impression** : Optimisation des rendus et ajustement de `print.css` pour l'export dashboard.
 

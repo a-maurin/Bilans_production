@@ -333,7 +333,7 @@ def chart_pie(
     pie_h_in = CHART_FIG_HEIGHT_PIE_COMPACT * figure_scale * CHART_PIE_DISK_SCALE
     legend_row_h_in = 0.20 * (leg_fs / CHART_LEGEND_FONT_SIZE_REF)
     legend_h_in = 0.42 + effective_legend_rows * legend_row_h_in
-    top_pad_in = 0.45 if str(title).strip() else 0.28
+    top_pad_in = 0.52 if str(title).strip() else 0.28
     gap_in = 0.08
     bottom_pad_in = 0.14
     fig_h = pie_h_in + legend_h_in + top_pad_in + gap_in + bottom_pad_in
@@ -431,7 +431,7 @@ def chart_pie_legend_right(
             ]
         )
     fig_w = 4.4 * figure_scale
-    fig_h = 2.6 * figure_scale
+    fig_h = 2.85 * figure_scale
     fig, (ax_pie, ax_leg) = plt.subplots(
         1,
         2,
@@ -443,15 +443,16 @@ def chart_pie_legend_right(
     else:
         wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.75)
     ax_pie.set_aspect("equal")
-    ax_pie.set_xlim(-1.5, 1.5)
-    ax_pie.set_ylim(-1.5, 1.5)
+    ax_pie.set_xlim(-1.85, 1.85)
+    ax_pie.set_ylim(-1.85, 1.85)
+    ax_pie.axis("off")
     if str(title).strip():
         ax_pie.set_title(
             title,
             fontsize=CHART_TITLE_FONT_SIZE_REF - 1,
             fontweight="bold",
             color=COLOR_PRIMARY,
-            pad=4,
+            pad=6,
         )
     ax_leg.axis("off")
     ax_leg.legend(
@@ -465,7 +466,7 @@ def chart_pie_legend_right(
         handletextpad=0.45,
         labelspacing=0.55,
     )
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.98 if not str(title).strip() else 0.90, bottom=0.02)
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.98 if not str(title).strip() else 0.88, bottom=0.02)
     return save_chart(fig, tmp_dir, name, dpi=DEFAULT_RASTER_EXPORT_DPI, tight=True)
 
 

@@ -4,7 +4,13 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 
 ---
 
-## [v1.0.6] - 2026-07-30 : Génération automatisée de commentaires dans les bilans PDF
+## [v1.0.6] - 2026-07-31 : Explorer Web interactif, Commentaires auto PDF & Correctifs
+
+### Explorer Web et Cartographie Dynamique
+* **Indicateurs KPI & Donuts interactifs** : Transformation des cartes d'indicateurs clés (Contrôles, PEJ, PA, PVe, Usagers) et des graphiques camemberts/donuts (Résultats, Types d'usager) en boutons de filtrage dynamique sur la carte Web Leaflet.
+* **Refonte de la Légende** : Intégration du masquage/affichage dynamique des couches directement depuis la légende interactive et suppression du contrôle de couches standard en haut à droite.
+* **Procédures PEJ dans le profil PNF** : Vérification et prise en compte complète des Procédures d'Enquête Judiciaire (PEJ) dans l'explorateur et la cartographie PNF.
+* **Correctif Infobulles / Popups** : Résolution du dysfonctionnement qui empêchait l'affichage des popups interactifs au clic sur les entités de la carte.
 
 ### Édition PDF et Rapports
 * **Commentaires automatiques** : Système de commentaires introductifs auto-générés s'intercalant avant les tableaux et graphiques (`commentaires_auto.py`).
@@ -13,9 +19,12 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 * **Pilotage & Surcharges** : Interrupteur global dans `pdf_presentation.yaml`, drapeaux CLI (`--commentaires-auto` / `--no-commentaires-auto`) et support des surcharges manuelles (`custom_text`).
 * **Mise en page anti-orphelins** : Insertion souple avec `keepWithNext=True` et espacement compact (1.5 mm) pour éviter les grands espaces vides et préserver les contraintes du format Brochure.
 
+### Données & Core
+* **Correctif GeoPandas CRS** : Gestion propre du recalcul des centroïdes en coordonnées géographiques (`EPSG:4326`) pour éliminer les avertissements de précision spatiale.
+
 ### Outils & Tests
 * **Prévisualisation console** : Script `scripts/test_commentaires_cli.py` pour tester instantanément le rendu des textes sans générer de PDF.
-* **Tests unitaires** : Ajout de la suite de tests `tests/test_commentaires.py`.
+* **Tests unitaires** : Ajout et mise à jour des suites de tests (`tests/test_commentaires.py`).
 
 ---
 

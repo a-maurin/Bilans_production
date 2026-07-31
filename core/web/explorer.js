@@ -62,6 +62,119 @@ document.addEventListener('DOMContentLoaded', () => {
     let tableSortAsc = true;
     let isTableExpanded = false;
 
+    // État pour le filtrage dynamique à la volée (Masquage visuel carte/chaleur/stats)
+    const dynamicExclusions = {
+        domaines: new Set(),
+        themes: new Set(),
+        actions: new Set()
+    };
+    let lastFetchedDataPayload = null;
+
+    function isItemDynamicallyExcluded(item) {
+        if (!item) return false;
+        if (item.domaine && dynamicExclusions.domaines.has(item.domaine.trim())) return true;
+        if (item.theme && dynamicExclusions.themes.has(item.theme.trim())) return true;
+        if (item.type_action && dynamicExclusions.actions.has(item.type_action.trim())) return true;
+        return false;
+    }
+
+    function populateDynamicFilterOptions(points = [], procedures = []) {
+        const domaines = new Set();
+        const themes = new Set();
+        const actions = new Set();
+
+        points.concat(procedures).forEach(item => {
+            if (item.domaine && item.domaine.trim()) domaines.add(item.domaine.trim());
+            if (item.theme && item.theme.trim()) themes.add(item.theme.trim());
+            if (item.type_action && item.type_action.trim()) actions.add(item.type_action.trim());
+        });
+
+        const buildGroup = (containerId, set, typeKey, groupWrapperId) => {
+            const container = document.getElementById(containerId);
+            const groupWrapper = document.getElementById(groupWrapperId);
+            if (!container) return;
+            container.innerHTML = '';
+            const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+            if (sorted.length === 0) {
+                if (groupWrapper) groupWrapper.style.display = 'none';
+                return;
+            }
+            if (groupWrapper) groupWrapper.style.display = 'block';
+            sorted.forEach(val => {
+                const label = document.createElement('label');
+                label.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;';
+                label.title = val;
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = val;
+                cb.checked = dynamicExclusions[typeKey].has(val);
+                cb.addEventListener('change', () => {
+                    if (cb.checked) {
+                        dynamicExclusions[typeKey].add(val);
+                    } else {
+                        dynamicExclusions[typeKey].delete(val);
+                    }
+                    updateDynamicFilterBadge();
+                    if (lastFetchedDataPayload && typeof renderLoadedData === 'function') {
+                        renderLoadedData(lastFetchedDataPayload);
+                    }
+                });
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(val));
+                container.appendChild(label);
+            });
+        };
+
+        buildGroup('dynamic-filter-domaines', domaines, 'domaines', 'dynamic-filter-domaines-group');
+        buildGroup('dynamic-filter-themes', themes, 'themes', 'dynamic-filter-themes-group');
+        buildGroup('dynamic-filter-actions', actions, 'actions', 'dynamic-filter-actions-group');
+        updateDynamicFilterBadge();
+    }
+
+    function updateDynamicFilterBadge() {
+        const badge = document.getElementById('dynamic-filter-badge');
+        const count = dynamicExclusions.domaines.size + dynamicExclusions.themes.size + dynamicExclusions.actions.size;
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = `${count} masqué${count > 1 ? 's' : ''}`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    }
+
+    const btnToggleDynFilter = document.getElementById('btn-toggle-dynamic-filter');
+    const dynFilterPanel = document.getElementById('dynamic-filter-panel');
+    const btnResetDynFilter = document.getElementById('btn-reset-dynamic-filter');
+
+    if (btnToggleDynFilter && dynFilterPanel) {
+        btnToggleDynFilter.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dynFilterPanel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!dynFilterPanel.contains(e.target) && e.target !== btnToggleDynFilter && !btnToggleDynFilter.contains(e.target)) {
+                dynFilterPanel.classList.add('hidden');
+            }
+        });
+    }
+
+    if (btnResetDynFilter) {
+        btnResetDynFilter.addEventListener('click', () => {
+            dynamicExclusions.domaines.clear();
+            dynamicExclusions.themes.clear();
+            dynamicExclusions.actions.clear();
+            updateDynamicFilterBadge();
+            if (lastFetchedDataPayload) {
+                populateDynamicFilterOptions(lastFetchedDataPayload.rawResN.points, lastFetchedDataPayload.rawResN.procedures);
+                if (typeof renderLoadedData === 'function') {
+                    renderLoadedData(lastFetchedDataPayload);
+                }
+            }
+        });
+    }
+
     const btnUpdate = document.getElementById('btn-update');
     const selectEchelle = document.getElementById('echelle');
     const inputCode = document.getElementById('code');
@@ -845,14 +958,28 @@ document.addEventListener('DOMContentLoaded', () => {
         attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>'
     }).addTo(map);
 
-    // Helper to calculate dynamic heatmap Max based on current zoom pixel projection
+    // Helper to calculate dynamic heatmap Max based on current viewport visible points
+    const HEATMAP_GRADIENT = {
+        0.2: 'blue',
+        0.45: 'lime',
+        0.7: 'yellow',
+        0.88: 'orange',
+        0.95: 'red'
+    };
+
     function getDynamicMaxForZoom(mapInstance, heatPoints, radiusPx) {
         if (!heatPoints || heatPoints.length === 0) return 1.0;
         const currentZoom = mapInstance.getZoom();
+        const bounds = mapInstance.getBounds();
+        
+        // Uniquement les points visibles dans le champ de vision actuel
+        const visiblePoints = heatPoints.filter(pt => bounds.contains([pt[0], pt[1]]));
+        const pointsToProcess = visiblePoints.length > 0 ? visiblePoints : heatPoints;
+
         const grid = {};
         let maxCount = 1;
         const cellSize = radiusPx / 2;
-        heatPoints.forEach(pt => {
+        pointsToProcess.forEach(pt => {
             const p = mapInstance.project([pt[0], pt[1]], currentZoom);
             const gx = Math.floor(p.x / cellSize);
             const gy = Math.floor(p.y / cellSize);
@@ -860,7 +987,7 @@ document.addEventListener('DOMContentLoaded', () => {
             grid[key] = (grid[key] || 0) + 1;
             if (grid[key] > maxCount) maxCount = grid[key];
         });
-        return Math.max(1.0, maxCount * 0.99);
+        return Math.max(1.0, maxCount);
     }
 
     window.updateClusterOffset = function(zoom) {
@@ -877,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    map.on('zoomend', function () {
+    map.on('zoomend moveend', function () {
         const currentZoom = map.getZoom();
         window.updateClusterOffset(currentZoom);
 
@@ -888,7 +1015,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const newMax = getDynamicMaxForZoom(map, hData, 25);
             heatmapLayer.setOptions({
                 max: newMax,
-                maxZoom: currentZoom // Bypass default Leaflet.heat zoom scaling
+                maxZoom: currentZoom,
+                gradient: HEATMAP_GRADIENT
             });
         }
     });
@@ -1323,39 +1451,99 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Mémorisation de l'état (localStorage et URL)
                 saveStateToLocalStorage();
                 updateURLWithState();
 
-                // Rendu des valeurs d'indicateurs clés
-                function updateStatElement(elementId, statKey) {
-                    const el = document.getElementById(elementId);
-                    if (!el) return;
+                lastFetchedDataPayload = {
+                    resGeoUnits,
+                    rawResN: Object.assign({}, resN),
+                    rawResN1: resN1 ? Object.assign({}, resN1) : null,
+                    isSpatial,
+                    isCompare,
+                    parsedCodes
+                };
 
-                    if (isSpatial) {
-                        let htmlLines = resGeoUnits.map((unit, idx) => {
-                            const val = (unit.stats && unit.stats[statKey] !== undefined) ? unit.stats[statKey] : 0;
-                            const label = parsedCodes[idx];
-                            return `<div style="display: flex; align-items: baseline; margin-bottom: 4px;">
-                                <span style="flex: 1; text-align: right; padding-right: 8px; font-size: 12px !important; color: var(--color-text-muted, #64748B) !important; font-weight: 600 !important; text-transform: uppercase;">${label}</span>
-                                <strong style="flex: 1; text-align: left; padding-left: 8px; font-size: 19px !important; color: var(--color-primary) !important; line-height: 1 !important;">${val}</strong>
-                            </div>`;
-                        });
-                        el.innerHTML = htmlLines.join('');
-                    } else {
-                        const valN = (resN.stats && resN.stats[statKey] !== undefined) ? resN.stats[statKey] : 0;
-                        const valN1 = isCompare && resN1 && resN1.stats ? resN1.stats[statKey] : null;
-
-                        if (valN1 === undefined || valN1 === null) {
-                            el.innerHTML = valN;
-                        } else {
-                            const pct = valN1 > 0 ? ((valN - valN1) / valN1 * 100).toFixed(1) : 0;
-                            const arrow = valN > valN1 ? '▲' : (valN < valN1 ? '▼' : '■');
-                            const color = valN > valN1 ? '#10B981' : (valN < valN1 ? '#EF4444' : '#64748B');
-                            el.innerHTML = `<span style="font-size: 16px;">${valN}</span> <div style="font-size: 9px; font-weight: 600; color: ${color}; margin-top: 2px;">vs ${valN1} (${pct >= 0 ? '+' : ''}${pct}% ${arrow})</div>`;
-                        }
-                    }
+                populateDynamicFilterOptions(resN.points || [], resN.procedures || []);
+                renderLoadedData(lastFetchedDataPayload);
+            })
+            .then(() => {
+                const banner = document.getElementById('profile-warning-banner');
+                if (banner && banner.style.color === 'rgb(239, 68, 68)') {
+                    banner.style.display = 'none';
+                    banner.style.color = '';
                 }
+            })
+            .catch(err => {
+                if (isUnloading) return;
+                console.error('[OFBilan] Erreur chargement données:', err);
+                const banner = document.getElementById('profile-warning-banner');
+                if (banner) {
+                    banner.innerHTML = `⚠️ Impossible de charger les données : ${err.message}`;
+                    banner.style.display = 'block';
+                    banner.style.color = '#EF4444';
+                }
+            })
+            .finally(() => {
+                updateLegend();
+                btnUpdate.disabled = false;
+                btnUpdate.innerHTML = 'Charger les données';
+            });
+    }
+
+    function renderLoadedData(payload) {
+        if (!payload) return;
+        const { resGeoUnits, rawResN, rawResN1, isSpatial, isCompare, parsedCodes } = payload;
+
+        // Application du filtrage dynamique en mémoire à la volée (masquage visuel)
+        const resN = Object.assign({}, rawResN, {
+            points: (rawResN.points || []).filter(pt => !isItemDynamicallyExcluded(pt)),
+            procedures: (rawResN.procedures || []).filter(p => !isItemDynamicallyExcluded(p))
+        });
+        const resN1 = rawResN1 ? Object.assign({}, rawResN1, {
+            points: (rawResN1.points || []).filter(pt => !isItemDynamicallyExcluded(pt)),
+            procedures: (rawResN1.procedures || []).filter(p => !isItemDynamicallyExcluded(p))
+        }) : null;
+
+        // Rendu des valeurs d'indicateurs clés
+        function updateStatElement(elementId, statKey) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            const hasDynamicExclusion = dynamicExclusions.domaines.size > 0 || dynamicExclusions.themes.size > 0 || dynamicExclusions.actions.size > 0;
+
+            if (isSpatial) {
+                let htmlLines = resGeoUnits.map((unit, idx) => {
+                    let val = (unit.stats && unit.stats[statKey] !== undefined) ? unit.stats[statKey] : 0;
+                    if (hasDynamicExclusion && statKey === 'total_controles') {
+                        val = resN.points ? resN.points.length : 0;
+                    }
+                    const label = parsedCodes[idx];
+                    return `<div style="display: flex; align-items: baseline; margin-bottom: 4px;">
+                        <span style="flex: 1; text-align: right; padding-right: 8px; font-size: 12px !important; color: var(--color-text-muted, #64748B) !important; font-weight: 600 !important; text-transform: uppercase;">${label}</span>
+                        <strong style="flex: 1; text-align: left; padding-left: 8px; font-size: 19px !important; color: var(--color-primary) !important; line-height: 1 !important;">${val}</strong>
+                    </div>`;
+                });
+                el.innerHTML = htmlLines.join('');
+            } else {
+                let valN = (resN.stats && resN.stats[statKey] !== undefined) ? resN.stats[statKey] : 0;
+                if (hasDynamicExclusion) {
+                    if (statKey === 'total_controles') valN = resN.points ? resN.points.length : 0;
+                    if (statKey === 'total_pej') valN = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase().includes('PEJ')).length : 0;
+                    if (statKey === 'total_pa') valN = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase().includes('PA')).length : 0;
+                    if (statKey === 'total_pve') valN = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase().includes('PVE')).length : 0;
+                }
+                const valN1 = isCompare && resN1 && resN1.stats ? resN1.stats[statKey] : null;
+
+                if (valN1 === undefined || valN1 === null) {
+                    el.innerHTML = valN;
+                } else {
+                    const pct = valN1 > 0 ? ((valN - valN1) / valN1 * 100).toFixed(1) : 0;
+                    const arrow = valN > valN1 ? '▲' : (valN < valN1 ? '▼' : '■');
+                    const color = valN > valN1 ? '#10B981' : (valN < valN1 ? '#EF4444' : '#64748B');
+                    el.innerHTML = `<span style="font-size: 16px;">${valN}</span> <div style="font-size: 9px; font-weight: 600; color: ${color}; margin-top: 2px;">vs ${valN1} (${pct >= 0 ? '+' : ''}${pct}% ${arrow})</div>`;
+                }
+            }
+        }
 
                 updateStatElement('val-controles', 'total_controles');
                 updateStatElement('val-pej', 'total_pej');
@@ -1363,8 +1551,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatElement('val-usagers-controles', 'total_usagers_controles');
                 updateStatElement('val-pve', 'total_pve');
 
-                const p1 = getParams();
-                const hidePve = p1.domaines.length > 0 || p1.themes.length > 0 || p1.types_action.length > 0;
+                const inputDom = document.getElementById('domaine-snc');
+                const inputTh = document.getElementById('theme-snc');
+                const inputAct = document.getElementById('type-action-snc');
+                const hidePve = (inputDom && inputDom.value.trim()) || (inputTh && inputTh.value.trim()) || (inputAct && inputAct.value.trim());
                 const pveCard = document.getElementById('stat-card-pve');
                 if (pveCard) {
                     pveCard.style.display = hidePve ? 'none' : 'block';
@@ -1520,7 +1710,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         radius: 25,
                         blur: 18,
                         maxZoom: map.getZoom(), // Dynamic zoom recalibration
-                        max: dynamicMax
+                        max: dynamicMax,
+                        gradient: HEATMAP_GRADIENT
                     }).addTo(map);
                 } else {
                     if (heatmapLayer) {
@@ -2390,30 +2581,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 });
-            })
-            // Point A : reset bannière sur succès
-            .then(() => {
-                const banner = document.getElementById('profile-warning-banner');
-                if (banner && banner.style.color === 'rgb(239, 68, 68)') {
-                    banner.style.display = 'none';
-                    banner.style.color = '';
-                }
-            })
-            .catch(err => {
-                if (isUnloading) return;
-                console.error('[OFBilan] Erreur chargement données:', err);
-                const banner = document.getElementById('profile-warning-banner');
-                if (banner) {
-                    banner.innerHTML = `⚠️ Impossible de charger les données : ${err.message}`;
-                    banner.style.display = 'block';
-                    banner.style.color = '#EF4444';
-                }
-            })
-            .finally(() => {
-                updateLegend();
-                btnUpdate.disabled = false;
-                btnUpdate.innerHTML = 'Charger les données';
-            });
     }
 
     // --- GESTION DU TABLEAU DÉTAILLÉ DES CONTRÔLES (LOT 1) ---
@@ -2651,7 +2818,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     radius: 25,
                     blur: 18,
                     maxZoom: map.getZoom(), // Dynamic zoom recalibration
-                    max: dynamicMax
+                    max: dynamicMax,
+                    gradient: HEATMAP_GRADIENT
                 }).addTo(map);
             } else {
                 if (heatmapLayer) {

@@ -649,6 +649,32 @@ Composants principaux :
                                     <input type="radio" name="map-mode" value="heatmap" style="margin: 0;"> Chaleur
                                 </label>
                                 <span style="color: var(--color-border);">|</span>
+                                <div style="position: relative; display: inline-block;">
+                                    <button type="button" id="btn-toggle-dynamic-filter" style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 4px; font-weight: 600; color: #b45309;" title="Masquer à la volée des domaines, thèmes ou actions sans recharger le serveur">
+                                        🚫 Masquer <span id="dynamic-filter-badge" class="hidden" style="background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 700;">0</span>
+                                    </button>
+                                    <div id="dynamic-filter-panel" class="hidden no-print" style="position: absolute; top: 25px; right: 0; z-index: 1000; background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); width: 300px; padding: 10px; font-size: 11px; text-align: left;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                                            <strong style="color: #1e293b;">Masquage à la volée (Carte/Vue)</strong>
+                                            <button type="button" id="btn-reset-dynamic-filter" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px; font-weight: 600;">Réinitialiser</button>
+                                        </div>
+                                        <div style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin;">
+                                            <div id="dynamic-filter-domaines-group">
+                                                <span style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Domaines :</span>
+                                                <div id="dynamic-filter-domaines" style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            </div>
+                                            <div id="dynamic-filter-themes-group">
+                                                <span style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Thèmes :</span>
+                                                <div id="dynamic-filter-themes" style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            </div>
+                                            <div id="dynamic-filter-actions-group">
+                                                <span style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Actions :</span>
+                                                <div id="dynamic-filter-actions" style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span style="color: var(--color-border);">|</span>
                                 <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;">
                                 </div>
                                 <span style="color: var(--color-border);">|</span>

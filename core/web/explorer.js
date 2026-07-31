@@ -123,9 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (kpiEl) kpiEl.classList.add('active-kpi-button');
         }
 
-        if (filterName === 'chart-results') {
+        if (filterName === 'chart-results' || filterName === 'controles' || filterName.startsWith('resultat:')) {
             const cardRes = document.getElementById('card-chart-results');
             if (cardRes) cardRes.classList.add('active-chart-button');
+            const kpiCtrl = document.getElementById('stat-card-controles');
+            if (kpiCtrl) kpiCtrl.classList.add('active-kpi-button');
         } else if (filterName === 'chart-usagers' || filterName === 'usagers' || filterName.startsWith('usager:')) {
             const cardUsa = document.getElementById('card-chart-usagers');
             if (cardUsa) cardUsa.classList.add('active-chart-button');
@@ -187,6 +189,25 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.keys(usagerLegendFilters).forEach(k => {
                 usagerLegendFilters[k] = normalizeStr(k).includes(targetLabel) || targetLabel.includes(normalizeStr(k));
             });
+        } else if (filterName.startsWith('resultat:')) {
+            currentMapMode = 'results';
+            const label = filterName.substring(9).toLowerCase();
+            if (label.includes('conforme') && !label.includes('non')) {
+                legendFilters.ctrl_conforme = true;
+                legendFilters.ctrl_infraction = false;
+                legendFilters.ctrl_attente = false;
+            } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                legendFilters.ctrl_conforme = false;
+                legendFilters.ctrl_infraction = true;
+                legendFilters.ctrl_attente = false;
+            } else {
+                legendFilters.ctrl_conforme = false;
+                legendFilters.ctrl_infraction = false;
+                legendFilters.ctrl_attente = true;
+            }
+            legendFilters.pej = false;
+            legendFilters.pa = false;
+            legendFilters.pve = false;
         }
 
         triggerMapReRender();
@@ -2301,6 +2322,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                            if (activeKpiFilter && activeKpiFilter.startsWith('resultat:')) {
+                                const label = activeKpiFilter.substring(9).toLowerCase();
+                                const res = (pt.resultat || '').toLowerCase();
+                                if (label.includes('conforme') && !label.includes('non')) {
+                                    if (!res.includes('conforme') || res.includes('non')) return;
+                                } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                                    if (!res.includes('infraction') && !res.includes('non') && !res.includes('manquement')) return;
+                                } else {
+                                    if (res.includes('conforme') || res.includes('infraction') || res.includes('non') || res.includes('manquement')) return;
+                                }
+                            }
 
                             const isUsagersMode = (currentMapMode === 'usagers');
                             const usagerCat = getUsagerCategory(pt.type_usager);
@@ -2435,6 +2467,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                            if (activeKpiFilter && activeKpiFilter.startsWith('resultat:')) {
+                                const label = activeKpiFilter.substring(9).toLowerCase();
+                                const res = (pt.resultat || '').toLowerCase();
+                                if (label.includes('conforme') && !label.includes('non')) {
+                                    if (!res.includes('conforme') || res.includes('non')) return;
+                                } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                                    if (!res.includes('infraction') && !res.includes('non') && !res.includes('manquement')) return;
+                                } else {
+                                    if (res.includes('conforme') || res.includes('infraction') || res.includes('non') || res.includes('manquement')) return;
+                                }
+                            }
 
                             const isUsagersMode = (currentMapMode === 'usagers');
                             const usagerCat = getUsagerCategory(pt.type_usager);
@@ -2743,7 +2786,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         responsive: true,
                         maintainAspectRatio: false,
                         onClick: (event, elements) => {
-                            window.handleKpiClick('chart-results');
+                            if (elements && elements.length > 0) {
+                                const index = elements[0].index;
+                                const label = chartResults.data.labels[index];
+                                window.handleKpiClick('resultat:' + label);
+                            } else {
+                                window.handleKpiClick('controles');
+                            }
                         },
                         plugins: {
                             legend: { display: false },
@@ -2762,6 +2811,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const color = resultsColors[idx] || '#64748B';
                         const itemDiv = document.createElement('div');
                         itemDiv.style.cssText = "display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; color: var(--color-text-dark); cursor: pointer;";
+                        itemDiv.title = `Filtrer la carte sur : ${label}`;
                         itemDiv.innerHTML = `
                             <span style="display: inline-block; width: 8px; height: 8px; background-color: ${color}; border-radius: 50%; flex-shrink: 0;"></span>
                             <span>${label}</span>
@@ -2769,7 +2819,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         itemDiv.addEventListener('click', (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            window.handleKpiClick('controles');
+                            window.handleKpiClick('resultat:' + label);
                         });
                         legendResults.appendChild(itemDiv);
                     });
@@ -3357,6 +3407,18 @@ document.addEventListener('DOMContentLoaded', () => {
             data = [...activePoints, ...activeProcedures].filter(item => {
                 const cat = getUsagerCategory(item.type_usager);
                 return usagerLegendFilters[cat] !== false;
+            });
+        } else if (activeKpiFilter && activeKpiFilter.startsWith('resultat:')) {
+            const label = activeKpiFilter.substring(9).toLowerCase();
+            data = activePoints.filter(pt => {
+                const res = (pt.resultat || '').toLowerCase();
+                if (label.includes('conforme') && !label.includes('non')) {
+                    return res.includes('conforme') && !res.includes('non');
+                } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                    return res.includes('infraction') || res.includes('non') || res.includes('manquement');
+                } else {
+                    return !res.includes('conforme') && !res.includes('infraction') && !res.includes('non') && !res.includes('manquement');
+                }
             });
         } else {
             data = [...activePoints];

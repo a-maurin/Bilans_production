@@ -82,10 +82,10 @@ class FieldValueState:
 INHERITED_HINT = "Hérité du socle _defaults.yaml"
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     out = deepcopy(base)
     for key, value in override.items():
-        if key in out and isinstance(out[key], dict) and isinstance(value, dict):
+        if isinstance(out.get(key), dict) and isinstance(value, dict):
             out[key] = _deep_merge(out[key], value)
         else:
             out[key] = deepcopy(value)
@@ -94,17 +94,24 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def load_schema() -> tuple[list[SectionSpec], list[FieldSpec]]:
     """Charge schema_ui.yaml → sections + catalogue pdf_block_fields."""
-    with SCHEMA_UI_PATH.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
+    if not SCHEMA_UI_PATH.is_file():
+        return [], []
+
+    try:
+        with SCHEMA_UI_PATH.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return [], []
+
     sections: list[SectionSpec] = []
     for sec in raw.get("sections", []) or []:
         if not isinstance(sec, dict):
             continue
-        fields: list[FieldSpec] = []
-        for fd in sec.get("fields", []) or []:
-            if not isinstance(fd, dict):
-                continue
-            fields.append(_field_from_dict(fd, target="profile"))
+        fields = [
+            _field_from_dict(fd, target="profile")
+            for fd in sec.get("fields", []) or []
+            if isinstance(fd, dict)
+        ]
         sections.append(
             SectionSpec(
                 id=str(sec.get("id", "")),
@@ -116,12 +123,15 @@ def load_schema() -> tuple[list[SectionSpec], list[FieldSpec]]:
                 ui_mode=str(sec.get("ui_mode", "")),
             )
         )
-    pdf_catalog: list[FieldSpec] = []
-    for fd in raw.get("pdf_block_fields", []) or []:
-        if isinstance(fd, dict):
-            spec = _field_from_dict(fd, target="pdf_presentation")
-            spec.widget = "bool"
-            pdf_catalog.append(spec)
+
+    pdf_catalog = [
+        _field_from_dict(fd, target="pdf_presentation")
+        for fd in raw.get("pdf_block_fields", []) or []
+        if isinstance(fd, dict)
+    ]
+    for spec in pdf_catalog:
+        spec.widget = "bool"
+
     return sections, pdf_catalog
 
 

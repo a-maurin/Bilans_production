@@ -72,36 +72,39 @@ def _fusion_recursif(dict_base: Dict[str, Any], dict_mise_a_jour: Dict[str, Any]
     """Fusionne récursivement deux dictionnaires."""
     resultat = dict_base.copy()
     for cle, valeur in dict_mise_a_jour.items():
-        if isinstance(valeur, dict) and cle in resultat and isinstance(resultat[cle], dict):
+        if isinstance(valeur, dict) and isinstance(resultat.get(cle), dict):
             resultat[cle] = _fusion_recursif(resultat[cle], valeur)
         else:
             resultat[cle] = valeur
     return resultat
+
 
 def lire_parametres() -> Dict[str, Any]:
     """Lit les paramètres depuis le fichier JSON. Renvoie les valeurs par défaut si absent."""
     fichier = get_settings_file_path()
     parametres = DEFAUT_PARAMETRES.copy()
 
-    if fichier.exists():
+    if fichier.is_file():
         try:
-            with open(fichier, 'r', encoding='utf-8') as f:
+            with fichier.open("r", encoding="utf-8") as f:
                 donnees_json = json.load(f)
-                parametres = _fusion_recursif(parametres, donnees_json)
-        except Exception as e:
+                if isinstance(donnees_json, dict):
+                    parametres = _fusion_recursif(parametres, donnees_json)
+        except (OSError, json.JSONDecodeError) as e:
             print(f"Erreur lors de la lecture des paramètres : {e}")
 
     return parametres
 
+
 def sauvegarder_parametres(nouveaux_parametres: Dict[str, Any]) -> None:
     """Sauvegarde les paramètres fournis dans le fichier JSON."""
     fichier = get_settings_file_path()
-    
     parametres_actuels = lire_parametres()
     parametres_fusionnes = _fusion_recursif(parametres_actuels, nouveaux_parametres)
-    
+
     try:
-        with open(fichier, 'w', encoding='utf-8') as f:
+        fichier.parent.mkdir(parents=True, exist_ok=True)
+        with fichier.open("w", encoding="utf-8") as f:
             json.dump(parametres_fusionnes, f, indent=4, ensure_ascii=False)
-    except Exception as e:
+    except OSError as e:
         print(f"Erreur lors de la sauvegarde des paramètres : {e}")

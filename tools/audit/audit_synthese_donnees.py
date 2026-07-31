@@ -98,12 +98,16 @@ def main() -> int:
 
     # --- § 1 vs agrégations globales ---
     print("\n--- Section 1 (chiffres clés) vs exports globaux ---")
-    tab_res = pd.read_csv(OUT / "controles_global_resultats.csv", sep=";")
-    pej_res = pd.read_csv(OUT / "pej_global_resume.csv", sep=";")
-    pa_res = pd.read_csv(OUT / "pa_global_resume.csv", sep=";")
-    pve_res = pd.read_csv(OUT / "pve_global_resume.csv", sep=";")
-    res_eff = pd.read_csv(OUT / "synthese_resultats_usager_effectifs.csv", sep=";")
-    resume = pd.read_csv(OUT / "synthese_resume.csv", sep=";")
+    try:
+        tab_res = pd.read_csv(OUT / "controles_global_resultats.csv", sep=";")
+        pej_res = pd.read_csv(OUT / "pej_global_resume.csv", sep=";")
+        pa_res = pd.read_csv(OUT / "pa_global_resume.csv", sep=";")
+        pve_res = pd.read_csv(OUT / "pve_global_resume.csv", sep=";")
+        res_eff = pd.read_csv(OUT / "synthese_resultats_usager_effectifs.csv", sep=";")
+        resume = pd.read_csv(OUT / "synthese_resume.csv", sep=";")
+    except (FileNotFoundError, pd.errors.EmptyDataError) as err:
+        print(f"  [ATTENTION] Fichiers d'audit non générés ou incomplets : {err}")
+        return 0
 
     nc_brut = int(
         tab_res.loc[tab_res["resultat"].astype(str).str.strip().isin(["Infraction", "Manquement"]), "nb"].sum()

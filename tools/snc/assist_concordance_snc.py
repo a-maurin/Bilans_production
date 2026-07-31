@@ -53,10 +53,16 @@ CONC_PATH = (
 )
 
 
-def charger_referentiel_2024(path: str) -> list[dict]:
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter=";")
-        return list(reader)
+def charger_referentiel_2024(path: str | Path) -> list[dict[str, str]]:
+    p = Path(path)
+    if not p.is_file():
+        return []
+    try:
+        with p.open(newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            return list(reader)
+    except (OSError, csv.Error):
+        return []
 
 
 def charger_concordance(path: str) -> tuple[list[dict], list[str]]:

@@ -34,6 +34,12 @@ import sys
 from pathlib import Path
 
 
+def _count_files(directory: Path) -> int:
+    if not directory.exists():
+        return 0
+    return sum(1 for p in directory.rglob("*") if p.is_file())
+
+
 def main() -> int:
     repo = Path(__file__).resolve().parents[1]
     if len(sys.argv) > 1:
@@ -101,8 +107,8 @@ def main() -> int:
         if not (ref / rel).exists():
             warnings.append(f"Documentation absente : ref/{rel}")
 
-    n_prog = sum(1 for _ in prog.rglob("*") if _.is_file()) if prog.exists() else 0
-    n_hp = sum(1 for _ in hp.rglob("*") if _.is_file()) if hp.exists() else 0
+    n_prog = _count_files(prog)
+    n_hp = _count_files(hp)
 
     print(f"Vérification ref/ — racine : {repo}")
     print(f"Fichiers : programme={n_prog}  hors_programme={n_hp}")

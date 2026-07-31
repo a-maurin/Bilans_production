@@ -78,18 +78,26 @@ def main() -> int:
 
     if out_root.exists():
         print(f"Suppression de l'ancien paquet : {out_root}")
-        shutil.rmtree(out_root)
+        try:
+            shutil.rmtree(out_root)
+        except OSError as err:
+            print(f"Erreur lors de la suppression de l'ancien paquet : {err}", file=sys.stderr)
+            return 1
 
-    out_root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src_prog, dest_ref / "programme")
+    try:
+        out_root.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src_prog, dest_ref / "programme")
 
-    root_readme = repo / "ref" / "README.md"
-    if root_readme.is_file():
-        shutil.copy2(root_readme, dest_ref / "README.md")
+        root_readme = repo / "ref" / "README.md"
+        if root_readme.is_file():
+            shutil.copy2(root_readme, dest_ref / "README.md")
 
-    if guide.is_file():
-        shutil.copy2(guide, out_root / "LISEZMOI_REF.md")
-        shutil.copy2(guide, dest_ref / "LISEZMOI_fichiers.md")
+        if guide.is_file():
+            shutil.copy2(guide, out_root / "LISEZMOI_REF.md")
+            shutil.copy2(guide, dest_ref / "LISEZMOI_fichiers.md")
+    except OSError as err:
+        print(f"Erreur E/S lors de la création du paquet : {err}", file=sys.stderr)
+        return 1
 
     n_files = sum(1 for _ in dest_ref.rglob("*") if _.is_file())
     print(f"Paquet créé : {out_root}")

@@ -46,20 +46,23 @@ def list_profiles() -> list[str]:
     profils_dir = PROJECT_ROOT / "config" / "profils_bilan"
     id_to_label: dict[str, str] = {}
 
-    themes = load_ref_themes_ctrl(PROJECT_ROOT)
-    if themes:
-        for t in themes:
-            pid = str(t.get("id", "")).strip()
-            if not pid or pid in _HIDDEN_PROFILES:
-                continue
-            label = str(t.get("label", pid)).strip() or pid
-            id_to_label[pid] = label
-    if profils_dir.exists():
+    try:
+        themes = load_ref_themes_ctrl(PROJECT_ROOT)
+        if themes:
+            for t in themes:
+                pid = str(t.get("id", "")).strip()
+                if not pid or pid in _HIDDEN_PROFILES:
+                    continue
+                label = str(t.get("label", pid)).strip() or pid
+                id_to_label[pid] = label
+    except Exception:
+        pass
+
+    if profils_dir.is_dir():
         for p in profils_dir.glob("*.yaml"):
             pid = p.stem
-            if pid in _HIDDEN_PROFILES:
-                continue
-            id_to_label.setdefault(pid, pid)
+            if pid not in _HIDDEN_PROFILES:
+                id_to_label.setdefault(pid, pid)
 
     if not id_to_label:
         return []
@@ -67,7 +70,7 @@ def list_profiles() -> list[str]:
     types_usager_cible_id = "types_usager_cible"
     if types_usager_cible_id not in id_to_label:
         yaml_path = profils_dir / f"{types_usager_cible_id}.yaml"
-        if yaml_path.exists() and types_usager_cible_id not in _HIDDEN_PROFILES:
+        if yaml_path.is_file() and types_usager_cible_id not in _HIDDEN_PROFILES:
             id_to_label[types_usager_cible_id] = "Types d'usagers – ciblé"
 
     priority_order: dict[str, int] = {
@@ -86,27 +89,23 @@ def list_profiles() -> list[str]:
         label = id_to_label.get(pid, pid)
         return (base_rank, label.lower())
 
-    all_ids = list(id_to_label.keys())
-    all_ids.sort(key=_sort_key)
-    return all_ids
+    return sorted(id_to_label.keys(), key=_sort_key)
 
 
 def resolve_profile_ids(raw_ids: list[str]) -> list[str]:
     """Résout les numéros (1, 2, …) en identifiants selon list_profiles()."""
     themes = list_profiles()
     if not themes:
-        return raw_ids
+        return [str(p).strip() for p in raw_ids if str(p).strip()]
+
     resolved: list[str] = []
-    for p in raw_ids:
-        p = str(p).strip()
+    for raw in raw_ids:
+        p = str(raw).strip()
         if not p:
             continue
         if p.isdigit():
             n = int(p)
-            if 1 <= n <= len(themes):
-                resolved.append(themes[n - 1])
-            else:
-                resolved.append(p)
+            resolved.append(themes[n - 1] if 1 <= n <= len(themes) else p)
         else:
             resolved.append(p)
     return resolved

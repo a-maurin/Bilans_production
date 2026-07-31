@@ -30,34 +30,33 @@ Rôles principaux :
   3. `unload()` : nettoyage des boutons et arrêt propre du serveur web à la fermeture de QGIS.
 ========================================================================================
 """
-from qgis.PyQt.QtCore import Qt
+import os
+import subprocess
+import sys
+import webbrowser
+from pathlib import Path
+from typing import Any
+
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
-import os
-import sys
-import subprocess
-import webbrowser
-import threading
-import time
+
 
 class OFBilanPlugin:
     """Plugin QGIS pour lancer OFBilan."""
 
-    def __init__(self, iface):
+    def __init__(self, iface: Any) -> None:
         self.iface = iface
-        self.plugin_dir = os.path.dirname(__file__)
-        self.action = None
-        self.server_process = None
+        self.plugin_dir = Path(__file__).resolve().parent
+        self.action: QAction | None = None
+        self.server_process: subprocess.Popen[bytes] | None = None
 
-    def initGui(self):
+    def initGui(self) -> None:
         """Initialise l'interface QGIS (bouton de barre d'outils et menu)."""
-        icon_path = ':/images/themes/default/mActionStart.svg' # Fallback QGIS icon
-        
-        # Si OFBilan possède un icône, on l'utilise
-        local_icon = os.path.join(self.plugin_dir, 'icon.svg')
-        if os.path.exists(local_icon):
-            icon_path = local_icon
-            
+        icon_path = ':/images/themes/default/mActionStart.svg'
+        local_icon = self.plugin_dir / 'icon.svg'
+        if local_icon.is_file():
+            icon_path = str(local_icon)
+
         icon = QIcon(icon_path)
         self.action = QAction(icon, "Lancer OFBilan Explorer", self.iface.mainWindow())
         self.action.triggered.connect(self.run)
@@ -65,58 +64,56 @@ class OFBilanPlugin:
         self.iface.addToolBarIcon(self.action)
         self.iface.addPluginToMenu("&OFBilan", self.action)
 
-    def unload(self):
+    def unload(self) -> None:
         """Nettoyage lors du déchargement du plugin."""
         if self.action:
             self.iface.removePluginMenu("&OFBilan", self.action)
             self.iface.removeToolBarIcon(self.action)
-        
-        # Arrêter le serveur s'il tourne encore
+
         if self.server_process and self.server_process.poll() is None:
             self.server_process.terminate()
 
-    def run(self):
+    def run(self) -> None:
         """Logique exécutée au clic sur le bouton."""
         port = 8000
         try:
             from .core.parametres_utilisateur import lire_parametres
             port = int(lire_parametres().get("tech", {}).get("port_serveur", 8000))
-        except Exception:
+        except (ImportError, ValueError, AttributeError, KeyError):
             pass
 
         if self.server_process and self.server_process.poll() is None:
-            QMessageBox.information(self.iface.mainWindow(), "OFBilan", "Le serveur OFBilan est déjà en cours d'exécution.\nOuverture du navigateur...")
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                "OFBilan",
+                "Le serveur OFBilan est déjà en cours d'exécution.\nOuverture du navigateur..."
+            )
             webbrowser.open(f'http://localhost:{port}/explorer.html')
             return
 
-        # Configuration de l'environnement pour importer 'core'
         env = os.environ.copy()
-        env["PYTHONPATH"] = self.plugin_dir + os.pathsep + env.get("PYTHONPATH", "")
-        
-        serveur_script = os.path.join(self.plugin_dir, 'core', 'web', 'serveur.py')
-        
+        env["PYTHONPATH"] = str(self.plugin_dir) + os.pathsep + env.get("PYTHONPATH", "")
+        serveur_script = self.plugin_dir / 'core' / 'web' / 'serveur.py'
+
         try:
             python_exe = sys.executable
             if os.name == 'nt' and "qgis" in python_exe.lower():
-                bin_dir = os.path.dirname(python_exe)
-                if os.path.exists(os.path.join(bin_dir, "python.exe")):
-                    python_exe = os.path.join(bin_dir, "python.exe")
-                elif os.path.exists(os.path.join(bin_dir, "python3.exe")):
-                    python_exe = os.path.join(bin_dir, "python3.exe")
-                    
-            # Lancement en arrière-plan sans bloquer QGIS
+                bin_dir = Path(python_exe).parent
+                if (bin_dir / "python.exe").exists():
+                    python_exe = str(bin_dir / "python.exe")
+                elif (bin_dir / "python3.exe").exists():
+                    python_exe = str(bin_dir / "python3.exe")
+
             self.server_process = subprocess.Popen(
-                [python_exe, serveur_script],
+                [python_exe, str(serveur_script)],
                 env=env,
-                cwd=self.plugin_dir,
+                cwd=str(self.plugin_dir),
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
-            
-            # Ouverture immédiate de la page de chargement (qui attendra le serveur)
-            loading_html = os.path.join(self.plugin_dir, 'core', 'web', 'loading.html')
-            webbrowser.open(f"file:///{loading_html.replace(os.sep, '/')}?port={port}")
-            
+
+            loading_html = self.plugin_dir / 'core' / 'web' / 'loading.html'
+            webbrowser.open(f"{loading_html.as_uri()}?port={port}")
             self.iface.messageBar().pushMessage("OFBilan", "Démarrage du serveur web...", level=0, duration=3)
-            
+
         except Exception as e:
             QMessageBox.critical(self.iface.mainWindow(), "Erreur OFBilan", f"Impossible de lancer le serveur :\n{e}")

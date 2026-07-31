@@ -60,7 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let gabaritsList = [];
     
     fetch('/api/profils')
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
         .then(data => {
             if (Array.isArray(data)) {
                 profilesList = data;
@@ -71,7 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let userDefaultGabarit = 'gabarit_defaut';
 
     fetch('/api/settings')
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
         .then(data => {
             if (data && data.geo && data.geo.gabarit_defaut) {
                 userDefaultGabarit = data.geo.gabarit_defaut;
@@ -125,11 +131,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function normalizeStr(str) {
+        if (!str) return '';
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+
     function renderDropdown(filterText = '') {
         profilsDropdown.innerHTML = '';
-        const search = filterText.toLowerCase().trim();
+        const search = normalizeStr(filterText.trim());
         const filtered = profilesList.filter(p =>
-            p.label.toLowerCase().includes(search) || p.value.toLowerCase().includes(search)
+            normalizeStr(p.label).includes(search) || normalizeStr(p.value).includes(search)
         );
 
         if (filtered.length === 0) {
@@ -332,10 +343,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupCombobox(inputEl, toggleBtn, dropdownEl, getListDataFn) {
         function render(filterText = '') {
             dropdownEl.innerHTML = '';
-            const search = filterText.toLowerCase().trim();
+            const search = normalizeStr(filterText.trim());
             const listData = getListDataFn();
             const filtered = listData.filter(p => 
-                p.label.toLowerCase().includes(search) || p.value.toLowerCase().includes(search)
+                normalizeStr(p.label).includes(search) || normalizeStr(p.value).includes(search)
             );
 
             if (filtered.length === 0) {

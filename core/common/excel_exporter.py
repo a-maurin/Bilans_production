@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # MISE EN FORME DES FEUILLES DE CALCUL (STYLES OFB ET AUTO-FIT)
 # ========================================================================================
 
-def _format_worksheet(ws) -> None:
+def _format_worksheet(ws: Any) -> None:
     """Applique la charte graphique OFB et ajuste automatiquement la largeur des colonnes."""
     header_fill = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
     header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -54,7 +54,8 @@ def _format_worksheet(ws) -> None:
         bottom=Side(style="thin", color="D3D3D3")
     )
 
-    ws.views.sheetView[0].showGridLines = True
+    if hasattr(ws.views, "sheetView") and ws.views.sheetView:
+        ws.views.sheetView[0].showGridLines = True
 
     # 1. En-têtes (fond bleu roi, texte blanc gras, centré)
     for cell in ws[1]:
@@ -74,11 +75,8 @@ def _format_worksheet(ws) -> None:
 
     # 3. Calcul dynamique de la largeur optimale des colonnes
     for col in ws.columns:
-        max_len = 0
         col_letter = get_column_letter(col[0].column)
-        for cell in col:
-            val_str = str(cell.value or "")
-            max_len = max(max_len, len(val_str))
+        max_len = max((len(str(cell.value or "")) for cell in col), default=0)
         ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
 
@@ -109,9 +107,8 @@ def export_synthese_region_excel(
             if df_ratio is not None and not df_ratio.empty:
                 df_ratio.to_excel(writer, sheet_name="Synthese_Regionale", index=False)
             else:
-                agg_region = df_detail.groupby(["domaine", "theme"])[
-                    [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_detail.columns]
-                ].sum().reset_index()
+                cols = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_detail.columns]
+                agg_region = df_detail.groupby(["domaine", "theme"])[cols].sum().reset_index()
                 agg_region.to_excel(writer, sheet_name="Synthese_Regionale", index=False)
 
             _format_worksheet(writer.sheets["Synthese_Regionale"])
@@ -133,7 +130,7 @@ def export_synthese_region_excel(
         logger.info(f"Classeur Excel régional formaté généré avec succès : {xlsx_path}")
         return xlsx_path
 
-    except Exception as e:
+    except (OSError, ValueError, KeyError) as e:
         logger.error(f"Erreur lors de la génération du classeur Excel {xlsx_path} : {e}")
         return None
 

@@ -62,44 +62,130 @@ document.addEventListener('DOMContentLoaded', () => {
     let tableSortAsc = true;
     let isTableExpanded = false;
 
+    // Fonction utilitaire de normalisation (insensibilité à la casse et aux accents)
+    function normalizeStr(str) {
+        if (!str) return '';
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+
     // État pour le filtrage dynamique à la volée (Masquage visuel carte/chaleur/stats)
     const dynamicExclusions = {
+        types: new Set(),
         domaines: new Set(),
         themes: new Set(),
         actions: new Set()
     };
     let lastFetchedDataPayload = null;
 
-    function isItemDynamicallyExcluded(item) {
+    function isItemDynamicallyExcluded(item, isProcedure = false) {
         if (!item) return false;
-        if (item.domaine && dynamicExclusions.domaines.has(item.domaine.trim())) return true;
-        if (item.theme && dynamicExclusions.themes.has(item.theme.trim())) return true;
-        if (item.type_action && dynamicExclusions.actions.has(item.type_action.trim())) return true;
-        return false;
+
+        if (isProcedure) {
+            const ptype = (item.type || '').toUpperCase();
+            if (ptype.includes('PEJ') && dynamicExclusions.types.has('PEJ')) return true;
+            if (ptype.includes('PA') && dynamicExclusions.types.has('PA')) return true;
+            if (ptype.includes('PVE') && dynamicExclusions.types.has('PVE')) return true;
+        } else {
+            if (dynamicExclusions.types.has('CONTROLES')) return true;
+        }
+
+        const dom = item.domaine?.trim();
+        const thm = item.theme?.trim();
+        const act = item.type_action?.trim();
+        return (dom && dynamicExclusions.domaines.has(dom)) ||
+               (thm && dynamicExclusions.themes.has(thm)) ||
+               (act && dynamicExclusions.actions.has(act));
     }
 
     function populateDynamicFilterOptions(points = [], procedures = []) {
-        const domaines = new Set();
-        const themes = new Set();
-        const actions = new Set();
+        const sets = { domaines: new Set(), themes: new Set(), actions: new Set() };
+        const keys = [
+            { field: 'domaine', set: sets.domaines },
+            { field: 'theme', set: sets.themes },
+            { field: 'type_action', set: sets.actions }
+        ];
 
         points.concat(procedures).forEach(item => {
-            if (item.domaine && item.domaine.trim()) domaines.add(item.domaine.trim());
-            if (item.theme && item.theme.trim()) themes.add(item.theme.trim());
-            if (item.type_action && item.type_action.trim()) actions.add(item.type_action.trim());
+            if (!item) return;
+            keys.forEach(({ field, set }) => {
+                const val = item[field]?.trim();
+                if (val) set.add(val);
+            });
         });
 
-        const buildGroup = (containerId, set, typeKey, groupWrapperId) => {
+        const procTypes = [
+            { label: 'Contrôles (points)', key: 'CONTROLES' },
+            { label: 'PEJ (Procédures Judiciaires)', key: 'PEJ' },
+            { label: 'PA (Procédures Admin.)', key: 'PA' },
+            { label: 'PVe (Procès-Verbaux)', key: 'PVE' }
+        ];
+
+        const renderTypesGroup = (searchTerm = '') => {
+            const container = document.getElementById('dynamic-filter-types');
+            const groupWrapper = document.getElementById('dynamic-filter-types-group');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const searchNorm = normalizeStr(searchTerm);
+            const filteredTypes = procTypes.filter(t => !searchTerm || normalizeStr(t.label).includes(searchNorm) || normalizeStr(t.key).includes(searchNorm));
+
+            if (groupWrapper) groupWrapper.style.display = filteredTypes.length === 0 ? 'none' : 'block';
+            if (filteredTypes.length === 0) return;
+
+            const sortedTypes = [...filteredTypes].sort((a, b) => {
+                const aChecked = dynamicExclusions.types.has(a.key);
+                const bChecked = dynamicExclusions.types.has(b.key);
+                if (aChecked !== bChecked) return aChecked ? -1 : 1;
+                return a.label.localeCompare(b.label, 'fr');
+            });
+
+            sortedTypes.forEach(t => {
+                const label = document.createElement('label');
+                label.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;';
+                label.title = t.label;
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = t.key;
+                cb.checked = dynamicExclusions.types.has(t.key);
+                cb.addEventListener('change', () => {
+                    if (cb.checked) {
+                        dynamicExclusions.types.add(t.key);
+                    } else {
+                        dynamicExclusions.types.delete(t.key);
+                    }
+                    updateDynamicFilterBadge();
+                    renderTypesGroup(document.getElementById('dynamic-filter-search')?.value || '');
+                    if (lastFetchedDataPayload && typeof renderLoadedData === 'function') {
+                        renderLoadedData(lastFetchedDataPayload);
+                    }
+                });
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(t.label));
+                container.appendChild(label);
+            });
+        };
+
+        const renderItemsGroup = (containerId, set, typeKey, groupWrapperId, searchTerm = '') => {
             const container = document.getElementById(containerId);
             const groupWrapper = document.getElementById(groupWrapperId);
             if (!container) return;
             container.innerHTML = '';
-            const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
-            if (sorted.length === 0) {
-                if (groupWrapper) groupWrapper.style.display = 'none';
-                return;
+
+            const searchNorm = normalizeStr(searchTerm);
+            const allItems = Array.from(set).filter(val => !searchTerm || normalizeStr(val).includes(searchNorm));
+
+            if (groupWrapper) {
+                groupWrapper.style.display = allItems.length === 0 ? 'none' : 'block';
             }
-            if (groupWrapper) groupWrapper.style.display = 'block';
+            if (allItems.length === 0) return;
+
+            const sorted = allItems.sort((a, b) => {
+                const aChecked = dynamicExclusions[typeKey].has(a);
+                const bChecked = dynamicExclusions[typeKey].has(b);
+                if (aChecked !== bChecked) return aChecked ? -1 : 1;
+                return a.localeCompare(b, 'fr');
+            });
+
             sorted.forEach(val => {
                 const label = document.createElement('label');
                 label.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;';
@@ -115,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         dynamicExclusions[typeKey].delete(val);
                     }
                     updateDynamicFilterBadge();
+                    renderItemsGroup(containerId, set, typeKey, groupWrapperId, document.getElementById('dynamic-filter-search')?.value || '');
                     if (lastFetchedDataPayload && typeof renderLoadedData === 'function') {
                         renderLoadedData(lastFetchedDataPayload);
                     }
@@ -125,15 +212,27 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        buildGroup('dynamic-filter-domaines', domaines, 'domaines', 'dynamic-filter-domaines-group');
-        buildGroup('dynamic-filter-themes', themes, 'themes', 'dynamic-filter-themes-group');
-        buildGroup('dynamic-filter-actions', actions, 'actions', 'dynamic-filter-actions-group');
+        const renderAllGroups = (searchTerm = '') => {
+            renderTypesGroup(searchTerm);
+            renderItemsGroup('dynamic-filter-domaines', sets.domaines, 'domaines', 'dynamic-filter-domaines-group', searchTerm);
+            renderItemsGroup('dynamic-filter-themes', sets.themes, 'themes', 'dynamic-filter-themes-group', searchTerm);
+            renderItemsGroup('dynamic-filter-actions', sets.actions, 'actions', 'dynamic-filter-actions-group', searchTerm);
+        };
+
+        const searchInput = document.getElementById('dynamic-filter-search');
+        if (searchInput) {
+            searchInput.oninput = (e) => {
+                renderAllGroups(e.target.value.trim());
+            };
+        }
+
+        renderAllGroups(searchInput ? searchInput.value.trim() : '');
         updateDynamicFilterBadge();
     }
 
     function updateDynamicFilterBadge() {
         const badge = document.getElementById('dynamic-filter-badge');
-        const count = dynamicExclusions.domaines.size + dynamicExclusions.themes.size + dynamicExclusions.actions.size;
+        const count = dynamicExclusions.types.size + dynamicExclusions.domaines.size + dynamicExclusions.themes.size + dynamicExclusions.actions.size;
         if (badge) {
             if (count > 0) {
                 badge.textContent = `${count} masqué${count > 1 ? 's' : ''}`;
@@ -162,9 +261,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnResetDynFilter) {
         btnResetDynFilter.addEventListener('click', () => {
+            dynamicExclusions.types.clear();
             dynamicExclusions.domaines.clear();
             dynamicExclusions.themes.clear();
             dynamicExclusions.actions.clear();
+            const searchInput = document.getElementById('dynamic-filter-search');
+            if (searchInput) searchInput.value = '';
             updateDynamicFilterBadge();
             if (lastFetchedDataPayload) {
                 populateDynamicFilterOptions(lastFetchedDataPayload.rawResN.points, lastFetchedDataPayload.rawResN.procedures);
@@ -776,10 +878,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function render(filterText = '') {
             dropdownEl.innerHTML = '';
-            const search = filterText.toLowerCase().trim();
+            const search = normalizeStr(filterText.trim());
             const listData = getListDataFn();
             const filtered = listData.filter(p =>
-                p.label.toLowerCase().includes(search) || p.value.toLowerCase().includes(search)
+                normalizeStr(p.label).includes(search) || normalizeStr(p.value).includes(search)
             );
 
             if (filtered.length === 0) {
@@ -1496,12 +1598,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Application du filtrage dynamique en mémoire à la volée (masquage visuel)
         const resN = Object.assign({}, rawResN, {
-            points: (rawResN.points || []).filter(pt => !isItemDynamicallyExcluded(pt)),
-            procedures: (rawResN.procedures || []).filter(p => !isItemDynamicallyExcluded(p))
+            points: (rawResN.points || []).filter(pt => !isItemDynamicallyExcluded(pt, false)),
+            procedures: (rawResN.procedures || []).filter(p => !isItemDynamicallyExcluded(p, true))
         });
         const resN1 = rawResN1 ? Object.assign({}, rawResN1, {
-            points: (rawResN1.points || []).filter(pt => !isItemDynamicallyExcluded(pt)),
-            procedures: (rawResN1.procedures || []).filter(p => !isItemDynamicallyExcluded(p))
+            points: (rawResN1.points || []).filter(pt => !isItemDynamicallyExcluded(pt, false)),
+            procedures: (rawResN1.procedures || []).filter(p => !isItemDynamicallyExcluded(p, true))
         }) : null;
 
         // Rendu des valeurs d'indicateurs clés
@@ -1509,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const el = document.getElementById(elementId);
             if (!el) return;
 
-            const hasDynamicExclusion = dynamicExclusions.domaines.size > 0 || dynamicExclusions.themes.size > 0 || dynamicExclusions.actions.size > 0;
+            const hasDynamicExclusion = dynamicExclusions.types.size > 0 || dynamicExclusions.domaines.size > 0 || dynamicExclusions.themes.size > 0 || dynamicExclusions.actions.size > 0;
 
             if (isSpatial) {
                 let htmlLines = resGeoUnits.map((unit, idx) => {

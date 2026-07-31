@@ -658,7 +658,14 @@ Composants principaux :
                                             <strong style="color: #1e293b;">Masquage à la volée (Carte/Vue)</strong>
                                             <button type="button" id="btn-reset-dynamic-filter" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px; font-weight: 600;">Réinitialiser</button>
                                         </div>
+                                        <div style="margin-bottom: 6px;">
+                                            <input type="text" id="dynamic-filter-search" placeholder="🔍 Rechercher un filtre..." style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--color-border); border-radius: 4px; box-sizing: border-box;">
+                                        </div>
                                         <div style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin;">
+                                            <div id="dynamic-filter-types-group">
+                                                <span style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Procédures / Catégories :</span>
+                                                <div id="dynamic-filter-types" style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            </div>
                                             <div id="dynamic-filter-domaines-group">
                                                 <span style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Domaines :</span>
                                                 <div id="dynamic-filter-domaines" style="display: flex; flex-direction: column; gap: 2px;"></div>

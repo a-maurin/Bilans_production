@@ -93,22 +93,30 @@ def tracer_cartouche(ax, titre: str, dept_name: str, date_deb: str, date_fin: st
     # Footer
     ax.text(0.1, 0.05, "Sources: OFB, IGN\nProjection: RGF93", fontsize=8, color="#999999", transform=ax.transAxes)
 
-def exporter_carte_matplotlib(prof, output_path: Path, dept_code: str, layers_to_render: list, project_root: Path):
+def exporter_carte_matplotlib(prof: Any, output_path: Path, dept_code: str, layers_to_render: list, project_root: Path) -> bool:
     """Point d'entree principal du generateur."""
-    logger.info(f"Génération Matplotlib (Fallback) pour le profil {prof.id}")
-    
-    fig = plt.figure(figsize=(11.69, 8.27), dpi=300) # A4 Landscape
-    gs = fig.add_gridspec(1, 2, width_ratios=[4, 1], wspace=0)
-    
-    ax_map = fig.add_subplot(gs[0])
-    ax_side = fig.add_subplot(gs[1])
-    
-    pochoir = charger_couche_pochoir(dept_code, project_root)
-    tracer_carte(ax_map, pochoir, layers_to_render)
-    
-    titre = getattr(prof, "title_main", "") or getattr(prof, "title", "Bilan")
-    tracer_cartouche(ax_side, titre, f"Département {dept_code}", prof.date_deb, prof.date_fin)
-    
-    fig.savefig(output_path, bbox_inches="tight", dpi=300)
-    plt.close(fig)
-    return True
+    logger.info(f"Génération Matplotlib (Fallback) pour le profil {getattr(prof, 'id', '')}")
+
+    fig = plt.figure(figsize=(11.69, 8.27), dpi=300)  # A4 Landscape
+    try:
+        gs = fig.add_gridspec(1, 2, width_ratios=[4, 1], wspace=0)
+
+        ax_map = fig.add_subplot(gs[0])
+        ax_side = fig.add_subplot(gs[1])
+
+        pochoir = charger_couche_pochoir(dept_code, project_root)
+        tracer_carte(ax_map, pochoir, layers_to_render)
+
+        titre = getattr(prof, "title_main", "") or getattr(prof, "title", "Bilan")
+        date_deb = getattr(prof, "date_deb", "")
+        date_fin = getattr(prof, "date_fin", "")
+        tracer_cartouche(ax_side, titre, f"Département {dept_code}", date_deb, date_fin)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, bbox_inches="tight", dpi=300)
+        return True
+    except Exception as err:
+        logger.error(f"Erreur génération carte Matplotlib : {err}")
+        return False
+    finally:
+        plt.close(fig)

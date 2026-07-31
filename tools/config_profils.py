@@ -74,15 +74,14 @@ INHERITED_FG = "#6b6b6b"
 
 def lister_profils(directory: Path) -> list[tuple[str, Path, str]]:
     """(label affiché, chemin fichier, id profil)."""
-    profils: list[tuple[str, Path, str]] = []
     if not directory.exists():
-        return profils
+        return []
 
+    profils: list[tuple[str, Path, str]] = []
     try:
         from ofbilan.engine.catalogue_profils import list_profiles
-
         profile_ids = list_profiles()
-    except Exception:
+    except (ImportError, Exception):
         profile_ids = sorted(
             p.stem
             for p in directory.glob("*.yaml")
@@ -99,7 +98,7 @@ def lister_profils(directory: Path) -> list[tuple[str, Path, str]]:
             label_yaml = data.get("label")
             if isinstance(label_yaml, str) and label_yaml.strip():
                 label = label_yaml.strip()
-        except Exception:
+        except (OSError, ValueError, TypeError):
             pass
         profils.append((f"{label} ({pid})", path, pid))
 

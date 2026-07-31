@@ -62,28 +62,43 @@ BATCH_MOVES = [
     (ROOT / "core" / "cartographie" / "lancer_production_cartographique.bat", ROOT / "scripts" / "windows" / "lancer_production_cartographique.bat"),
 ]
 
-def main():
+def _rel_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+def main() -> None:
     cleaned = 0
     # 1. Suppression des cibles
     for target in TO_REMOVE:
-        if target.is_file():
-            target.unlink()
-            print(f"Fichier supprimé : {target.relative_to(ROOT)}")
-            cleaned += 1
-        elif target.is_dir():
-            shutil.rmtree(target)
-            print(f"Dossier supprimé : {target.relative_to(ROOT)}")
-            cleaned += 1
+        try:
+            if target.is_file():
+                target.unlink()
+                print(f"Fichier supprimé : {_rel_path(target)}")
+                cleaned += 1
+            elif target.is_dir():
+                shutil.rmtree(target)
+                print(f"Dossier supprimé : {_rel_path(target)}")
+                cleaned += 1
+        except OSError as err:
+            print(f"Erreur lors de la suppression de {_rel_path(target)}: {err}")
 
     # 2. Déplacement des fichiers batch
     win_dir = ROOT / "scripts" / "windows"
-    win_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        win_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
 
     for src, dst in BATCH_MOVES:
         if src.exists():
-            shutil.move(str(src), str(dst))
-            print(f"Fichier déplacé : {src.relative_to(ROOT)} -> {dst.relative_to(ROOT)}")
-            cleaned += 1
+            try:
+                shutil.move(str(src), str(dst))
+                print(f"Fichier déplacé : {_rel_path(src)} -> {_rel_path(dst)}")
+                cleaned += 1
+            except OSError as err:
+                print(f"Erreur lors du déplacement de {_rel_path(src)}: {err}")
 
     print(f"\nRevue et nettoyage terminés : {cleaned} action(s) effectuée(s).")
 

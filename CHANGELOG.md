@@ -7,8 +7,9 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 ## [v1.0.6] - 2026-07-31 : Explorer Web interactif, Commentaires auto PDF & Correctifs
 
 ### Explorer Web et Cartographie Dynamique
-* **Indicateurs KPI & Donuts interactifs** : Transformation des cartes d'indicateurs clés (Contrôles, PEJ, PA, PVe, Usagers) et des graphiques camemberts/donuts (Résultats, Types d'usager) en boutons de filtrage dynamique sur la carte Web Leaflet.
-* **Refonte de la Légende** : Intégration du masquage/affichage dynamique des couches directement depuis la légende interactive et suppression du contrôle de couches standard en haut à droite.
+* **Indicateurs KPI & Donuts interactifs** : Transformation des cartes d'indicateurs clés (Contrôles, PEJ, PA, PVe, Usagers) et des graphiques donuts (Résultats, Types d'usager) en boutons de filtrage dynamique cliquables sur la carte Leaflet, la légende et le tableau de données.
+* **Filtrage par tranche de graphique** : Filtrage ciblé au clic sur une tranche spécifique des donuts (ex: usager *Agriculteur* ou résultat *Conforme* / *Infraction* / *En attente*).
+* **Refonte & Réactivation Légende** : Gestion dynamique et réactivation à la volée des entités/usagers masqués depuis les libellés de la légende interactive de la carte.
 * **Procédures PEJ dans le profil PNF** : Vérification et prise en compte complète des Procédures d'Enquête Judiciaire (PEJ) dans l'explorateur et la cartographie PNF.
 * **Correctif Infobulles / Popups** : Résolution du dysfonctionnement qui empêchait l'affichage des popups interactifs au clic sur les entités de la carte.
 

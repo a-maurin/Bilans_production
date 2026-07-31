@@ -22,7 +22,7 @@
 import pytest
 import pandas as pd
 from pathlib import Path
-from core.common.excel_exporter import export_synthese_region_excel
+from core.common.excel_exporter import export_synthese_region_excel, main, load_input_file
 
 def test_export_synthese_region_excel(tmp_path: Path):
     df_detail = pd.DataFrame({
@@ -42,3 +42,21 @@ def test_export_synthese_region_excel(tmp_path: Path):
     assert res is not None
     assert res.exists()
     assert res.name == "Synthese_Region.xlsx"
+
+
+def test_excel_exporter_cli_main(tmp_path: Path):
+    csv_file = tmp_path / "sample.csv"
+    csv_file.write_text("departement;domaine;theme;nb_operations\n21;Eau;Pollution;10\n71;Faune;Chasse;5\n", encoding="utf-8")
+    
+    out_dir = tmp_path / "output"
+    
+    # Test CLI échelle région (déduction automatique des depts)
+    ret = main(["-i", str(csv_file), "-o", str(out_dir), "-f", "Bilan_CLI.xlsx", "-e", "region"])
+    assert ret == 0
+    assert (out_dir / "Bilan_CLI.xlsx").exists()
+
+    # Test CLI échelle département avec --code 21
+    ret_dept = main(["-i", str(csv_file), "-o", str(out_dir), "-f", "Bilan_Dept21.xlsx", "-e", "departement", "-c", "21"])
+    assert ret_dept == 0
+    assert (out_dir / "Bilan_Dept21.xlsx").exists()
+

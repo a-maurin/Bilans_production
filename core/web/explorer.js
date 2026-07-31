@@ -1344,17 +1344,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let heatmapLayer = null;
 
-    // Contrôle des couches
-    const baseMaps = {};
-    const overlayMaps = {
-        "Contrôles (Clusters/Points)": clusterParent,
-        "PEJ": pejParent,
-        "PA": paParent,
-        "PVe": pveParent
+    // État des filtres de la légende (Activé par défaut)
+    window.legendFilters = {
+        ctrl_conforme: true,
+        ctrl_infraction: true,
+        ctrl_attente: true,
+        pej: true,
+        pa: true,
+        pve: true
     };
-    L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
 
-    // Légende de la carte (Dynamique & Rétractable)
+    // Légende de la carte (Dynamique, Interactive & Rétractable)
     const mapLegend = L.control({ position: 'bottomright' });
     let mapLegendDiv = null;
     let isLegendCollapsed = false;
@@ -1368,28 +1368,167 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLegend();
     };
 
+    window.toggleLegendFilter = function(filterKey, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        legendFilters[filterKey] = !legendFilters[filterKey];
+        applyLegendFilters();
+        updateLegend();
+    };
+
+    window.toggleLegendGroup = function(groupKey, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (groupKey === 'controles') {
+            const allActive = legendFilters.ctrl_conforme && legendFilters.ctrl_infraction && legendFilters.ctrl_attente;
+            const targetState = !allActive;
+            legendFilters.ctrl_conforme = targetState;
+            legendFilters.ctrl_infraction = targetState;
+            legendFilters.ctrl_attente = targetState;
+        } else if (groupKey === 'procedures') {
+            const allActive = legendFilters.pej && legendFilters.pa && legendFilters.pve;
+            const targetState = !allActive;
+            legendFilters.pej = targetState;
+            legendFilters.pa = targetState;
+            legendFilters.pve = targetState;
+        }
+        applyLegendFilters();
+        updateLegend();
+    };
+
+    function applyLegendFilters() {
+        // 1. Contrôles (N et N-1)
+        clustersByTerritory.forEach((grp, key) => {
+            let active = true;
+            if (key.endsWith('#10B981')) active = legendFilters.ctrl_conforme;
+            else if (key.endsWith('#EF4444')) active = legendFilters.ctrl_infraction;
+            else if (key.endsWith('#64748B')) active = legendFilters.ctrl_attente;
+
+            if (active) {
+                if (!clusterParent.hasLayer(grp)) clusterParent.addLayer(grp);
+            } else {
+                if (clusterParent.hasLayer(grp)) clusterParent.removeLayer(grp);
+            }
+        });
+
+        if (typeof clustersByTerritoryN1 !== 'undefined') {
+            clustersByTerritoryN1.forEach((grp, key) => {
+                let active = true;
+                if (key.endsWith('#10B981')) active = legendFilters.ctrl_conforme;
+                else if (key.endsWith('#EF4444')) active = legendFilters.ctrl_infraction;
+                else if (key.endsWith('#64748B')) active = legendFilters.ctrl_attente;
+
+                if (active) {
+                    if (!clusterParentN1.hasLayer(grp)) clusterParentN1.addLayer(grp);
+                } else {
+                    if (clusterParentN1.hasLayer(grp)) clusterParentN1.removeLayer(grp);
+                }
+            });
+        }
+
+        // 2. PEJ (N et N-1)
+        pejByTerritory.forEach((grp) => {
+            if (legendFilters.pej) {
+                if (!pejParent.hasLayer(grp)) pejParent.addLayer(grp);
+            } else {
+                if (pejParent.hasLayer(grp)) pejParent.removeLayer(grp);
+            }
+        });
+        if (typeof pejByTerritoryN1 !== 'undefined') {
+            pejByTerritoryN1.forEach((grp) => {
+                if (legendFilters.pej) {
+                    if (!pejParentN1.hasLayer(grp)) pejParentN1.addLayer(grp);
+                } else {
+                    if (pejParentN1.hasLayer(grp)) pejParentN1.removeLayer(grp);
+                }
+            });
+        }
+
+        // 3. PA (N et N-1)
+        paByTerritory.forEach((grp) => {
+            if (legendFilters.pa) {
+                if (!paParent.hasLayer(grp)) paParent.addLayer(grp);
+            } else {
+                if (paParent.hasLayer(grp)) paParent.removeLayer(grp);
+            }
+        });
+        if (typeof paByTerritoryN1 !== 'undefined') {
+            paByTerritoryN1.forEach((grp) => {
+                if (legendFilters.pa) {
+                    if (!paParentN1.hasLayer(grp)) paParentN1.addLayer(grp);
+                } else {
+                    if (paParentN1.hasLayer(grp)) paParentN1.removeLayer(grp);
+                }
+            });
+        }
+
+        // 4. PVe (N et N-1)
+        pveByTerritory.forEach((grp) => {
+            if (legendFilters.pve) {
+                if (!pveParent.hasLayer(grp)) pveParent.addLayer(grp);
+            } else {
+                if (pveParent.hasLayer(grp)) pveParent.removeLayer(grp);
+            }
+        });
+        if (typeof pveByTerritoryN1 !== 'undefined') {
+            pveByTerritoryN1.forEach((grp) => {
+                if (legendFilters.pve) {
+                    if (!pveParentN1.hasLayer(grp)) pveParentN1.addLayer(grp);
+                } else {
+                    if (pveParentN1.hasLayer(grp)) pveParentN1.removeLayer(grp);
+                }
+            });
+        }
+
+        updateMapLayerClasses();
+    }
+
     function updateLegend() {
         if (!mapLegendDiv) return;
 
-        const renderItem = (color, label) => `
-            <div style="display:flex; align-items:center; margin-bottom:2px;">
-                <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background-color:${color}; margin-right:5px; flex-shrink:0; border:1px solid rgba(0,0,0,0.15);"></span>
-                <span style="font-size:9.5px; line-height:1.2; color:#334155;">${label}</span>
-            </div>
-        `;
+        const renderItem = (filterKey, color, label) => {
+            const isActive = legendFilters[filterKey] !== false;
+            const opacityStyle = isActive ? 'opacity: 1;' : 'opacity: 0.4; text-decoration: line-through;';
+            const cleanTitle = label.replace(/<br\s*\/?>/gi, ' ');
+            return `
+                <div onclick="toggleLegendFilter('${filterKey}', event)" title="${isActive ? 'Masquer' : 'Afficher'} ${cleanTitle}" style="display:flex; align-items:center; margin-bottom:3px; cursor:pointer; user-select:none; transition:opacity 0.2s; ${opacityStyle}">
+                    <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background-color:${color}; margin-right:6px; flex-shrink:0; border:1px solid rgba(0,0,0,0.15);"></span>
+                    <span style="font-size:9.5px; line-height:1.2; color:#334155;">${label}</span>
+                </div>
+            `;
+        };
 
-        // Vérifier quelles couches sont activées sur la carte ET contiennent des données
-        const hasControles = (map.hasLayer(clusterParent) && clusterParent.getLayers().length > 0) || 
-                             (typeof clusterParentN1 !== 'undefined' && map.hasLayer(clusterParentN1) && clusterParentN1.getLayers().length > 0);
-                             
-        const hasPej = (map.hasLayer(pejParent) && pejParent.getLayers().length > 0) || 
-                       (typeof pejParentN1 !== 'undefined' && map.hasLayer(pejParentN1) && pejParentN1.getLayers().length > 0);
-                       
-        const hasPa = (map.hasLayer(paParent) && paParent.getLayers().length > 0) || 
-                      (typeof paParentN1 !== 'undefined' && map.hasLayer(paParentN1) && paParentN1.getLayers().length > 0);
-                      
-        const hasPve = (map.hasLayer(pveParent) && pveParent.getLayers().length > 0) || 
-                       (typeof pveParentN1 !== 'undefined' && map.hasLayer(pveParentN1) && pveParentN1.getLayers().length > 0);
+        const renderGroupHeader = (groupKey, title) => {
+            let isAllActive = true;
+            if (groupKey === 'controles') {
+                isAllActive = legendFilters.ctrl_conforme && legendFilters.ctrl_infraction && legendFilters.ctrl_attente;
+            } else if (groupKey === 'procedures') {
+                isAllActive = legendFilters.pej && legendFilters.pa && legendFilters.pve;
+            }
+            const opacityStyle = isAllActive ? 'opacity: 1;' : 'opacity: 0.55;';
+            return `
+                <div onclick="toggleLegendGroup('${groupKey}', event)" title="Tout masquer / Tout afficher (${title})" style="font-weight:bold; font-size:10px; margin-bottom:4px; color:#1e293b; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; ${opacityStyle}">
+                    <span>${title}</span>
+                </div>
+            `;
+        };
+
+        const hasConforme = Array.from(clustersByTerritory.keys()).some(k => k.endsWith('#10B981')) ||
+                            (typeof clustersByTerritoryN1 !== 'undefined' && Array.from(clustersByTerritoryN1.keys()).some(k => k.endsWith('#10B981')));
+        const hasInfraction = Array.from(clustersByTerritory.keys()).some(k => k.endsWith('#EF4444')) ||
+                              (typeof clustersByTerritoryN1 !== 'undefined' && Array.from(clustersByTerritoryN1.keys()).some(k => k.endsWith('#EF4444')));
+        const hasAttente = Array.from(clustersByTerritory.keys()).some(k => k.endsWith('#64748B')) ||
+                           (typeof clustersByTerritoryN1 !== 'undefined' && Array.from(clustersByTerritoryN1.keys()).some(k => k.endsWith('#64748B')));
+
+        const hasControles = hasConforme || hasInfraction || hasAttente;
+
+        const hasPej = pejByTerritory.size > 0 || (typeof pejByTerritoryN1 !== 'undefined' && pejByTerritoryN1.size > 0);
+        const hasPa = paByTerritory.size > 0 || (typeof paByTerritoryN1 !== 'undefined' && paByTerritoryN1.size > 0);
+        const hasPve = pveByTerritory.size > 0 || (typeof pveByTerritoryN1 !== 'undefined' && pveByTerritoryN1.size > 0);
 
         const hasAnyData = hasControles || hasPej || hasPa || hasPve;
 
@@ -1403,27 +1542,25 @@ document.addEventListener('DOMContentLoaded', () => {
         let bodyHtml = '';
 
         if (hasControles) {
-            bodyHtml += `
-                <div style="font-weight:bold; font-size:10px; margin-bottom:3px; color:#1e293b;">Contrôles</div>
-                ${renderItem('#10B981', 'Conforme')}
-                ${renderItem('#EF4444', 'Infraction / <br> Manquement')}
-                ${renderItem('#64748B', 'En attente / <br> Autre')}
-            `;
+            bodyHtml += renderGroupHeader('controles', 'Contrôles');
+            if (hasConforme) bodyHtml += renderItem('ctrl_conforme', '#10B981', 'Conforme');
+            if (hasInfraction) bodyHtml += renderItem('ctrl_infraction', '#EF4444', 'Infraction / <br> Manquement');
+            if (hasAttente) bodyHtml += renderItem('ctrl_attente', '#64748B', 'En attente / <br> Autre');
         }
 
         if (hasPej || hasPa || hasPve) {
-            if (bodyHtml.length > 0) bodyHtml += `<div style="margin-top:5px;"></div>`;
-            bodyHtml += `<div style="font-weight:bold; font-size:10px; margin-bottom:3px; color:#1e293b;">Procédures</div>`;
-            if (hasPej) bodyHtml += renderItem('#3B82F6', 'PEJ');
-            if (hasPa) bodyHtml += renderItem('#8B5CF6', 'PA');
-            if (hasPve) bodyHtml += renderItem('#F97316', 'PVe');
+            if (bodyHtml.length > 0) bodyHtml += `<div style="margin-top:6px;"></div>`;
+            bodyHtml += renderGroupHeader('procedures', 'Procédures');
+            if (hasPej) bodyHtml += renderItem('pej', '#3B82F6', 'PEJ');
+            if (hasPa) bodyHtml += renderItem('pa', '#8B5CF6', 'PA');
+            if (hasPve) bodyHtml += renderItem('pve', '#F97316', 'PVe');
         }
 
         const icon = isLegendCollapsed ? '▲' : '▼';
         const toggleBtn = `<button class="legend-toggle-btn" onclick="toggleMapLegend(event)" title="${isLegendCollapsed ? 'Déplier la légende' : 'Réduire la légende'}" style="background:none; border:none; padding:0 0 0 6px; cursor:pointer; font-size:9px; color:#64748b; font-weight:bold;">${icon}</button>`;
 
         mapLegendDiv.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; ${isLegendCollapsed ? '' : 'margin-bottom:3px; border-bottom:1px solid #f1f5f9; padding-bottom:2px;'}" class="legend-header">
+            <div style="display:flex; align-items:center; justify-content:space-between; ${isLegendCollapsed ? '' : 'margin-bottom:4px; border-bottom:1px solid #f1f5f9; padding-bottom:3px;'}" class="legend-header">
                 <span style="font-weight:bold; font-size:9.5px; color:#475569;">Légende</span>
                 ${toggleBtn}
             </div>
@@ -1452,35 +1589,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateMapLayerClasses() {
         const container = map.getContainer();
-        const hasCtrl = map.hasLayer(clusterParent);
-        const hasPej = map.hasLayer(pejParent);
-        const hasPa = map.hasLayer(paParent);
-        const hasPve = map.hasLayer(pveParent);
+        const hasCtrl = map.hasLayer(clusterParent) && clusterParent.getLayers().length > 0;
+        const hasPej = map.hasLayer(pejParent) && pejParent.getLayers().length > 0;
+        const hasPa = map.hasLayer(paParent) && paParent.getLayers().length > 0;
+        const hasPve = map.hasLayer(pveParent) && pveParent.getLayers().length > 0;
 
         container.classList.toggle('has-ctrl', hasCtrl);
         container.classList.toggle('has-pej', hasPej);
         container.classList.toggle('has-pa', hasPa);
         container.classList.toggle('has-pve', hasPve);
     }
-
-    // Mettre à jour la légende, les classes et synchroniser les calques N-1
-    map.on('overlayadd', function(e) {
-        if (e.layer === clusterParent && typeof clusterParentN1 !== 'undefined') map.addLayer(clusterParentN1);
-        if (e.layer === pejParent && typeof pejParentN1 !== 'undefined') map.addLayer(pejParentN1);
-        if (e.layer === paParent && typeof paParentN1 !== 'undefined') map.addLayer(paParentN1);
-        if (e.layer === pveParent && typeof pveParentN1 !== 'undefined') map.addLayer(pveParentN1);
-        updateLegend();
-        updateMapLayerClasses();
-    });
-
-    map.on('overlayremove', function(e) {
-        if (e.layer === clusterParent && typeof clusterParentN1 !== 'undefined') map.removeLayer(clusterParentN1);
-        if (e.layer === pejParent && typeof pejParentN1 !== 'undefined') map.removeLayer(pejParentN1);
-        if (e.layer === paParent && typeof paParentN1 !== 'undefined') map.removeLayer(paParentN1);
-        if (e.layer === pveParent && typeof pveParentN1 !== 'undefined') map.removeLayer(pveParentN1);
-        updateLegend();
-        updateMapLayerClasses();
-    });
 
     // Color definitions for status markers
     function getMarkerColor(resultat) {
@@ -1905,8 +2023,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false, 'cluster-pve')).addLayers(markers));
                 }
 
+                applyLegendFilters();
                 updateLegend();
-                updateMapLayerClasses();
 
                 if (isHeatmapMode) {
                     clusterParent.eachLayer(l => map.removeLayer(l));
@@ -2022,6 +2140,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     pveByKeyN1.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParentN1, pveByTerritoryN1, getDynamicClusterOpts('#F97316', true, 'cluster-pve-n1')).addLayers(markers));
                 }
 
+                applyLegendFilters();
+                updateLegend();
+
                 // Plus de addLayers global — déjà injecté dans les sous-groupes cloisonnés ci-dessus
 
                 // Render boundary if available
@@ -2046,6 +2167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (hasGeojson) {
                     boundaryLayer = L.geoJSON(combinedGeojson, {
+                        interactive: false,
                         style: function(feature) {
                             let color = '#003A76';
                             let fillColor = 'transparent';
@@ -2079,7 +2201,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 opacity: 0.85,
                                 fillColor: fillColor,
                                 fillOpacity: fillOpacity,
-                                dashArray: dashArray
+                                dashArray: dashArray,
+                                interactive: false
                             };
                         }
                     }).addTo(map);

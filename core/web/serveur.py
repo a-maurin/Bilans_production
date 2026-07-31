@@ -856,8 +856,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # 4.bis. Restriction spatiale globale PNF ou TUB
                 if echelle == "pnf":
                     import logging
+                    from core.common.chargeurs_donnees import merge_pej_faits_locations
                     from core.engine.orchestrateur_profils import _apply_restrict_geo_pnf, _coalesced_insee_for_pnf_mask
                     log = logging.getLogger(__name__)
+                    if not df_pej.empty:
+                        df_pej = merge_pej_faits_locations(df_pej, project_root, echelle, code)
                     df_pts, df_pej, df_pa, df_pve = _apply_restrict_geo_pnf(
                         df_pts, df_pej, df_pa, df_pve, project_root, log
                     )

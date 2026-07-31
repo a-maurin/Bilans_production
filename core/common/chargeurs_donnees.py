@@ -617,8 +617,8 @@ def load_pej(
             elif echelle_norm != "bmi" and "ENTITE_ORIGINE_PROCEDURE" in df.columns:
                 dept_codes = get_departements_pour_perimetre(echelle, code)
                 if dept_codes and "FR" not in dept_codes:
-                    entity_sds = [f"SD{d}" for d in dept_codes]
-                    df = df[df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.strip().isin(entity_sds)].copy()
+                    dept_extracted = df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'(\d+)')[0]
+                    df = df[dept_extracted.isin(dept_codes)].copy()
         if not df.empty and "DC_ID" in df.columns:
             if "DATE_REF" in df.columns:
                 df = df.sort_values("DATE_REF", ascending=False)
@@ -682,8 +682,8 @@ def load_pej(
         elif echelle_norm != "bmi" and "ENTITE_ORIGINE_PROCEDURE" in df.columns:
             dept_codes = get_departements_pour_perimetre(echelle, code)
             if dept_codes and "FR" not in dept_codes:
-                entity_sds = [f"SD{d}" for d in dept_codes]
-                df = df[df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.strip().isin(entity_sds)].copy()
+                dept_extracted = df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'(\d+)')[0]
+                df = df[dept_extracted.isin(dept_codes)].copy()
 
     if not df.empty and "DC_ID" in df.columns:
         if "DATE_REF" in df.columns:

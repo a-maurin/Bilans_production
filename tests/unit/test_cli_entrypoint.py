@@ -200,6 +200,96 @@ def test_bilans_cli_brochure_option(monkeypatch) -> None:
     assert captured["cli_options"]["brochure"] is True
 
 
+def test_bilans_cli_no_brochure_option(monkeypatch) -> None:
+    import core.point_entree_cli as cli
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "bilans",
+            "--profil",
+            "global",
+            "--date-deb",
+            "2025-01-01",
+            "--date-fin",
+            "2025-12-31",
+            "--no-brochure",
+        ],
+    )
+    monkeypatch.setattr(cli, "_check_deps", lambda: None)
+    monkeypatch.setattr(
+        "core.engine.catalogue_profils.resolve_profile_ids",
+        lambda ids: ids,
+    )
+
+    def _fake_run_batch(
+        _profils: list[str],
+        _date_deb: str,
+        _date_fin: str,
+        _echelle: str,
+        _code: str,
+        *,
+        combine: bool = False,
+        cli_options: dict | None = None,
+    ) -> int:
+        captured["cli_options"] = cli_options
+        return 0
+
+    monkeypatch.setattr(
+        "core.engine.execution_lots_profils.run_profiles_batch",
+        _fake_run_batch,
+    )
+    assert cli.main() == 0
+    assert captured["cli_options"]["brochure"] is False
+
+
+def test_bilans_cli_default_brochure_option(monkeypatch) -> None:
+    import core.point_entree_cli as cli
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "bilans",
+            "--profil",
+            "global",
+            "--date-deb",
+            "2025-01-01",
+            "--date-fin",
+            "2025-12-31",
+        ],
+    )
+    monkeypatch.setattr(cli, "_check_deps", lambda: None)
+    monkeypatch.setattr(cli, "_is_interactive", lambda: False)
+    monkeypatch.setattr(
+        "core.engine.catalogue_profils.resolve_profile_ids",
+        lambda ids: ids,
+    )
+
+    def _fake_run_batch(
+        _profils: list[str],
+        _date_deb: str,
+        _date_fin: str,
+        _echelle: str,
+        _code: str,
+        *,
+        combine: bool = False,
+        cli_options: dict | None = None,
+    ) -> int:
+        captured["cli_options"] = cli_options
+        return 0
+
+    monkeypatch.setattr(
+        "core.engine.execution_lots_profils.run_profiles_batch",
+        _fake_run_batch,
+    )
+    assert cli.main() == 0
+    assert "brochure" not in (captured["cli_options"] or {})
+
+
 def test_list_type_usagers(monkeypatch, capsys) -> None:
     import core.point_entree_cli as cli
 

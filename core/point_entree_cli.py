@@ -25,6 +25,11 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
+
+_PROJECT_ROOT_CLI = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT_CLI) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT_CLI))
 
 from core.configuration_journalisation import configure_logging
 from core.chemins_projet import PROJECT_ROOT
@@ -322,6 +327,12 @@ def main() -> int:
         default=None,
         help="Désactiver la génération des commentaires automatiques dans le PDF.",
     )
+    parser.add_argument(
+        "--excel",
+        action="store_true",
+        default=False,
+        help="Générer un classeur Excel (.xlsx) multi-onglets contenant les données calculées.",
+    )
     args = parser.parse_args()
 
     # Configuration du logging selon l'option --debug
@@ -467,8 +478,8 @@ def main() -> int:
     if brochure is None and _is_interactive():
         brochure_rep = ask_choice_list("Activation du mode brochure", [(True, "Oui"), (False, "Non")], False)
         brochure = bool(brochure_rep)
-    if brochure:
-        cli_options["brochure"] = True
+    if brochure is not None:
+        cli_options["brochure"] = brochure
 
     if args.mots_cles:
         cli_options["mots_cles"] = args.mots_cles
@@ -483,6 +494,9 @@ def main() -> int:
 
     if args.gabarit:
         cli_options["gabarit"] = args.gabarit
+
+    if args.excel:
+        cli_options["excel"] = True
 
     from core.common.chargeurs_donnees import init_session_cache, clear_session_cache
 

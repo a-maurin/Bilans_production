@@ -252,7 +252,7 @@ DEFAULT_PDF_PRESENTATION_CONFIG: dict[str, Any] = {
                 {
                     "when": "always",
                     "text": (
-                        "Créé avec OFBilan – Auteur⯯: Aguirre MAURIN (OFB, Service départemental de la Côte d’Or)"
+                        "Créé avec OFBilan – Auteur : Aguirre MAURIN (OFB, Service départemental de la Côte d’Or)"
                     ),
                     "section": "annex"
                 },

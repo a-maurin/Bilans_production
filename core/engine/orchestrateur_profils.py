@@ -740,8 +740,27 @@ def _run_global_profile_via_yaml(
         print("Option --cartes-seules active : arrêt avant la génération du PDF.")
         return 0
 
-    print("[4/5] Exportation des tableaux de résultats (CSV)...")
-    # L'export CSV est fait en interne dans run_aggregations pour le bilan global
+    print("[4/5] Exportation des tableaux de résultats (CSV / Excel)...")
+    if resolved_opts.get("excel") or options.get("excel"):
+        try:
+            from core.common.excel_exporter import export_bilan_excel
+            excel_prefix = str(profile.get("id", "global")).strip()
+            code_suffix = f"_{code_norm}" if code_norm else ""
+            excel_filename = f"bilan_{excel_prefix}_{echelle_norm}{code_suffix}_{date_deb_ts.year}.xlsx"
+            
+            depts_target = [code_norm] if echelle_norm == "departement" else None
+            excel_path = export_bilan_excel(
+                out_dir=out_dir,
+                df_detail=point,
+                echelle=echelle_norm,
+                code=code_norm,
+                depts=depts_target,
+                filename=excel_filename
+            )
+            if excel_path:
+                print(f"  ✅ Classeur Excel disponible : {excel_path}")
+        except Exception as e_excel:
+            logger.warning("Échec de la génération Excel moteur : %s", e_excel)
     print("  Tableaux exportés.")
 
     print("[5/5] Mise en page et création du rapport PDF...")
@@ -1377,9 +1396,11 @@ def _filter_pej(
     ft = profile["filter"]["type"]
 
     # Restriction au département par entité
-    entity_sds = cfg.entity_sds
-    if entity_sds and "ENTITE_ORIGINE_PROCEDURE" in pej.columns:
-        pej = pej[pej["ENTITE_ORIGINE_PROCEDURE"].isin(entity_sds)].copy()
+    from core.common.utilitaires_metier import get_departements_pour_perimetre
+    dept_codes = get_departements_pour_perimetre(cfg.echelle, cfg.code)
+    if dept_codes and "FR" not in dept_codes and "ENTITE_ORIGINE_PROCEDURE" in pej.columns:
+        dept_extracted = pej["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'(\d+)')[0]
+        pej = pej[dept_extracted.isin(dept_codes)].copy()
 
     # Déduplication par DC_ID
     if "DC_ID" in pej.columns:
@@ -1652,8 +1673,21 @@ def _apply_restrict_geo_pnf(
                     context="restriction PNF — PEJ (coordonnées FAITS)",
                     log=log,
                 )
+                if not sub_insee.empty and "insee_comm" in sub_insee.columns:
+                    if "insee_comm" not in pej_filtered.columns:
+                        pej_filtered["insee_comm"] = pd.NA
+                    pej_filtered.loc[sub_insee.index, "insee_comm"] = sub_insee["insee_comm"]
                 m_insee = _mask_insee_in_pnf_codes(sub_insee, pnf_codes)
                 mask_pej = mask_pej | m_insee.reindex(pej_filtered.index, fill_value=False)
+
+        if not point_filtered.empty and "dc_id" in point_filtered.columns and "insee_comm" in point_filtered.columns:
+            pt_insee_map = point_filtered.dropna(subset=["dc_id", "insee_comm"]).set_index("dc_id")["insee_comm"].to_dict()
+            if pt_insee_map:
+                if "insee_comm" not in pej_filtered.columns:
+                    pej_filtered["insee_comm"] = pd.NA
+                dc_series = pej_filtered["DC_ID"].astype(str).str.strip()
+                pej_filtered["insee_comm"] = pej_filtered["insee_comm"].fillna(dc_series.map(pt_insee_map))
+
         if not mask_pej.any():
             log.warning(
                 "Restriction PNF : aucune PEJ ne correspond à un contrôle du périmètre "

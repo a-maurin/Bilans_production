@@ -227,6 +227,30 @@ Composants principaux :
             border: 1px solid var(--color-border);
             text-align: center;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.01);
+            cursor: pointer;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            user-select: none;
+        }
+
+        .stat-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 2px 8px rgba(0, 58, 118, 0.12);
+        }
+
+        .stat-card.active-kpi-button, .interactive-chart-card.active-chart-button {
+            border-color: #2563eb !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25), 0 2px 8px rgba(37, 99, 235, 0.15) !important;
+            background-color: #f0f7ff !important;
+        }
+
+        .interactive-chart-card {
+            cursor: pointer;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .interactive-chart-card:hover {
+            border-color: var(--color-primary) !important;
+            box-shadow: 0 2px 8px rgba(0, 58, 118, 0.12);
         }
 
         .stat-card .value {
@@ -715,15 +739,15 @@ Composants principaux :
             <div class="card" style="margin-bottom: 0;">
                 <h2>Indicateurs Clés</h2>
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card" id="stat-card-controles">
                         <div class="value" id="val-controles">-</div>
                         <div class="label">Contrôles</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="stat-card-pej">
                         <div class="value" id="val-pej">-</div>
                         <div class="label">Procédures Judiciaires</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="stat-card-pa">
                         <div class="value" id="val-pa">-</div>
                         <div class="label">Procédures Adm.</div>
                     </div>
@@ -839,7 +863,7 @@ Composants principaux :
 
                     <!-- Graphiques Donuts Côte à Côte -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div
+                        <div id="card-chart-results" class="interactive-chart-card"
                             style="background:var(--color-bg-card); padding:10px; border:1px solid var(--color-border); border-radius:6px; min-height: 250px; display: flex; flex-direction: column; min-width: 0;">
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -857,7 +881,7 @@ Composants principaux :
                                 style="display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; margin-top: 10px; flex: 1; align-items: center; align-content: center;">
                             </div>
                         </div>
-                        <div
+                        <div id="card-chart-usagers" class="interactive-chart-card"
                             style="background:var(--color-bg-card); padding:10px; border:1px solid var(--color-border); border-radius:6px; min-height: 250px; display: flex; flex-direction: column; min-width: 0;">
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -1399,8 +1423,8 @@ Composants principaux :
                     { element: '.control-panel', popover: { title: '1. Les Filtres', description: 'Sélectionnez vos critères de recherche ici (Période, Territoire...).', side: "right", align: 'start' } },
                     { element: '#btn-update', popover: { title: '2. Charger les données', description: 'Cliquez toujours ici après avoir modifié vos filtres pour mettre à jour la vue.', side: "right", align: 'start' } },
                     { element: '#map', popover: { title: '3. Carte Interactive', description: 'Visualisez vos données. Vous pouvez zoomer et basculer entre points et chaleur.', side: "left", align: 'start' } },
-                    { element: '.stats-grid', popover: { title: '4. Indicateurs Clés', description: 'Voici un résumé rapide de l\'activité sur la période sélectionnée.', side: "bottom", align: 'center' } },
-                    { element: '#chart-results', popover: { title: '5. Graphiques', description: 'Analysez la répartition. Survolez les éléments pour voir les valeurs précises.', side: "top", align: 'center' } },
+                    { element: '.stats-grid', popover: { title: '4. Indicateurs Clés Interactifs', description: 'Cliquez sur un chiffre clé (Contrôles, PEJ, PA, PVe, Usagers) pour filtrer dynamiquement la carte, la légende et le tableau.', side: "bottom", align: 'center' } },
+                    { element: '#card-chart-results', popover: { title: '5. Graphiques Donuts Interactifs', description: 'Cliquez sur un graphique donut ou ses tranches pour afficher par conformité ou par types d\'usagers avec légende synchronisée.', side: "top", align: 'center' } },
                     { element: '#btn-pdf', popover: { title: '6. Édition PDF', description: 'Prêt à exporter ? Cliquez ici pour générer un bilan PDF formaté.', side: "right", align: 'start' } }
                 ]
             });

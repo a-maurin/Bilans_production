@@ -77,6 +77,285 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     let lastFetchedDataPayload = null;
 
+    // Mode d'affichage et filtre interactif des KPI / Donuts
+    let currentMapMode = 'results'; // 'results' | 'usagers'
+    let activeKpiFilter = null; // null | 'controles' | 'pej' | 'pa' | 'pve' | 'usagers' | 'chart-results' | 'chart-usagers' | 'usager:Label'
+    window.usagerLegendFilters = {
+        'Particulier': true,
+        'Agriculteur': true,
+        'Collectivité': true,
+        'Entreprise': true,
+        'Acteurs sylvicoles': true,
+        'Autre': true
+    };
+
+    function getUsagerCategory(typeUsager) {
+        if (!typeUsager) return 'Autre';
+        const l = typeUsager.toLowerCase();
+        if (l.includes('agriculteur')) return 'Agriculteur';
+        if (l.includes('particulier')) return 'Particulier';
+        if (l.includes('collectiv')) return 'Collectivité';
+        if (l.includes('entreprise')) return 'Entreprise';
+        if (l.includes('sylvic')) return 'Acteurs sylvicoles';
+        return 'Autre';
+    }
+
+    function getUsagerColor(typeUsager) {
+        const cat = getUsagerCategory(typeUsager);
+        switch (cat) {
+            case 'Agriculteur': return '#F1C40F';
+            case 'Particulier': return '#2980B9';
+            case 'Collectivité': return '#27AE60';
+            case 'Entreprise': return '#E74C3C';
+            case 'Acteurs sylvicoles': return '#16A085';
+            default: return '#95A5A6';
+        }
+    }
+
+    function setActiveKpiVisual(filterName) {
+        document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('active-kpi-button'));
+        document.querySelectorAll('.interactive-chart-card').forEach(el => el.classList.remove('active-chart-button'));
+
+        if (!filterName) return;
+
+        if (['controles', 'pej', 'pa', 'pve', 'usagers'].includes(filterName)) {
+            const kpiEl = document.getElementById(`stat-card-${filterName}`);
+            if (kpiEl) kpiEl.classList.add('active-kpi-button');
+        }
+
+        if (filterName === 'chart-results') {
+            const cardRes = document.getElementById('card-chart-results');
+            if (cardRes) cardRes.classList.add('active-chart-button');
+        } else if (filterName === 'chart-usagers' || filterName === 'usagers' || filterName.startsWith('usager:')) {
+            const cardUsa = document.getElementById('card-chart-usagers');
+            if (cardUsa) cardUsa.classList.add('active-chart-button');
+            const kpiUsa = document.getElementById('stat-card-usagers');
+            if (kpiUsa) kpiUsa.classList.add('active-kpi-button');
+        }
+    }
+
+    window.handleKpiClick = function(filterName) {
+        if (filterName === 'chart-usagers') filterName = 'usagers';
+        if (filterName === 'chart-results') filterName = 'controles';
+
+        if (activeKpiFilter === filterName) {
+            resetKpiFilter();
+            return;
+        }
+
+        activeKpiFilter = filterName;
+        setActiveKpiVisual(filterName);
+
+        if (filterName === 'controles') {
+            currentMapMode = 'results';
+            legendFilters.ctrl_conforme = true;
+            legendFilters.ctrl_infraction = true;
+            legendFilters.ctrl_attente = true;
+            legendFilters.pej = true;
+            legendFilters.pa = true;
+            legendFilters.pve = true;
+        } else if (filterName === 'pej') {
+            currentMapMode = 'results';
+            legendFilters.ctrl_conforme = false;
+            legendFilters.ctrl_infraction = false;
+            legendFilters.ctrl_attente = false;
+            legendFilters.pej = true;
+            legendFilters.pa = false;
+            legendFilters.pve = false;
+        } else if (filterName === 'pa') {
+            currentMapMode = 'results';
+            legendFilters.ctrl_conforme = false;
+            legendFilters.ctrl_infraction = false;
+            legendFilters.ctrl_attente = false;
+            legendFilters.pej = false;
+            legendFilters.pa = true;
+            legendFilters.pve = false;
+        } else if (filterName === 'pve') {
+            currentMapMode = 'results';
+            legendFilters.ctrl_conforme = false;
+            legendFilters.ctrl_infraction = false;
+            legendFilters.ctrl_attente = false;
+            legendFilters.pej = false;
+            legendFilters.pa = false;
+            legendFilters.pve = true;
+        } else if (filterName === 'usagers') {
+            currentMapMode = 'usagers';
+            Object.keys(usagerLegendFilters).forEach(k => usagerLegendFilters[k] = true);
+        } else if (filterName.startsWith('usager:')) {
+            currentMapMode = 'usagers';
+            const targetLabel = normalizeStr(filterName.substring(7));
+            Object.keys(usagerLegendFilters).forEach(k => {
+                usagerLegendFilters[k] = normalizeStr(k).includes(targetLabel) || targetLabel.includes(normalizeStr(k));
+            });
+        }
+
+        triggerMapReRender();
+    };
+
+    window.resetKpiFilter = function() {
+        activeKpiFilter = null;
+        currentMapMode = 'results';
+        setActiveKpiVisual(null);
+        legendFilters.ctrl_conforme = true;
+        legendFilters.ctrl_infraction = true;
+        legendFilters.ctrl_attente = true;
+        legendFilters.pej = true;
+        legendFilters.pa = true;
+        legendFilters.pve = true;
+        Object.keys(usagerLegendFilters).forEach(k => usagerLegendFilters[k] = true);
+
+        triggerMapReRender();
+    };
+
+    window.toggleUsagerLegendFilter = function(categoryKey, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        usagerLegendFilters[categoryKey] = usagerLegendFilters[categoryKey] === false ? true : false;
+        applyLegendFilters();
+        updateLegend();
+    };
+
+    function getFilteredHeatmapData() {
+        const heatData = [];
+        if (!lastFetchedDataPayload) return heatData;
+
+        const { rawResN, rawResN1 } = lastFetchedDataPayload;
+
+        // Points Contrôles N
+        if (rawResN && rawResN.points) {
+            rawResN.points.forEach(pt => {
+                if (isItemDynamicallyExcluded(pt, false)) return;
+                if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                    const target = normalizeStr(activeKpiFilter.substring(7));
+                    const cat = normalizeStr(getUsagerCategory(pt.type_usager));
+                    if (!cat.includes(target) && !target.includes(cat)) return;
+                }
+
+                const usagerCat = getUsagerCategory(pt.type_usager);
+                if (currentMapMode === 'usagers') {
+                    if (usagerLegendFilters[usagerCat] === false) return;
+                } else {
+                    const res = (pt.resultat || '').toLowerCase();
+                    if (res.includes('conforme') && !res.includes('non')) {
+                        if (legendFilters.ctrl_conforme === false) return;
+                    } else if (res.includes('infraction') || res.includes('non') || res.includes('manquement')) {
+                        if (legendFilters.ctrl_infraction === false) return;
+                    } else {
+                        if (legendFilters.ctrl_attente === false) return;
+                    }
+                }
+
+                const lat = parseFloat(pt.y);
+                const lng = parseFloat(pt.x);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    heatData.push([lat, lng, 1.0]);
+                }
+            });
+        }
+
+        // Procédures N
+        if (currentMapMode !== 'usagers' && rawResN && rawResN.procedures) {
+            rawResN.procedures.forEach(p => {
+                if (isItemDynamicallyExcluded(p, true)) return;
+                if (activeKpiFilter === 'controles') return;
+                const ptype = (p.type || '').toUpperCase();
+                if (activeKpiFilter === 'pej' && !ptype.includes('PEJ')) return;
+                if (activeKpiFilter === 'pa' && !ptype.includes('PA')) return;
+                if (activeKpiFilter === 'pve' && !ptype.includes('PVE')) return;
+
+                if (ptype.includes('PEJ') && legendFilters.pej === false) return;
+                if (ptype.includes('PA') && legendFilters.pa === false) return;
+                if (ptype.includes('PVE') && legendFilters.pve === false) return;
+
+                const lat = parseFloat(p.y);
+                const lng = parseFloat(p.x);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    heatData.push([lat, lng, 1.0]);
+                }
+            });
+        }
+
+        // Complément N-1 si comparaison active
+        if (rawResN1) {
+            if (rawResN1.points) {
+                rawResN1.points.forEach(pt => {
+                    if (isItemDynamicallyExcluded(pt, false)) return;
+                    if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                    if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                        const target = normalizeStr(activeKpiFilter.substring(7));
+                        const cat = normalizeStr(getUsagerCategory(pt.type_usager));
+                        if (!cat.includes(target) && !target.includes(cat)) return;
+                    }
+
+                    const usagerCat = getUsagerCategory(pt.type_usager);
+                    if (currentMapMode === 'usagers') {
+                        if (usagerLegendFilters[usagerCat] === false) return;
+                    } else {
+                        const res = (pt.resultat || '').toLowerCase();
+                        if (res.includes('conforme') && !res.includes('non')) {
+                            if (legendFilters.ctrl_conforme === false) return;
+                        } else if (res.includes('infraction') || res.includes('non') || res.includes('manquement')) {
+                            if (legendFilters.ctrl_infraction === false) return;
+                        } else {
+                            if (legendFilters.ctrl_attente === false) return;
+                        }
+                    }
+
+                    const lat = parseFloat(pt.y);
+                    const lng = parseFloat(pt.x);
+                    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                        heatData.push([lat, lng, 1.0]);
+                    }
+                });
+            }
+            if (currentMapMode !== 'usagers' && rawResN1.procedures) {
+                rawResN1.procedures.forEach(p => {
+                    if (isItemDynamicallyExcluded(p, true)) return;
+                    if (activeKpiFilter === 'controles') return;
+                    const ptype = (p.type || '').toUpperCase();
+                    if (activeKpiFilter === 'pej' && !ptype.includes('PEJ')) return;
+                    if (activeKpiFilter === 'pa' && !ptype.includes('PA')) return;
+                    if (activeKpiFilter === 'pve' && !ptype.includes('PVE')) return;
+
+                    if (ptype.includes('PEJ') && legendFilters.pej === false) return;
+                    if (ptype.includes('PA') && legendFilters.pa === false) return;
+                    if (ptype.includes('PVE') && legendFilters.pve === false) return;
+
+                    const lat = parseFloat(p.y);
+                    const lng = parseFloat(p.x);
+                    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                        heatData.push([lat, lng, 1.0]);
+                    }
+                });
+            }
+        }
+
+        return heatData;
+    }
+
+    function triggerMapReRender() {
+        if (lastFetchedDataPayload) {
+            const mapContainer = map.getContainer();
+            if (mapContainer) {
+                mapContainer.classList.add('map-fade-transition');
+                mapContainer.style.opacity = '0.4';
+            }
+            setTimeout(() => {
+                try {
+                    renderLoadedData(lastFetchedDataPayload);
+                    renderTable();
+                } catch (e) {
+                    console.error("Erreur lors de la mise à jour de la carte :", e);
+                } finally {
+                    if (mapContainer) mapContainer.style.opacity = '1';
+                }
+            }, 120);
+        }
+    }
+
     // Cache mémoire LRU pour les requêtes /api/data (filtres à la volée / années)
     const DATA_CACHE_MAX_SIZE = 50;
     const dataResponseCache = new Map();
@@ -1401,6 +1680,52 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function applyLegendFilters() {
+        if (currentMapMode === 'usagers') {
+            clustersByTerritory.forEach((grp, key) => {
+                let active = true;
+                if (key.includes('_usager_')) {
+                    const parts = key.split('_usager_');
+                    if (parts.length > 1) {
+                        const category = parts[1].split('_')[0];
+                        if (usagerLegendFilters[category] === false) active = false;
+                    }
+                }
+                if (active) {
+                    if (!clusterParent.hasLayer(grp)) clusterParent.addLayer(grp);
+                } else {
+                    if (clusterParent.hasLayer(grp)) clusterParent.removeLayer(grp);
+                }
+            });
+
+            if (typeof clustersByTerritoryN1 !== 'undefined') {
+                clustersByTerritoryN1.forEach((grp, key) => {
+                    let active = true;
+                    if (key.includes('_usager_')) {
+                        const parts = key.split('_usager_');
+                        if (parts.length > 1) {
+                            const category = parts[1].split('_')[0];
+                            if (usagerLegendFilters[category] === false) active = false;
+                        }
+                    }
+                    if (active) {
+                        if (!clusterParentN1.hasLayer(grp)) clusterParentN1.addLayer(grp);
+                    } else {
+                        if (clusterParentN1.hasLayer(grp)) clusterParentN1.removeLayer(grp);
+                    }
+                });
+            }
+
+            pejByTerritory.forEach(grp => { if (pejParent.hasLayer(grp)) pejParent.removeLayer(grp); });
+            paByTerritory.forEach(grp => { if (paParent.hasLayer(grp)) paParent.removeLayer(grp); });
+            pveByTerritory.forEach(grp => { if (pveParent.hasLayer(grp)) pveParent.removeLayer(grp); });
+            if (typeof pejByTerritoryN1 !== 'undefined') pejByTerritoryN1.forEach(grp => { if (pejParentN1.hasLayer(grp)) pejParentN1.removeLayer(grp); });
+            if (typeof paByTerritoryN1 !== 'undefined') paByTerritoryN1.forEach(grp => { if (paParentN1.hasLayer(grp)) paParentN1.removeLayer(grp); });
+            if (typeof pveByTerritoryN1 !== 'undefined') pveByTerritoryN1.forEach(grp => { if (pveParentN1.hasLayer(grp)) pveParentN1.removeLayer(grp); });
+
+            updateMapLayerClasses();
+            return;
+        }
+
         // 1. Contrôles (N et N-1)
         clustersByTerritory.forEach((grp, key) => {
             let active = true;
@@ -1489,6 +1814,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateLegend() {
         if (!mapLegendDiv) return;
+
+        if (currentMapMode === 'usagers') {
+            mapLegendDiv.style.display = 'block';
+            let bodyHtml = `
+                <div style="font-weight:bold; font-size:10px; margin-bottom:4px; color:#1e293b;">
+                    <span>Par Type d'Usager</span>
+                </div>
+            `;
+            const categories = [
+                { key: 'Particulier', color: '#2980B9', label: 'Particulier' },
+                { key: 'Agriculteur', color: '#F1C40F', label: 'Agriculteur' },
+                { key: 'Collectivité', color: '#27AE60', label: 'Collectivité' },
+                { key: 'Entreprise', color: '#E74C3C', label: 'Entreprise' },
+                { key: 'Acteurs sylvicoles', color: '#16A085', label: 'Acteurs sylvicoles' },
+                { key: 'Autre', color: '#95A5A6', label: 'Autre' }
+            ];
+            categories.forEach(cat => {
+                const isActive = usagerLegendFilters[cat.key] !== false;
+                const opacityStyle = isActive ? 'opacity: 1;' : 'opacity: 0.4; text-decoration: line-through;';
+                bodyHtml += `
+                    <div onclick="toggleUsagerLegendFilter('${cat.key}', event)" title="${isActive ? 'Masquer' : 'Afficher'} ${cat.label}" style="display:flex; align-items:center; margin-bottom:3px; cursor:pointer; user-select:none; transition:opacity 0.2s; ${opacityStyle}">
+                        <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background-color:${cat.color}; margin-right:6px; flex-shrink:0; border:1px solid rgba(0,0,0,0.15);"></span>
+                        <span style="font-size:9.5px; line-height:1.2; color:#334155;">${cat.label}</span>
+                    </div>
+                `;
+            });
+
+            const icon = isLegendCollapsed ? '▲' : '▼';
+            const toggleBtn = `<button class="legend-toggle-btn" onclick="toggleMapLegend(event)" title="${isLegendCollapsed ? 'Déplier la légende' : 'Réduire la légende'}" style="background:none; border:none; padding:0 0 0 6px; cursor:pointer; font-size:9px; color:#64748b; font-weight:bold;">${icon}</button>`;
+
+            mapLegendDiv.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; ${isLegendCollapsed ? '' : 'margin-bottom:4px; border-bottom:1px solid #f1f5f9; padding-bottom:3px;'}" class="legend-header">
+                    <span style="font-weight:bold; font-size:9.5px; color:#475569;">Légende Usagers</span>
+                    ${toggleBtn}
+                </div>
+                <div class="legend-body" style="${isLegendCollapsed ? 'display:none;' : 'display:block;'}">
+                    ${bodyHtml}
+                </div>
+            `;
+            return;
+        }
 
         const renderItem = (filterKey, color, label) => {
             const isActive = legendFilters[filterKey] !== false;
@@ -1935,10 +2301,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         const lng = parseFloat(pt.x);
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                            if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                            if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                                const target = normalizeStr(activeKpiFilter.substring(7));
+                                const cat = normalizeStr(getUsagerCategory(pt.type_usager));
+                                if (!cat.includes(target) && !target.includes(cat)) return;
+                            }
+
                             coordinates.push([lat, lng]);
                             heatData.push([lat, lng, 1.0]);
 
-                            const color = getMarkerColor(pt.resultat);
+                            const isUsagersMode = (currentMapMode === 'usagers');
+                            const color = isUsagersMode ? getUsagerColor(pt.type_usager) : getMarkerColor(pt.resultat);
+                            const usagerCat = getUsagerCategory(pt.type_usager);
+
                             const marker = L.circleMarker([lat, lng], {
                                 radius: 6,
                                 fillColor: color,
@@ -1948,22 +2324,27 @@ document.addEventListener('DOMContentLoaded', () => {
                                 fillOpacity: 1
                             });
 
+                            const resColor = getMarkerColor(pt.resultat);
+                            const usaColor = getUsagerColor(pt.type_usager);
                             const popupContent = `
                             <strong>Contrôle OSCEAN</strong><br>
                             ID: ${pt.dc_id || 'N/A'}<br>
                             Date: ${pt.date_ctrl || 'N/A'}<br>
-                            Résultat: <span style="font-weight:bold;color:${color}">${pt.resultat || 'N/A'}</span><br>
+                            Résultat: <span style="font-weight:bold;color:${resColor}">${pt.resultat || 'N/A'}</span><br>
                             Domaine: ${pt.domaine || 'N/A'}<br>
                             Thème: ${pt.theme || 'N/A'}<br>
                             Action: ${pt.type_action || 'N/A'}<br>
-                            Usager: ${pt.type_usager || 'N/A'}<br>
+                            Usager: <span style="font-weight:bold;color:${usaColor}">${pt.type_usager || 'N/A'}</span><br>
                             Commune: ${pt.nom_commun || 'N/A'}
                         `;
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
 
                             // Cloisonnement : on groupe par clé territoire ET COULEUR avant d'injecter
-                            const tKey = getTerritoryKey(pt.code_dept) + '_' + color;
+                            const tKey = isUsagersMode
+                                ? getTerritoryKey(pt.code_dept) + '_usager_' + usagerCat + '_' + color
+                                : getTerritoryKey(pt.code_dept) + '_' + color;
+
                             if (!markersByKey.has(tKey)) markersByKey.set(tKey, { markers: [], color: color });
                             markersByKey.get(tKey).markers.push(marker);
                         }
@@ -2029,9 +2410,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isHeatmapMode) {
                     clusterParent.eachLayer(l => map.removeLayer(l));
 
-                    const dynamicMax = getDynamicMaxForZoom(map, heatData, 25);
+                    const filteredHeat = getFilteredHeatmapData();
+                    const dynamicMax = getDynamicMaxForZoom(map, filteredHeat, 25);
 
-                    heatmapLayer = L.heatLayer(heatData, {
+                    heatmapLayer = L.heatLayer(filteredHeat, {
                         radius: 25,
                         blur: 18,
                         maxZoom: map.getZoom(), // Dynamic zoom recalibration
@@ -2056,7 +2438,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         const lng = parseFloat(pt.x);
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                            const color = getMarkerColor(pt.resultat);
+                            if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                            if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                                const target = normalizeStr(activeKpiFilter.substring(7));
+                                const cat = normalizeStr(getUsagerCategory(pt.type_usager));
+                                if (!cat.includes(target) && !target.includes(cat)) return;
+                            }
+
+                            const isUsagersMode = (currentMapMode === 'usagers');
+                            const color = isUsagersMode ? getUsagerColor(pt.type_usager) : getMarkerColor(pt.resultat);
+                            const usagerCat = getUsagerCategory(pt.type_usager);
+
                             const marker = L.circleMarker([lat, lng], {
                                 radius: 6,
                                 fillColor: color,
@@ -2066,20 +2458,25 @@ document.addEventListener('DOMContentLoaded', () => {
                                 fillOpacity: 0.4
                             });
 
+                            const resColor = getMarkerColor(pt.resultat);
+                            const usaColor = getUsagerColor(pt.type_usager);
                             const popupContent = `
                             <strong>Contrôle OSCEAN (N-1)</strong><br>
                             ID: ${pt.dc_id || 'N/A'}<br>
                             Date: ${pt.date_ctrl || 'N/A'}<br>
-                            Résultat: <span style="font-weight:bold;color:${color}">${pt.resultat || 'N/A'}</span><br>
+                            Résultat: <span style="font-weight:bold;color:${resColor}">${pt.resultat || 'N/A'}</span><br>
                             Domaine: ${pt.domaine || 'N/A'}<br>
                             Thème: ${pt.theme || 'N/A'}<br>
-                            Usager: ${pt.type_usager || 'N/A'}<br>
+                            Usager: <span style="font-weight:bold;color:${usaColor}">${pt.type_usager || 'N/A'}</span><br>
                             Commune: ${pt.nom_commun || 'N/A'}
                         `;
                             marker.bindPopup(popupContent);
                             markersGroup.addLayer(marker);
 
-                            const tKey = getTerritoryKey(pt.code_dept) + '_' + color;
+                            const tKey = isUsagersMode
+                                ? getTerritoryKey(pt.code_dept) + '_usager_' + usagerCat + '_' + color
+                                : getTerritoryKey(pt.code_dept) + '_' + color;
+
                             if (!markersByKeyN1.has(tKey)) markersByKeyN1.set(tKey, { markers: [], color: color });
                             markersByKeyN1.get(tKey).markers.push(marker);
                         }
@@ -2352,6 +2749,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        onClick: (event, elements) => {
+                            window.handleKpiClick('chart-results');
+                        },
                         plugins: {
                             legend: { display: false },
                             tooltip: { callbacks: tooltipPercentageCallback }
@@ -2367,15 +2767,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     const resultsColors = ['#53AB60', '#EF4444', '#64748B'];
                     resultsLabels.forEach((label, idx) => {
                         const color = resultsColors[idx] || '#64748B';
-                        legendResults.innerHTML += `
-                        <div style="display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; color: var(--color-text-dark);">
+                        const itemDiv = document.createElement('div');
+                        itemDiv.style.cssText = "display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; color: var(--color-text-dark); cursor: pointer;";
+                        itemDiv.innerHTML = `
                             <span style="display: inline-block; width: 8px; height: 8px; background-color: ${color}; border-radius: 50%; flex-shrink: 0;"></span>
                             <span>${label}</span>
-                        </div>
-                    `;
+                        `;
+                        itemDiv.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.handleKpiClick('controles');
+                        });
+                        legendResults.appendChild(itemDiv);
                     });
                     if (isSpatial) {
-                        legendResults.innerHTML += `<div style="font-size:8px;color:#888;margin-top:3px;">Anneau ext. = ${parsedCodes[0]}, int. = ${parsedCodes.slice(1).join(', ')}</div>`;
+                        const spatialDiv = document.createElement('div');
+                        spatialDiv.style.cssText = "font-size:8px;color:#888;margin-top:3px;";
+                        spatialDiv.textContent = `Anneau ext. = ${parsedCodes[0]}, int. = ${parsedCodes.slice(1).join(', ')}`;
+                        legendResults.appendChild(spatialDiv);
                     }
                 }
 
@@ -2450,15 +2859,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (elements && elements.length > 0) {
                                 const index = elements[0].index;
                                 const shortLabel = chartUsagers.data.labels[index];
-                                const matched = usagersList.find(u => u.label.toLowerCase().includes(shortLabel.toLowerCase()) || u.value.toLowerCase().includes(shortLabel.toLowerCase()));
-                                if (matched && matched.value) {
-                                    if (inputUsager.setSelectedValues) {
-                                        inputUsager.setSelectedValues([matched.value]);
-                                    } else {
-                                        inputUsager.value = matched.value;
-                                    }
-                                    loadData();
-                                }
+                                window.handleKpiClick('usager:' + shortLabel);
+                            } else {
+                                window.handleKpiClick('chart-usagers');
                             }
                         },
                         plugins: {
@@ -2474,15 +2877,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     legendUsagers.innerHTML = '';
                     usagersLabels.forEach((label, idx) => {
                         const color = usagersColors[idx];
-                        legendUsagers.innerHTML += `
-                        <div style="display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; color: var(--color-text-dark);">
+                        const itemDiv = document.createElement('div');
+                        itemDiv.style.cssText = "display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; color: var(--color-text-dark); cursor: pointer;";
+                        itemDiv.title = `Filtrer la carte sur : ${label}`;
+                        itemDiv.innerHTML = `
                             <span style="display: inline-block; width: 8px; height: 8px; background-color: ${color}; border-radius: 50%; flex-shrink: 0;"></span>
                             <span>${label}</span>
-                        </div>
-                    `;
+                        `;
+                        itemDiv.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.handleKpiClick('usager:' + label);
+                        });
+                        legendUsagers.appendChild(itemDiv);
                     });
                     if (isSpatial) {
-                        legendUsagers.innerHTML += `<div style="font-size:8px;color:#888;margin-top:3px;">Anneau ext. = ${parsedCodes[0]}, int. = ${parsedCodes.slice(1).join(', ')}</div>`;
+                        const spatialDiv = document.createElement('div');
+                        spatialDiv.style.cssText = "font-size:8px;color:#888;margin-top:3px;";
+                        spatialDiv.textContent = `Anneau ext. = ${parsedCodes[0]}, int. = ${parsedCodes.slice(1).join(', ')}`;
+                        legendUsagers.appendChild(spatialDiv);
                     }
                 }
 
@@ -2940,7 +3353,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tableBody.innerHTML = '';
 
-        let data = [...activePoints];
+        let data = [];
+        if (activeKpiFilter === 'pej') {
+            data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PEJ'));
+        } else if (activeKpiFilter === 'pa') {
+            data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PA'));
+        } else if (activeKpiFilter === 'pve') {
+            data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PVE'));
+        } else if (activeKpiFilter === 'usagers') {
+            data = [...activePoints, ...activeProcedures];
+        } else if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+            const target = normalizeStr(activeKpiFilter.substring(7));
+            data = [...activePoints, ...activeProcedures].filter(item => {
+                const cat = normalizeStr(getUsagerCategory(item.type_usager));
+                return cat.includes(target) || target.includes(cat);
+            });
+        } else {
+            data = [...activePoints];
+        }
+
+        data = data.filter(item => {
+            const isProc = Boolean(item.type && !item.resultat);
+            return !isItemDynamicallyExcluded(item, isProc);
+        });
 
         // Tri
         if (tableSortColumn) {
@@ -3084,6 +3519,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnReset) {
         btnReset.addEventListener('click', () => {
             clearDataResponseCache();
+            if (typeof resetKpiFilter === 'function') resetKpiFilter();
             const now = new Date();
             const currentYear = now.getFullYear();
             const selectProfil = document.getElementById('profil-select');
@@ -3118,9 +3554,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (inputCommune) inputCommune.value = '';
 
+            // Rechargement automatique des données réinitialisées
             loadData();
         });
     }
+
+    // Écouteurs d'événements cliquables pour Chiffres Clés (KPI) et Graphiques Donuts
+    const kpiBindings = [
+        { id: 'stat-card-controles', filter: 'controles' },
+        { id: 'stat-card-pej', filter: 'pej' },
+        { id: 'stat-card-pa', filter: 'pa' },
+        { id: 'stat-card-usagers', filter: 'usagers' },
+        { id: 'stat-card-pve', filter: 'pve' },
+        { id: 'card-chart-results', filter: 'chart-results' },
+        { id: 'card-chart-usagers', filter: 'chart-usagers' }
+    ];
+
+    kpiBindings.forEach(b => {
+        const el = document.getElementById(b.id);
+        if (el) {
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-export-chart-png')) return;
+                window.handleKpiClick(b.filter);
+            });
+        }
+    });
 
     // Gestion du basculement du mode carte (Points / Chaleur)
     document.querySelectorAll('input[name="map-mode"]').forEach(radio => {
@@ -3135,9 +3593,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 allParents.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
                 try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch (e) { }
 
-                const heatData = [...activePoints, ...activeProcedures]
-                    .map(pt => [parseFloat(pt.y), parseFloat(pt.x), 1.0])
-                    .filter(coords => !isNaN(coords[0]) && !isNaN(coords[1]) && coords[0] !== 0 && coords[1] !== 0);
+                const heatData = getFilteredHeatmapData();
 
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);

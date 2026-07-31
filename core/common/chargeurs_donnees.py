@@ -1836,9 +1836,9 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
                         gdf = gdf.set_geometry("geometry")
                         if gdf.crs is None:
                             gdf.crs = "EPSG:2154"
-                        if gdf.crs.to_epsg() != 4326:
-                            gdf = gdf.to_crs("EPSG:4326")
-                        centroids = gdf.geometry.centroid
+                        # Calcul du centroïde en projection métrique (EPSG:2154) pour éviter l'avertissement géométrique et garantir la précision
+                        gdf_proj = gdf.to_crs("EPSG:2154") if (hasattr(gdf.crs, "is_geographic") and gdf.crs.is_geographic) else gdf
+                        centroids = gdf_proj.geometry.centroid.to_crs("EPSG:4326")
                         out = pd.DataFrame({"code_insee": gdf[insee_col].astype(str).str.zfill(5), "lat": centroids.y, "lon": centroids.x})
                         return out.dropna(subset=["lat", "lon"])
                 except Exception:

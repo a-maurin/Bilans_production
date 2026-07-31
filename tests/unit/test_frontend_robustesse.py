@@ -146,4 +146,36 @@ def test_compare_active_title_mention_in_explorer_js():
     """
     source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
     assert "compare-active" in source, "Élément compare-active absent de explorer.js"
-    assert "(Comparaison années N / N-1)" in source, "Mention de comparaison (Comparaison années N / N-1) absente de explorer.js"
+    assert "(Comparaison années N / N-1)" in source, "Mention de comparaison (Comparaison années N / N-1) absente de explorer.js"
+
+
+def test_cache_lru_and_fade_transition():
+    """
+    Vérifie l'implémentation du cache LRU et du fondu visuel dans explorer.js et explorer.html.
+    """
+    js_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
+    html_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.html").read_text(encoding="utf-8")
+
+    assert "dataResponseCache = new Map()" in js_source, "dataResponseCache absent de explorer.js"
+    assert "DATA_CACHE_MAX_SIZE = 50" in js_source, "DATA_CACHE_MAX_SIZE absent de explorer.js"
+    assert "clearDataResponseCache()" in js_source, "clearDataResponseCache absent de explorer.js"
+    assert "data-fade-in" in js_source, "Classe data-fade-in absente de explorer.js"
+    assert ".data-fade-in" in html_source, "Classe CSS .data-fade-in absente de explorer.html"
+
+
+def test_map_fullscreen_layout_fix():
+    """
+    Vérifie la présence des règles CSS et JS prévenant les bugs de mise en page en mode plein écran.
+    """
+    js_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
+    html_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.html").read_text(encoding="utf-8")
+
+    assert "transform: none !important;" in html_source, "transform: none absente de .map-fullscreen dans explorer.html"
+    assert "document.body.style.overflow = isFullscreen ? 'hidden' : ''" in js_source, "Gestion de l'overflow du body absente dans explorer.js"
+    assert "map.invalidateSize" in js_source, "Invalidation de taille de carte absente dans explorer.js"
+    assert "flex-wrap: wrap;" in html_source, "flex-wrap: wrap absent de la barre d'outils carte dans explorer.html"
+    assert "transform: translateY" not in html_source, "transform: translateY ne doit pas être présent dans dataFadeIn"
+
+
+
+

@@ -77,6 +77,45 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     let lastFetchedDataPayload = null;
 
+    // Cache mémoire LRU pour les requêtes /api/data (filtres à la volée / années)
+    const DATA_CACHE_MAX_SIZE = 50;
+    const dataResponseCache = new Map();
+
+    function clearDataResponseCache() {
+        dataResponseCache.clear();
+    }
+    window.clearDataResponseCache = clearDataResponseCache;
+
+    function cloneData(data) {
+        if (!data) return data;
+        return typeof structuredClone === 'function' ? structuredClone(data) : JSON.parse(JSON.stringify(data));
+    }
+
+    function getOrSetCache(cacheKey, fetchFn) {
+        if (dataResponseCache.has(cacheKey)) {
+            const cachedData = dataResponseCache.get(cacheKey);
+            dataResponseCache.delete(cacheKey);
+            dataResponseCache.set(cacheKey, cachedData);
+            return Promise.resolve(cloneData(cachedData));
+        }
+        return fetchFn().then(data => {
+            if (dataResponseCache.size >= DATA_CACHE_MAX_SIZE) {
+                const oldestKey = dataResponseCache.keys().next().value;
+                dataResponseCache.delete(oldestKey);
+            }
+            dataResponseCache.set(cacheKey, data);
+            return cloneData(data);
+        });
+    }
+
+    function triggerDataFadeIn(selector = '.explorer-panel, .stat-card, #results-count') {
+        document.querySelectorAll(selector).forEach(el => {
+            el.classList.remove('data-fade-in');
+            void el.offsetWidth;
+            el.classList.add('data-fade-in');
+        });
+    }
+
     function isItemDynamicallyExcluded(item, isProcedure = false) {
         if (!item) return false;
 
@@ -440,6 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(err => console.error('Erreur chargement version:', err));
 
     function updateUIForProfile() {
+        clearDataResponseCache();
         const selectProfil = document.getElementById('profil-select');
         if (!selectProfil) return;
         const val = selectProfil.value;
@@ -1455,6 +1495,58 @@ document.addEventListener('DOMContentLoaded', () => {
         return '#64748B';
     }
 
+    function toggleElementClass(element, className, add) {
+        if (element) element.classList.toggle(className, add);
+    }
+
+    function setGlobalLoadingState(isLoading, isError = false, errorMessage = '') {
+        const mapOverlay = document.getElementById('map-loading-overlay');
+        const mapErrorBanner = document.getElementById('map-error-banner');
+        const mapErrorMessage = document.getElementById('map-error-message');
+        const controlPanel = document.querySelector('.control-panel');
+        const quickYearContainer = document.getElementById('quick-year-container');
+        const activeQuickYearBtn = document.querySelector('.btn-quick-year.active');
+
+        // Activation / Désactivation des voiles et des filtres
+        toggleElementClass(mapOverlay, 'hidden', !isLoading);
+        toggleElementClass(controlPanel, 'filters-loading-disabled', isLoading);
+        toggleElementClass(quickYearContainer, 'filters-loading-disabled', isLoading);
+
+        if (isLoading) {
+            toggleElementClass(mapErrorBanner, 'hidden', true);
+            if (activeQuickYearBtn) {
+                activeQuickYearBtn.classList.remove('has-error');
+                activeQuickYearBtn.classList.add('is-loading');
+                let spinner = activeQuickYearBtn.querySelector('.btn-quick-year-spinner');
+                if (!spinner) {
+                    spinner = document.createElement('span');
+                    spinner.className = 'btn-quick-year-spinner';
+                    activeQuickYearBtn.appendChild(spinner);
+                }
+                spinner.style.display = 'inline-block';
+            }
+        } else {
+            document.querySelectorAll('.btn-quick-year').forEach(b => {
+                b.classList.remove('is-loading');
+                const spinner = b.querySelector('.btn-quick-year-spinner');
+                if (spinner) spinner.style.display = 'none';
+            });
+
+            if (isError) {
+                if (activeQuickYearBtn) activeQuickYearBtn.classList.add('has-error');
+                if (mapErrorBanner) {
+                    if (mapErrorMessage) {
+                        mapErrorMessage.textContent = `⚠️ Erreur lors du chargement des données${errorMessage ? ' : ' + errorMessage : '.'}`;
+                    }
+                    mapErrorBanner.classList.remove('hidden');
+                }
+            } else {
+                document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('has-error'));
+                toggleElementClass(mapErrorBanner, 'hidden', true);
+            }
+        }
+    }
+
     function loadData() {
         btnUpdate.disabled = true;
         btnUpdate.innerHTML = `
@@ -1464,6 +1556,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <path d="M12 2 A10 10 0 0 1 22 12" stroke="white" />
             </svg>
             Chargement...`;
+        setGlobalLoadingState(true);
 
         // Point C : validation dates avant tout appel réseau
         if (dateDebEl && dateFinEl && dateDebEl.value && dateFinEl.value && dateDebEl.value > dateFinEl.value) {
@@ -1475,6 +1568,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             btnUpdate.disabled = false;
             btnUpdate.innerHTML = 'Charger les données';
+            setGlobalLoadingState(false, false);
             return;
         }
 
@@ -1510,19 +1604,22 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         };
 
-        // Helper fetch unique
-        const fetchOne = (params) => fetch('/api/data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params)
-        }).then(async response => {
-            if (!response.ok) {
-                let errMsg = 'Erreur API';
-                try { const d = await response.json(); if (d.error) errMsg += ' : ' + d.error; } catch (e) { }
-                throw new Error(errMsg);
-            }
-            return response.json();
-        });
+        // Helper fetch unique avec mise en cache LRU
+        const fetchOne = (params) => {
+            const cacheKey = JSON.stringify(params);
+            return getOrSetCache(cacheKey, () => fetch('/api/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: cacheKey
+            }).then(async response => {
+                if (!response.ok) {
+                    let errMsg = 'Erreur API';
+                    try { const d = await response.json(); if (d.error) errMsg += ' : ' + d.error; } catch (e) { }
+                    throw new Error(errMsg);
+                }
+                return response.json();
+            }));
+        };
 
         // Résolution des promises selon le mode actif
         let allPromises;
@@ -1584,17 +1681,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     banner.style.display = 'block';
                     banner.style.color = '#EF4444';
                 }
+                setGlobalLoadingState(false, true, err.message);
             })
             .finally(() => {
                 updateLegend();
                 btnUpdate.disabled = false;
                 btnUpdate.innerHTML = 'Charger les données';
+
+                const mapErrorBanner = document.getElementById('map-error-banner');
+                const hasError = mapErrorBanner && !mapErrorBanner.classList.contains('hidden');
+                setGlobalLoadingState(false, hasError);
             });
     }
 
     function renderLoadedData(payload) {
         if (!payload) return;
         const { resGeoUnits, rawResN, rawResN1, isSpatial, isCompare, parsedCodes } = payload;
+
+        // Déclenchement de la transition visuelle par fondu sur les panneaux de résultats
+        triggerDataFadeIn();
 
         // Application du filtrage dynamique en mémoire à la volée (masquage visuel)
         const resN = Object.assign({}, rawResN, {
@@ -2855,6 +2960,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnReset = document.getElementById('btn-reset');
     if (btnReset) {
         btnReset.addEventListener('click', () => {
+            clearDataResponseCache();
             const now = new Date();
             const currentYear = now.getFullYear();
             const selectProfil = document.getElementById('profil-select');
@@ -3036,20 +3142,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFullscreenMap = document.getElementById('btn-fullscreen-map');
     if (btnFullscreenMap) {
         btnFullscreenMap.addEventListener('click', () => {
-            const mapCard = document.getElementById('map').closest('.card');
+            const mapCard = document.getElementById('map')?.closest('.card');
             if (mapCard) {
-                mapCard.classList.toggle('map-fullscreen');
-                if (mapCard.classList.contains('map-fullscreen')) {
+                const isFullscreen = mapCard.classList.toggle('map-fullscreen');
+                document.body.style.overflow = isFullscreen ? 'hidden' : '';
+
+                if (isFullscreen) {
                     btnFullscreenMap.textContent = '🗗 Quitter';
                     btnFullscreenMap.title = 'Quitter le mode plein écran';
                 } else {
                     btnFullscreenMap.textContent = '⛶ Plein écran';
                     btnFullscreenMap.title = 'Plein écran';
                 }
-                // Attendre la transition de rendu et redimensionner la carte Leaflet
-                setTimeout(() => {
-                    map.invalidateSize();
-                }, 200);
+
+                // Invalidation progressive de la taille pour s'adapter au rendu DOM
+                const invalidate = () => { if (typeof map !== 'undefined' && map && map.invalidateSize) map.invalidateSize(); };
+                invalidate();
+                setTimeout(invalidate, 50);
+                setTimeout(invalidate, 250);
             }
         });
     }
@@ -3228,6 +3338,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnUpdate.addEventListener('click', loadData);
+
+    const btnRetryLoad = document.getElementById('btn-retry-load');
+    if (btnRetryLoad) {
+        btnRetryLoad.addEventListener('click', loadData);
+    }
 
     const btnPdf = document.getElementById('btn-pdf');
     if (btnPdf) {

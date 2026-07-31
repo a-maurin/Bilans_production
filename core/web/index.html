@@ -94,68 +94,67 @@ Composants principaux :
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const btnUpdate = document.getElementById('btn-update-sources');
+            const consoleContainer = document.getElementById('update-console-container');
+            const consoleOutput = document.getElementById('update-console-output');
+
+            if (!btnUpdate || !consoleContainer || !consoleOutput) return;
+
             let isInitialDownload = false;
-            
-            if(btnUpdate) {
-                btnUpdate.addEventListener('click', function(e) {
-                    const consoleContainer = document.getElementById('update-console-container');
-                    const consoleOutput = document.getElementById('update-console-output');
-                    
-                    consoleContainer.classList.remove('hidden');
-                    consoleContainer.style.display = 'flex';
-                    consoleOutput.innerHTML = "Démarrage de la mise à jour...\n";
-                    
-                    const evtSource = new EventSource("/api/update-sources");
-                    
-                    evtSource.onmessage = function(event) {
-                        consoleOutput.innerHTML += event.data + "\n";
-                        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                        
-                        if (event.data.startsWith("[TERMINE]")) {
-                            evtSource.close();
-                            consoleOutput.innerHTML += "\nMise à jour terminée. Redémarrage du serveur...\n";
-                            setTimeout(() => {
-                                restartServer();
-                            }, 2000);
-                        } else if (event.data.startsWith("[ERREUR]")) {
-                            evtSource.close();
-                            if (isInitialDownload) {
-                                alert("Échec du téléchargement initial des données.\n\nVeuillez vous assurer d'être connecté au réseau de l'OFB (ou VPN) et rechargez la page.");
-                                isInitialDownload = false;
-                            }
-                            setTimeout(() => {
-                                consoleContainer.style.display = 'none';
-                                consoleContainer.classList.add('hidden');
-                            }, 3000);
-                        }
-                    };
-                    
-                    evtSource.onerror = function() {
-                        consoleOutput.innerHTML += "[ERREUR] Connexion SSE perdue.\n";
+
+            const hideConsole = (delayMs = 3000) => {
+                setTimeout(() => {
+                    consoleContainer.style.display = 'none';
+                    consoleContainer.classList.add('hidden');
+                }, delayMs);
+            };
+
+            const handleDownloadError = (message) => {
+                if (isInitialDownload) {
+                    alert(`${message}\n\nVeuillez vous assurer d'être connecté au réseau de l'OFB (ou VPN) et rechargez la page.`);
+                    isInitialDownload = false;
+                }
+                hideConsole(3000);
+            };
+
+            btnUpdate.addEventListener('click', function() {
+                consoleContainer.classList.remove('hidden');
+                consoleContainer.style.display = 'flex';
+                consoleOutput.textContent = "Démarrage de la mise à jour...\n";
+
+                const evtSource = new EventSource("/api/update-sources");
+
+                evtSource.onmessage = function(event) {
+                    consoleOutput.textContent += event.data + "\n";
+                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+                    if (event.data.startsWith("[TERMINE]")) {
                         evtSource.close();
-                        if (isInitialDownload) {
-                            alert("Perte de connexion durant le téléchargement initial.\n\nVeuillez vous assurer d'être connecté au réseau de l'OFB (ou VPN) et rechargez la page.");
-                            isInitialDownload = false;
-                        }
-                        setTimeout(() => {
-                            consoleContainer.style.display = 'none';
-                            consoleContainer.classList.add('hidden');
-                        }, 3000);
-                    };
-                });
-                
-                // Vérification automatique au démarrage
-                fetch('/api/check-sources')
-                    .then(r => r.json())
-                    .then(data => {
-                        if(data.needs_update) {
-                            console.log("Sources manquantes, lancement automatique du premier téléchargement...");
-                            isInitialDownload = true;
-                            btnUpdate.click(); 
-                        }
-                    })
-                    .catch(e => console.error("Erreur check-sources:", e));
-            }
+                        consoleOutput.textContent += "\nMise à jour terminée. Redémarrage du serveur...\n";
+                        setTimeout(() => restartServer(), 2000);
+                    } else if (event.data.startsWith("[ERREUR]")) {
+                        evtSource.close();
+                        handleDownloadError("Échec du téléchargement initial des données.");
+                    }
+                };
+
+                evtSource.onerror = function() {
+                    consoleOutput.textContent += "[ERREUR] Connexion SSE perdue.\n";
+                    evtSource.close();
+                    handleDownloadError("Perte de connexion durant le téléchargement initial.");
+                };
+            });
+
+            // Vérification automatique au démarrage
+            fetch('/api/check-sources')
+                .then(res => res.ok ? res.json() : Promise.reject(res.statusText))
+                .then(data => {
+                    if (data && data.needs_update) {
+                        console.log("[OFBilan] Sources manquantes, premier téléchargement automatique...");
+                        isInitialDownload = true;
+                        btnUpdate.click();
+                    }
+                })
+                .catch(err => console.error("[OFBilan] Erreur de vérification des sources:", err));
         });
     </script>
 

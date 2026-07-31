@@ -48,6 +48,15 @@ Composants principaux :
     <!-- Driver.js CSS pour la visite guidée -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css" />
     <style>
+        @keyframes dataFadeIn {
+            from { opacity: 0.35; }
+            to { opacity: 1; }
+        }
+
+        .data-fade-in {
+            animation: dataFadeIn 220ms ease-out forwards;
+        }
+
         /* Style Plein Écran Carte */
         .map-fullscreen {
             position: fixed !important;
@@ -58,13 +67,27 @@ Composants principaux :
             z-index: 99999 !important;
             margin: 0 !important;
             border-radius: 0 !important;
-            background: var(--color-bg-card) !important;
+            background: var(--color-bg-card, #ffffff) !important;
             padding: 10px !important;
+            box-sizing: border-box !important;
+            transform: none !important;
+            animation: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        .map-fullscreen > div:last-child {
+            flex: 1 !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
         }
 
         .map-fullscreen #map {
-            height: calc(100vh - 45px) !important;
-            border-radius: 0 !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            flex: 1 !important;
+            border-radius: 4px !important;
         }
 
         /* Compact styling overrides to avoid scrolling */
@@ -279,6 +302,93 @@ Composants principaux :
             background-color: var(--color-primary);
             color: white;
             border-color: var(--color-primary);
+        }
+
+        .btn-quick-year.is-loading {
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .btn-quick-year .btn-quick-year-spinner {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-left: 4px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: quickyearspin 0.75s linear infinite;
+            vertical-align: middle;
+        }
+
+        .btn-quick-year:not(.active) .btn-quick-year-spinner {
+            border: 2px solid rgba(71, 85, 105, 0.3);
+            border-top-color: #475569;
+        }
+
+        .btn-quick-year.has-error {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+            color: #991b1b !important;
+        }
+
+        .map-loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            border-radius: 6px;
+            pointer-events: all;
+        }
+
+        .map-loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .map-loading-box {
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid var(--color-border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .map-loading-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #cbd5e1;
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: mapspin 0.75s linear infinite;
+        }
+
+        @keyframes mapspin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .filters-loading-disabled {
+            pointer-events: none !important;
+            opacity: 0.75;
+        }
+
+        .map-fade-transition {
+            transition: opacity 0.3s ease-in-out;
         }
     </style>
 </head>
@@ -633,12 +743,16 @@ Composants principaux :
                 style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; flex: 1;">
                 <!-- Bloc Carte & Saisonnalité -->
                 <div style="display: flex; flex-direction: column; gap: 15px; min-width: 0;">
-                    <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
+                    <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0; position: relative;">
+                        <div id="map-error-banner" class="hidden" style="margin-bottom: 8px; padding: 6px 12px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 6px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                            <span id="map-error-message">⚠️ Erreur lors du chargement des données.</span>
+                            <button type="button" id="btn-retry-load" style="background: #dc2626; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔄 Réessayer</button>
+                        </div>
                         <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
                             <h2 style="margin-bottom: 0 !important;">Localisation des données</h2>
                             <div class="no-print"
-                                style="display: flex; gap: 10px; font-size: 11px; align-items: center; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border);">
+                                style="display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: 11px; align-items: center; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); max-width: 100%;">
                                 <label
                                     style="margin: 0 !important; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
                                     <input type="radio" name="map-mode" value="markers" checked style="margin: 0;">
@@ -694,7 +808,15 @@ Composants principaux :
                                     title="Télécharger l'image de la carte">📥 PNG</button>
                             </div>
                         </div>
-                        <div id="map" style="margin-bottom: 0;"></div>
+                        <div style="position: relative; flex: 1; display: flex; flex-direction: column; min-height: 400px;">
+                            <div id="map" style="margin-bottom: 0; flex: 1;"></div>
+                            <div id="map-loading-overlay" class="map-loading-overlay hidden">
+                                <div class="map-loading-box">
+                                    <span class="map-loading-spinner"></span>
+                                    <span>Chargement des données...</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">
                         <div

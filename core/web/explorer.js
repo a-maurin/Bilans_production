@@ -213,8 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             event.stopPropagation();
         }
         usagerLegendFilters[categoryKey] = usagerLegendFilters[categoryKey] === false ? true : false;
-        applyLegendFilters();
-        updateLegend();
+        triggerMapReRender();
     };
 
     function getFilteredHeatmapData() {
@@ -2302,18 +2301,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
-                            if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
-                                const target = normalizeStr(activeKpiFilter.substring(7));
-                                const cat = normalizeStr(getUsagerCategory(pt.type_usager));
-                                if (!cat.includes(target) && !target.includes(cat)) return;
-                            }
+
+                            const isUsagersMode = (currentMapMode === 'usagers');
+                            const usagerCat = getUsagerCategory(pt.type_usager);
+                            if (isUsagersMode && usagerLegendFilters[usagerCat] === false) return;
 
                             coordinates.push([lat, lng]);
                             heatData.push([lat, lng, 1.0]);
 
-                            const isUsagersMode = (currentMapMode === 'usagers');
                             const color = isUsagersMode ? getUsagerColor(pt.type_usager) : getMarkerColor(pt.resultat);
-                            const usagerCat = getUsagerCategory(pt.type_usager);
 
                             const marker = L.circleMarker([lat, lng], {
                                 radius: 6,
@@ -2439,15 +2435,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
                             if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
-                            if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
-                                const target = normalizeStr(activeKpiFilter.substring(7));
-                                const cat = normalizeStr(getUsagerCategory(pt.type_usager));
-                                if (!cat.includes(target) && !target.includes(cat)) return;
-                            }
 
                             const isUsagersMode = (currentMapMode === 'usagers');
-                            const color = isUsagersMode ? getUsagerColor(pt.type_usager) : getMarkerColor(pt.resultat);
                             const usagerCat = getUsagerCategory(pt.type_usager);
+                            if (isUsagersMode && usagerLegendFilters[usagerCat] === false) return;
+
+                            const color = isUsagersMode ? getUsagerColor(pt.type_usager) : getMarkerColor(pt.resultat);
 
                             const marker = L.circleMarker([lat, lng], {
                                 radius: 6,
@@ -3360,13 +3353,10 @@ document.addEventListener('DOMContentLoaded', () => {
             data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PA'));
         } else if (activeKpiFilter === 'pve') {
             data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PVE'));
-        } else if (activeKpiFilter === 'usagers') {
-            data = [...activePoints, ...activeProcedures];
-        } else if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
-            const target = normalizeStr(activeKpiFilter.substring(7));
+        } else if (activeKpiFilter === 'usagers' || currentMapMode === 'usagers') {
             data = [...activePoints, ...activeProcedures].filter(item => {
-                const cat = normalizeStr(getUsagerCategory(item.type_usager));
-                return cat.includes(target) || target.includes(cat);
+                const cat = getUsagerCategory(item.type_usager);
+                return usagerLegendFilters[cat] !== false;
             });
         } else {
             data = [...activePoints];

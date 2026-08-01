@@ -84,38 +84,42 @@ def analyse_region_par_departement(
     
     # 1. Traitement des points de contrôle (Localisations et Opérations)
     if not point.empty:
-        # Assurer qu'on a un num_depart
+        # Assurer qu'on a un num_depart propre et filtré
         pt = point.copy()
         if "num_depart" not in pt.columns:
             pt["num_depart"] = "Inconnu"
+        pt["num_depart"] = pt["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
+        pt = pt[pt["num_depart"].isin(dept_codes)]
+        
         pt["domaine"] = pt["domaine"].fillna("Hors domaine").astype(str) if "domaine" in pt.columns else "Hors domaine"
         pt["theme"] = pt["theme"].fillna("Hors thème").astype(str) if "theme" in pt.columns else (pt["thematique"].fillna("Hors thème").astype(str) if "thematique" in pt.columns else "Hors thème")
         
-        # Localisations
-        locs = pt.groupby(["domaine", "theme", "num_depart"]).size().reset_index(name="nb_localisations")
-        
-        # Opérations (fc_id uniques)
-        if "fc_id" in pt.columns:
-            ops = pt.groupby(["domaine", "theme", "num_depart"])["fc_id"].nunique().reset_index(name="nb_operations")
-            locs = pd.merge(locs, ops, on=["domaine", "theme", "num_depart"], how="outer")
-        else:
-            locs["nb_operations"] = 0
+        if not pt.empty:
+            # Localisations
+            locs = pt.groupby(["domaine", "theme", "num_depart"]).size().reset_index(name="nb_localisations")
             
-        for _, r in locs.iterrows():
-            rows.append({
-                "domaine": r["domaine"],
-                "theme": r["theme"],
-                "departement": r["num_depart"],
-                "metrique": "nb_localisations",
-                "valeur": r["nb_localisations"]
-            })
-            rows.append({
-                "domaine": r["domaine"],
-                "theme": r["theme"],
-                "departement": r["num_depart"],
-                "metrique": "nb_operations",
-                "valeur": r["nb_operations"]
-            })
+            # Opérations (fc_id uniques)
+            if "fc_id" in pt.columns:
+                ops = pt.groupby(["domaine", "theme", "num_depart"])["fc_id"].nunique().reset_index(name="nb_operations")
+                locs = pd.merge(locs, ops, on=["domaine", "theme", "num_depart"], how="outer")
+            else:
+                locs["nb_operations"] = 0
+                
+            for _, r in locs.iterrows():
+                rows.append({
+                    "domaine": r["domaine"],
+                    "theme": r["theme"],
+                    "departement": r["num_depart"],
+                    "metrique": "nb_localisations",
+                    "valeur": r["nb_localisations"]
+                })
+                rows.append({
+                    "domaine": r["domaine"],
+                    "theme": r["theme"],
+                    "departement": r["num_depart"],
+                    "metrique": "nb_operations",
+                    "valeur": r["nb_operations"]
+                })
             
     # 2. PEJ
     if not pej.empty:
@@ -126,39 +130,46 @@ def analyse_region_par_departement(
         if "ENTITE_ORIGINE_PROCEDURE" in pj.columns:
             # Extraction du département de SDXX
             pj["departement"] = pj["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'SD(\d+)')[0]
-            pj["departement"] = pj["departement"].fillna("Inconnu")
+            pj["departement"] = pj["departement"].fillna("Inconnu").astype(str).str.strip().str.zfill(2)
+        pj = pj[pj["departement"].isin(dept_codes)]
             
         if "DATE_REF" in pj.columns and "DC_ID" in pj.columns:
             pj = pj.sort_values("DATE_REF", ascending=False).drop_duplicates("DC_ID")
             
-        pejs = pj.groupby(["domaine", "theme", "departement"]).size().reset_index(name="nb_pej")
-        for _, r in pejs.iterrows():
-            rows.append({
-                "domaine": r["domaine"],
-                "theme": r["theme"],
-                "departement": r["departement"],
-                "metrique": "nb_pej",
-                "valeur": r["nb_pej"]
-            })
+        if not pj.empty:
+            pejs = pj.groupby(["domaine", "theme", "departement"]).size().reset_index(name="nb_pej")
+            for _, r in pejs.iterrows():
+                rows.append({
+                    "domaine": r["domaine"],
+                    "theme": r["theme"],
+                    "departement": r["departement"],
+                    "metrique": "nb_pej",
+                    "valeur": r["nb_pej"]
+                })
             
     # 3. PA
     if not point.empty and "resultat" in point.columns:
         from core.common.utilitaires_metier import filter_points_induisant_pa
         pt_pa = filter_points_induisant_pa(point)
         if not pt_pa.empty:
-            pt_pa["domaine"] = pt_pa["domaine"].fillna("Hors domaine").astype(str) if "domaine" in pt_pa.columns else "Hors domaine"
-            pt_pa["theme"] = pt_pa["theme"].fillna("Hors thème").astype(str) if "theme" in pt_pa.columns else (pt_pa["thematique"].fillna("Hors thème").astype(str) if "thematique" in pt_pa.columns else "Hors thème")
+            pt_pa = pt_pa.copy()
             if "num_depart" not in pt_pa.columns:
                 pt_pa["num_depart"] = "Inconnu"
-            pas = pt_pa.groupby(["domaine", "theme", "num_depart"]).size().reset_index(name="nb_pa")
-            for _, r in pas.iterrows():
-                rows.append({
-                    "domaine": r["domaine"],
-                    "theme": r["theme"],
-                    "departement": r["num_depart"],
-                    "metrique": "nb_pa",
-                    "valeur": r["nb_pa"]
-                })
+            pt_pa["num_depart"] = pt_pa["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
+            pt_pa = pt_pa[pt_pa["num_depart"].isin(dept_codes)]
+            
+            if not pt_pa.empty:
+                pt_pa["domaine"] = pt_pa["domaine"].fillna("Hors domaine").astype(str) if "domaine" in pt_pa.columns else "Hors domaine"
+                pt_pa["theme"] = pt_pa["theme"].fillna("Hors thème").astype(str) if "theme" in pt_pa.columns else (pt_pa["thematique"].fillna("Hors thème").astype(str) if "thematique" in pt_pa.columns else "Hors thème")
+                pas = pt_pa.groupby(["domaine", "theme", "num_depart"]).size().reset_index(name="nb_pa")
+                for _, r in pas.iterrows():
+                    rows.append({
+                        "domaine": r["domaine"],
+                        "theme": r["theme"],
+                        "departement": r["num_depart"],
+                        "metrique": "nb_pa",
+                        "valeur": r["nb_pa"]
+                    })
                 
     # 4. PVe
     if not pve.empty:
@@ -183,23 +194,25 @@ def analyse_region_par_departement(
             
         pv["departement"] = "Inconnu"
         if "INF-INSEE" in pv.columns:
-            def _extract_dep(val):
-                s = str(val).strip().zfill(5)
-                return s[:3] if s.startswith("97") else s[:2]
-            pv["departement"] = pv["INF-INSEE"].apply(_extract_dep)
+            s_insee = pv["INF-INSEE"].astype(str).str.strip().str.zfill(5)
+            pv["departement"] = s_insee.where(~s_insee.str.startswith("97"), s_insee.str[:3])
+            pv["departement"] = pv["departement"].where(s_insee.str.startswith("97"), s_insee.str[:2])
         elif "INSEE_DEP" in pv.columns:
             pv["departement"] = pv["INSEE_DEP"].astype(str)
-
             
-        pves = pv.groupby(["domaine", "theme", "departement"]).size().reset_index(name="nb_pve")
-        for _, r in pves.iterrows():
-            rows.append({
-                "domaine": r["domaine"],
-                "theme": r["theme"],
-                "departement": r["departement"],
-                "metrique": "nb_pve",
-                "valeur": r["nb_pve"]
-            })
+        pv["departement"] = pv["departement"].astype(str).str.strip().str.zfill(2)
+        pv = pv[pv["departement"].isin(dept_codes)]
+
+        if not pv.empty:
+            pves = pv.groupby(["domaine", "theme", "departement"]).size().reset_index(name="nb_pve")
+            for _, r in pves.iterrows():
+                rows.append({
+                    "domaine": r["domaine"],
+                    "theme": r["theme"],
+                    "departement": r["departement"],
+                    "metrique": "nb_pve",
+                    "valeur": r["nb_pve"]
+                })
 
     if not rows:
         pd.DataFrame(columns=["domaine", "theme", "departement", "metrique", "valeur"]).to_csv(out_dir / "region_detail_par_dept.csv", sep=";", index=False)

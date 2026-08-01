@@ -52,7 +52,7 @@ except ImportError:
     gpd = None
 
 
-def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text: str, styles: dict) -> RLImage | Paragraph:
+def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text: str, styles: dict, max_h: float | None = 450.0) -> RLImage | Paragraph:
     """Instancie une RLImage ReportLab en conservant mathématiquement le ratio largeur/hauteur réel."""
     body_style = styles.get("BodyText", styles.get("Normal"))
     if not img_path.exists():
@@ -62,6 +62,9 @@ def _create_proportional_rl_image(img_path: Path, target_w: float, fallback_text
             w_px, h_px = im.size
         aspect = (h_px / float(w_px)) if w_px > 0 else 0.7
         target_h = target_w * aspect
+        if max_h is not None and target_h > max_h:
+            target_h = max_h
+            target_w = target_h / aspect
         return RLImage(str(img_path), width=target_w, height=target_h)
     except Exception:
         return Paragraph(f"<i>{fallback_text}</i>", body_style)
@@ -151,16 +154,17 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                             gdf_pts = gdf_pts.to_crs("EPSG:2154")
                     
                     target_dept = str(dept_code).strip().split('.')[0].zfill(2)
-                    # Priorité 1 : filtrage spatial strict (points géographiquement dans le département)
-                    try:
-                        pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
-                    except Exception:
-                        pts_dept = None
-                    
-                    # Secours (Priorité 2) : si le sjoin ne donne aucun point, filtrer par l'attribut num_depart
-                    if (pts_dept is None or pts_dept.empty) and "num_depart" in gdf_pts.columns:
+                    # Priorité 1 : filtrage attributaire rapide par num_depart / INSEE
+                    if "num_depart" in gdf_pts.columns:
                         dept_clean = gdf_pts["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
                         pts_dept = gdf_pts[dept_clean == target_dept]
+                    
+                    # Secours (Priorité 2) : sjoin spatial uniquement si le filtrage attributaire ne donne rien
+                    if pts_dept is None or pts_dept.empty:
+                        try:
+                            pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
+                        except Exception:
+                            pts_dept = None
                 except Exception:
                     pts_dept = None
             

@@ -547,8 +547,26 @@ def _run_global_profile_via_yaml(
 
     print(f"[2/5] Regroupement et calcul des indicateurs (Période : {ventilation_mode})...")
     with Spinner():
+        gdf_faits = None
+        try:
+            from core.common.chargeurs_donnees import get_points_infrac_pj_path, read_vector_attributes
+            path_faits = get_points_infrac_pj_path(root)
+            if path_faits.exists():
+                try:
+                    import geopandas as _gpd
+                    gdf_raw = _gpd.read_file(path_faits)
+                    if "x_infrac" not in gdf_raw.columns and "geometry" in gdf_raw.columns:
+                        gdf_raw["x_infrac"] = gdf_raw.geometry.x
+                        gdf_raw["y_infrac"] = gdf_raw.geometry.y
+                    gdf_faits = pd.DataFrame(gdf_raw.drop(columns=["geometry"], errors="ignore"))
+                except Exception:
+                    gdf_faits = read_vector_attributes(path_faits)
+        except Exception:
+            gdf_faits = None
+
         def _run_agg_for_context(pts, pjs, pas, pvs, out):
-            run_aggregations(
+            import inspect
+            agg_kwargs = dict(
                 profile=profile,
                 root=root,
                 point=pts,
@@ -561,6 +579,10 @@ def _run_global_profile_via_yaml(
                 date_deb=date_deb_ts,
                 date_fin=date_fin_ts,
             )
+            sig = inspect.signature(run_aggregations)
+            if "gdf_faits" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+                agg_kwargs["gdf_faits"] = gdf_faits
+            run_aggregations(**agg_kwargs)
 
         if echelle_norm == "pnf":
             point_f, pej_f, pa_f, pve_f = _apply_restrict_geo_pnf(point, pej, pa, pve, root, spatial_log)

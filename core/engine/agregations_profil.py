@@ -296,6 +296,7 @@ def analyse_pej_pa_global(
     out_dir: Path,
     echelle: str = "departement",
     code: str = "21",
+    gdf_faits: pd.DataFrame | None = None,
 ) -> None:
     """PEJ et PA du departement (ENTITE_ORIGINE_PROCEDURE == SD{code} pour les PEJ), tous domaines/themes."""
     natinf_ref = load_natinf_ref(root)
@@ -320,7 +321,7 @@ def analyse_pej_pa_global(
         pej_dept = pej_dept[pej_dept["DC_ID"].isna() | ~pej_dept.duplicated(subset=["DC_ID"], keep="first")].copy()
 
     from core.common.chargeurs_donnees import merge_pej_faits_locations
-    pej_dept = merge_pej_faits_locations(pej_dept, root, echelle, code)
+    pej_dept = merge_pej_faits_locations(pej_dept, root, echelle, code, gdf_faits=gdf_faits)
 
     def _col_or_fallback(df: pd.DataFrame, name: str, fallback: str) -> pd.Series:
         if name in df.columns:
@@ -552,6 +553,114 @@ def analyse_pve_global(pve: pd.DataFrame, out_dir: Path) -> None:
     pve_detail.to_csv(out_dir / "pve_detail.csv", sep=";", index=False)
 
 
+def _build_temporal_indicators(
+    point: pd.DataFrame,
+    pa: pd.DataFrame,
+    pej: pd.DataFrame,
+    pve: pd.DataFrame,
+    out_dir: Path,
+    period_type: str,
+    filename: str,
+) -> None:
+    """Construit de façon entièrement vectorisée les indicateurs temporels globaux."""
+    def _get_period_series(df: pd.DataFrame, col: str) -> pd.Series:
+        if df is None or df.empty or col not in df.columns:
+            return pd.Series(dtype=object)
+        dt = pd.to_datetime(df[col], errors="coerce")
+        valid_mask = dt.notna()
+        if not valid_mask.any():
+            return pd.Series(index=df.index, dtype=object)
+        
+        res = pd.Series(index=df.index, dtype=object)
+        sub_dt = dt[valid_mask]
+        if period_type == "annuelle":
+            res.loc[valid_mask] = sub_dt.dt.year.astype(str)
+        elif period_type == "mensuelle":
+            res.loc[valid_mask] = sub_dt.dt.strftime("%Y-%m")
+        elif period_type == "trimestrielle":
+            q = (sub_dt.dt.month - 1) // 3 + 1
+            res.loc[valid_mask] = sub_dt.dt.year.astype(str) + "-T" + q.astype(str)
+        elif period_type == "hebdomadaire":
+            iso = sub_dt.dt.isocalendar()
+            res.loc[valid_mask] = iso["year"].astype(str) + "-S" + iso["week"].astype(str).str.zfill(2)
+        return res
+
+    p_period = _get_period_series(point, "date_ctrl")
+    pej_period = _get_period_series(pej, "DATE_REF")
+    pve_period = _get_period_series(pve, "INF-DATE-INTG")
+
+    periods = set()
+    for s in (p_period, pej_period, pve_period):
+        if not s.empty:
+            periods |= set(s.dropna().unique())
+    periods.discard("<NA>")
+    periods.discard("nan")
+    periods.discard("None")
+    periods.discard("")
+
+    if not periods:
+        pd.DataFrame(
+            columns=[
+                "periode",
+                "nb_localisations",
+                "nb_operations_controle",
+                "nb_localisations_non_conformes",
+                "taux_non_conformite_localisations",
+                "nb_pej",
+                "nb_pa",
+                "nb_pve",
+            ]
+        ).to_csv(out_dir / filename, sep=";", index=False)
+        return
+
+    loc_counts = p_period.value_counts() if not p_period.empty else pd.Series(dtype=int)
+    pej_counts = pej_period.value_counts() if not pej_period.empty else pd.Series(dtype=int)
+    pve_counts = pve_period.value_counts() if not pve_period.empty else pd.Series(dtype=int)
+
+    ops_counts = {}
+    if not point.empty and "fc_id" in point.columns and not p_period.empty:
+        valid_pts = point[p_period.notna()]
+        ops_counts = valid_pts.groupby(p_period[p_period.notna()])["fc_id"].nunique().to_dict()
+
+    nc_counts = {}
+    if not point.empty and "resultat" in point.columns and not p_period.empty:
+        from core.common.utilitaires_metier import classify_resultat_controle_series
+        is_nc = classify_resultat_controle_series(point["resultat"]).isin(["Infraction", "Manquement"])
+        valid_nc = is_nc & p_period.notna()
+        nc_counts = point[valid_nc].groupby(p_period[valid_nc]).size().to_dict()
+
+    pa_counts = {}
+    if not point.empty and "code_pa" in point.columns and not p_period.empty:
+        from core.common.utilitaires_metier import is_filled_procedure_code
+        is_pa = point["code_pa"].map(is_filled_procedure_code)
+        valid_pa = is_pa & p_period.notna()
+        pa_counts = point[valid_pa].groupby(p_period[valid_pa]).size().to_dict()
+
+    rows = []
+    for per in sorted(periods):
+        nb_loc = int(loc_counts.get(per, 0))
+        nb_ops = int(ops_counts.get(per, 0))
+        nb_nc = int(nc_counts.get(per, 0))
+        nb_pej_val = int(pej_counts.get(per, 0))
+        nb_pa_val = int(pa_counts.get(per, 0))
+        nb_pve_val = int(pve_counts.get(per, 0))
+
+        rows.append(
+            {
+                "periode": per,
+                "nb_localisations": nb_loc,
+                "nb_operations_controle": nb_ops,
+                "nb_localisations_non_conformes": nb_nc,
+                "taux_non_conformite_localisations": (nb_nc / nb_loc) if nb_loc > 0 else pd.NA,
+                "nb_pej": nb_pej_val,
+                "nb_pa": nb_pa_val,
+                "nb_pve": nb_pve_val,
+            }
+        )
+
+    pd.DataFrame(rows).to_csv(out_dir / filename, sep=";", index=False)
+
+
 def analyse_annuelle_global(
     point: pd.DataFrame,
     pa: pd.DataFrame,
@@ -560,76 +669,7 @@ def analyse_annuelle_global(
     out_dir: Path,
 ) -> None:
     """Construit les indicateurs annuels globaux pour les periodes multi-annuelles."""
-    if not point.empty and "date_ctrl" in point.columns:
-        point = point.copy()
-        point["date_ctrl"] = pd.to_datetime(point["date_ctrl"], errors="coerce")
-    if not pej.empty and "DATE_REF" in pej.columns:
-        pej = pej.copy()
-        pej["DATE_REF"] = pd.to_datetime(pej["DATE_REF"], errors="coerce")
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        pve = pve.copy()
-        pve["INF-DATE-INTG"] = pd.to_datetime(pve["INF-DATE-INTG"], errors="coerce")
-
-    years: set[int] = set()
-    if not point.empty and "date_ctrl" in point.columns:
-        years |= set(point["date_ctrl"].dropna().dt.year.astype(int).tolist())
-    if not pej.empty and "DATE_REF" in pej.columns:
-        years |= set(pej["DATE_REF"].dropna().dt.year.astype(int).tolist())
-    pa_pts = filter_points_induisant_pa(point)
-    if not pa_pts.empty and "date_ctrl" in pa_pts.columns:
-        years |= set(pa_pts["date_ctrl"].dropna().dt.year.astype(int).tolist())
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        years |= set(pve["INF-DATE-INTG"].dropna().dt.year.astype(int).tolist())
-
-    rows = []
-    for year in sorted(years):
-        nb_localisations = (
-            int((point["date_ctrl"].dt.year == year).sum())
-            if not point.empty and "date_ctrl" in point.columns
-            else 0
-        )
-        nb_ops = 0
-        if not point.empty and "date_ctrl" in point.columns:
-            mask = point["date_ctrl"].dt.year == year
-            nb_ops = count_operations_controle(point, mask=mask)
-        nb_localisations_inf = (
-            count_controles_non_conformes_oscean(
-                point.loc[point["date_ctrl"].dt.year == year, "resultat"]
-            )
-            if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns
-            else 0
-        )
-        nb_pej = (
-            int((pej["DATE_REF"].dt.year == year).sum())
-            if not pej.empty and "DATE_REF" in pej.columns
-            else 0
-        )
-        nb_pa = 0
-        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
-            dt = point["date_ctrl"]
-            mask = dt.dt.year == year
-            nb_pa = count_pa_induites_par_controles(point, mask=mask)
-        nb_pve = (
-            int((pve["INF-DATE-INTG"].dt.year == year).sum())
-            if not pve.empty and "INF-DATE-INTG" in pve.columns
-            else 0
-        )
-        rows.append(
-            {
-                "periode": str(year),
-                "nb_localisations": nb_localisations,
-                "nb_operations_controle": nb_ops,
-                "nb_localisations_non_conformes": nb_localisations_inf,
-                "taux_non_conformite_localisations": (nb_localisations_inf / nb_localisations) if nb_localisations > 0 else pd.NA,
-                "nb_pej": nb_pej,
-                "nb_pa": nb_pa,
-                "nb_pve": nb_pve,
-            }
-        )
-
-    pd.DataFrame(rows).to_csv(
-        out_dir / "indicateurs_global_par_annee.csv", sep=";", index=False
-    )
+    _build_temporal_indicators(point, pa, pej, pve, out_dir, "annuelle", "indicateurs_global_par_annee.csv")
 
 
 def analyse_trimestrielle_global(
@@ -639,94 +679,8 @@ def analyse_trimestrielle_global(
     pve: pd.DataFrame,
     out_dir: Path,
 ) -> None:
-    """Construit les indicateurs trimestriels globaux (T1=janv-mars, T2=avr-juin, T3=juil-sept, T4=oct-dec)."""
-    if not point.empty and "date_ctrl" in point.columns:
-        point = point.copy()
-        point["date_ctrl"] = pd.to_datetime(point["date_ctrl"], errors="coerce")
-    if not pej.empty and "DATE_REF" in pej.columns:
-        pej = pej.copy()
-        pej["DATE_REF"] = pd.to_datetime(pej["DATE_REF"], errors="coerce")
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        pve = pve.copy()
-        pve["INF-DATE-INTG"] = pd.to_datetime(pve["INF-DATE-INTG"], errors="coerce")
-
-    periods: set[tuple[int, int]] = set()
-
-    if not point.empty and "date_ctrl" in point.columns:
-        for _, r in point["date_ctrl"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                q = (t.month - 1) // 3 + 1
-                periods.add((int(t.year), q))
-    if not pej.empty and "DATE_REF" in pej.columns:
-        for _, r in pej["DATE_REF"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                q = (t.month - 1) // 3 + 1
-                periods.add((int(t.year), q))
-    pa_pts = filter_points_induisant_pa(point)
-    if not pa_pts.empty and "date_ctrl" in pa_pts.columns:
-        for _, r in pa_pts["date_ctrl"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                q = (t.month - 1) // 3 + 1
-                periods.add((int(t.year), q))
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        for _, r in pve["INF-DATE-INTG"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                q = (t.month - 1) // 3 + 1
-                periods.add((int(t.year), q))
-
-    rows = []
-    for (year, quarter) in sorted(periods):
-        m1 = (quarter - 1) * 3 + 1
-        m2 = quarter * 3
-
-        nb_localisations = 0
-        nb_ops = 0
-        if not point.empty and "date_ctrl" in point.columns:
-            dt = point["date_ctrl"]
-            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
-            nb_localisations = int(mask.sum())
-            nb_ops = count_operations_controle(point, mask=mask)
-        nb_localisations_inf = 0
-        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
-            dt = point["date_ctrl"]
-            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
-            nb_localisations_inf = count_controles_non_conformes_oscean(point.loc[mask, "resultat"])
-        nb_pej = 0
-        if not pej.empty and "DATE_REF" in pej.columns:
-            dt = pej["DATE_REF"]
-            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
-            nb_pej = int(mask.sum())
-        nb_pa = 0
-        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
-            dt = point["date_ctrl"]
-            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
-            nb_pa = count_pa_induites_par_controles(point, mask=mask)
-        nb_pve = 0
-        if not pve.empty and "INF-DATE-INTG" in pve.columns:
-            dt = pve["INF-DATE-INTG"]
-            mask = (dt.dt.year == year) & (dt.dt.month >= m1) & (dt.dt.month <= m2)
-            nb_pve = int(mask.sum())
-
-        rows.append(
-            {
-                "periode": f"{year}-T{quarter}",
-                "nb_localisations": nb_localisations,
-                "nb_operations_controle": nb_ops,
-                "nb_localisations_non_conformes": nb_localisations_inf,
-                "taux_non_conformite_localisations": (nb_localisations_inf / nb_localisations) if nb_localisations > 0 else pd.NA,
-                "nb_pej": nb_pej,
-                "nb_pa": nb_pa,
-                "nb_pve": nb_pve,
-            }
-        )
-
-    pd.DataFrame(rows).to_csv(
-        out_dir / "indicateurs_global_par_trimestre.csv", sep=";", index=False
-    )
+    """Construit les indicateurs trimestriels globaux."""
+    _build_temporal_indicators(point, pa, pej, pve, out_dir, "trimestrielle", "indicateurs_global_par_trimestre.csv")
 
 
 def analyse_mensuelle_global(
@@ -737,88 +691,7 @@ def analyse_mensuelle_global(
     out_dir: Path,
 ) -> None:
     """Construit les indicateurs mensuels globaux (YYYY-MM)."""
-    if not point.empty and "date_ctrl" in point.columns:
-        point = point.copy()
-        point["date_ctrl"] = pd.to_datetime(point["date_ctrl"], errors="coerce")
-    if not pej.empty and "DATE_REF" in pej.columns:
-        pej = pej.copy()
-        pej["DATE_REF"] = pd.to_datetime(pej["DATE_REF"], errors="coerce")
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        pve = pve.copy()
-        pve["INF-DATE-INTG"] = pd.to_datetime(pve["INF-DATE-INTG"], errors="coerce")
-
-    periods: set[tuple[int, int]] = set()
-
-    if not point.empty and "date_ctrl" in point.columns:
-        for _, r in point["date_ctrl"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                periods.add((int(t.year), int(t.month)))
-    if not pej.empty and "DATE_REF" in pej.columns:
-        for _, r in pej["DATE_REF"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                periods.add((int(t.year), int(t.month)))
-    pa_pts = filter_points_induisant_pa(point)
-    if not pa_pts.empty and "date_ctrl" in pa_pts.columns:
-        for _, r in pa_pts["date_ctrl"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                periods.add((int(t.year), int(t.month)))
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        for _, r in pve["INF-DATE-INTG"].dropna().items():
-            t = r
-            if hasattr(t, "year") and hasattr(t, "month"):
-                periods.add((int(t.year), int(t.month)))
-
-    rows = []
-    for (year, month) in sorted(periods):
-        nb_localisations = 0
-        nb_ops = 0
-        nb_localisations_nc = 0
-        if not point.empty and "date_ctrl" in point.columns:
-            dt = point["date_ctrl"]
-            mask = (dt.dt.year == year) & (dt.dt.month == month)
-            nb_localisations = int(mask.sum())
-            nb_ops = count_operations_controle(point, mask=mask)
-            if "resultat" in point.columns:
-                nb_localisations_nc = count_controles_non_conformes_oscean(
-                    point.loc[mask, "resultat"]
-                )
-        nb_pej = 0
-        if not pej.empty and "DATE_REF" in pej.columns:
-            dt = pej["DATE_REF"]
-            mask = (dt.dt.year == year) & (dt.dt.month == month)
-            nb_pej = int(mask.sum())
-        nb_pa = 0
-        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
-            dt = point["date_ctrl"]
-            mask = (dt.dt.year == year) & (dt.dt.month == month)
-            nb_pa = count_pa_induites_par_controles(point, mask=mask)
-        nb_pve = 0
-        if not pve.empty and "INF-DATE-INTG" in pve.columns:
-            dt = pve["INF-DATE-INTG"]
-            mask = (dt.dt.year == year) & (dt.dt.month == month)
-            nb_pve = int(mask.sum())
-
-        rows.append(
-            {
-                "periode": f"{year}-{month:02d}",
-                "nb_localisations": nb_localisations,
-                "nb_operations_controle": nb_ops,
-                "nb_localisations_non_conformes": nb_localisations_nc,
-                "taux_non_conformite_localisations": (nb_localisations_nc / nb_localisations)
-                if nb_localisations > 0
-                else pd.NA,
-                "nb_pej": nb_pej,
-                "nb_pa": nb_pa,
-                "nb_pve": nb_pve,
-            }
-        )
-
-    pd.DataFrame(rows).to_csv(
-        out_dir / "indicateurs_global_par_mois.csv", sep=";", index=False
-    )
+    _build_temporal_indicators(point, pa, pej, pve, out_dir, "mensuelle", "indicateurs_global_par_mois.csv")
 
 
 def analyse_hebdomadaire_global(
@@ -829,79 +702,7 @@ def analyse_hebdomadaire_global(
     out_dir: Path,
 ) -> None:
     """Indicateurs par semaine (libellé YYYY-Sww), aligné sur le moteur thématique."""
-    if not point.empty and "date_ctrl" in point.columns:
-        point = point.copy()
-        point["date_ctrl"] = pd.to_datetime(point["date_ctrl"], errors="coerce")
-    if not pej.empty and "DATE_REF" in pej.columns:
-        pej = pej.copy()
-        pej["DATE_REF"] = pd.to_datetime(pej["DATE_REF"], errors="coerce")
-    if not pve.empty and "INF-DATE-INTG" in pve.columns:
-        pve = pve.copy()
-        pve["INF-DATE-INTG"] = pd.to_datetime(pve["INF-DATE-INTG"], errors="coerce")
-
-    periods: set[tuple[int, int]] = set()
-
-    def _collect(df: pd.DataFrame, col: str) -> None:
-        if df is None or df.empty or col not in df.columns:
-            return
-        dt = pd.to_datetime(df[col], errors="coerce").dropna()
-        if dt.empty:
-            return
-        iso = dt.dt.isocalendar()
-        for y, w in zip(iso["year"].tolist(), iso["week"].tolist()):
-            periods.add((int(y), int(w)))
-
-    _collect(point, "date_ctrl")
-    _collect(pej, "DATE_REF")
-    _collect(filter_points_induisant_pa(point), "date_ctrl")
-    _collect(pve, "INF-DATE-INTG")
-
-    rows = []
-    for (year, week) in sorted(periods):
-        nb_localisations = 0
-        nb_ops = 0
-        nb_localisations_nc = 0
-        if not point.empty and "date_ctrl" in point.columns:
-            dt = point["date_ctrl"]
-            iso = dt.dt.isocalendar()
-            mask = (iso["year"] == year) & (iso["week"] == week)
-            nb_localisations = int(mask.sum())
-            nb_ops = count_operations_controle(point, mask=mask)
-            if "resultat" in point.columns:
-                nb_localisations_nc = count_controles_non_conformes_oscean(point.loc[mask, "resultat"])
-        nb_pej = 0
-        if not pej.empty and "DATE_REF" in pej.columns:
-            dt = pej["DATE_REF"]
-            iso = dt.dt.isocalendar()
-            nb_pej = int(((iso["year"] == year) & (iso["week"] == week)).sum())
-        nb_pa = 0
-        if not point.empty and "date_ctrl" in point.columns and "resultat" in point.columns:
-            dt = point["date_ctrl"]
-            iso = dt.dt.isocalendar()
-            mask = (iso["year"] == year) & (iso["week"] == week)
-            nb_pa = count_pa_induites_par_controles(point, mask=mask)
-        nb_pve = 0
-        if not pve.empty and "INF-DATE-INTG" in pve.columns:
-            dt = pve["INF-DATE-INTG"]
-            iso = dt.dt.isocalendar()
-            nb_pve = int(((iso["year"] == year) & (iso["week"] == week)).sum())
-
-        rows.append(
-            {
-                "periode": f"{year}-S{week:02d}",
-                "nb_localisations": nb_localisations,
-                "nb_operations_controle": nb_ops,
-                "nb_localisations_non_conformes": nb_localisations_nc,
-                "taux_non_conformite_localisations": (nb_localisations_nc / nb_localisations) if nb_localisations > 0 else pd.NA,
-                "nb_pej": nb_pej,
-                "nb_pa": nb_pa,
-                "nb_pve": nb_pve,
-            }
-        )
-
-    pd.DataFrame(rows).to_csv(
-        out_dir / "indicateurs_global_par_semaine.csv", sep=";", index=False
-    )
+    _build_temporal_indicators(point, pa, pej, pve, out_dir, "hebdomadaire", "indicateurs_global_par_semaine.csv")
 
 
 __all__ = [
@@ -931,10 +732,11 @@ def run_profile_aggregations(
     date_deb: pd.Timestamp,
     date_fin: pd.Timestamp,
     pej_global: pd.DataFrame | None = None,
+    gdf_faits: pd.DataFrame | None = None,
 ) -> None:
     """Adapter d'agrégations piloté par profil YAML."""
     analyse_controles_global(point, out_dir)
-    analyse_pej_pa_global(root, point, pa, pej, out_dir, echelle=echelle, code=code)
+    analyse_pej_pa_global(root, point, pa, pej, out_dir, echelle=echelle, code=code, gdf_faits=gdf_faits)
     analyse_pve_global(pve, out_dir)
     if ventilation_mode == "annuelle":
         analyse_annuelle_global(point, pa, pej, pve, out_dir)

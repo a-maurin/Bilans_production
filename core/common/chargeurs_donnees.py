@@ -2359,6 +2359,7 @@ def merge_pej_faits_locations(
     *,
     natinf_list: list = [],
     log: Optional[logging.Logger] = None,
+    gdf_faits: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     Enrichit le tableau PEJ (ODS) avec les coordonnées WGS84 issues de la couche
@@ -2375,24 +2376,27 @@ def merge_pej_faits_locations(
     if "x_faits" in pej.columns and "y_faits" in pej.columns:
         return pej.copy()
 
-    path = get_points_infrac_pj_path(root)
-    if not path.exists():
-        lg.info("Couche FAITS PJ absente (%s) — PEJ sans coordonnées SIG.", path)
-        return pej.copy()
+    if gdf_faits is not None and not gdf_faits.empty:
+        gdf = gdf_faits.copy()
+    else:
+        path = get_points_infrac_pj_path(root)
+        if not path.exists():
+            lg.info("Couche FAITS PJ absente (%s) — PEJ sans coordonnées SIG.", path)
+            return pej.copy()
 
-    try:
-        import geopandas as _gpd
-        gdf_raw = _gpd.read_file(path)
-        # Extraire x/y depuis la géométrie si les colonnes attributaires sont absentes
-        if "x_infrac" not in gdf_raw.columns and "geometry" in gdf_raw.columns:
-            gdf_raw["x_infrac"] = gdf_raw.geometry.x
-            gdf_raw["y_infrac"] = gdf_raw.geometry.y
-        gdf = pd.DataFrame(gdf_raw.drop(columns=["geometry"], errors="ignore"))
-    except ImportError:
-        gdf = read_vector_attributes(path)
-    except Exception as e:
-        lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
-        return pej.copy()
+        try:
+            import geopandas as _gpd
+            gdf_raw = _gpd.read_file(path)
+            # Extraire x/y depuis la géométrie si les colonnes attributaires sont absentes
+            if "x_infrac" not in gdf_raw.columns and "geometry" in gdf_raw.columns:
+                gdf_raw["x_infrac"] = gdf_raw.geometry.x
+                gdf_raw["y_infrac"] = gdf_raw.geometry.y
+            gdf = pd.DataFrame(gdf_raw.drop(columns=["geometry"], errors="ignore"))
+        except ImportError:
+            gdf = read_vector_attributes(path)
+        except Exception as e:
+            lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
+            return pej.copy()
 
     if gdf.empty:
         return pej.copy()

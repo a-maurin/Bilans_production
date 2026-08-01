@@ -263,7 +263,7 @@ def test_bilans_cli_default_brochure_option(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(cli, "_check_deps", lambda: None)
-    monkeypatch.setattr(cli, "_is_interactive", lambda: False)
+    monkeypatch.setattr("core.common.prompt_periode._is_interactive", lambda: False)
     monkeypatch.setattr(
         "core.engine.catalogue_profils.resolve_profile_ids",
         lambda ids: ids,

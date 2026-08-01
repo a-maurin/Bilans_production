@@ -41,11 +41,10 @@ title:
   line2_mode: fixed
   line2_fixed: "Service Régional Police"
 
-sections:
-  order:
-    - sec1
-    - sec2
-    - sec4
-    - sec3
-    - sec6
 ```
+
+## Gabarits officiels intégrés
+
+* `gabarit_defaut.yaml` : Gabarit institutionnel par défaut de l'OFB.
+* `srp_r27.yaml` : Gabarit sur-mesure Service Régional Police (BFC / R27).
+

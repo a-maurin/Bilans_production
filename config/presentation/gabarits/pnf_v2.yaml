@@ -1,0 +1,86 @@
+# ========================================================================================
+# GABARIT DE PRESENTATION : PARC NATIONAL DE FORETS V2 (`pnf_v2.yaml`)
+# ========================================================================================
+# Ce fichier régit le gabarit de présentation PDF pour le Parc national de forêts (v2),
+# reprenant l'architecture et les composants des bilans régionaux :
+#   - Synthèse globale AOA avec chiffres clés, cartes et graphiques complets.
+#   - Focus dédié au Cœur de parc.
+#   - Déclinaisons départementales (21 - Côte-d'Or & 52 - Haute-Marne).
+#   - Fiches synthétiques 1 page par département en fin de document.
+# ========================================================================================
+
+version: 1
+gabarit_id: pnf_v2
+label: "PNF v2"
+description: "Gabarit de présentation Bilan PNF (AOA, Cœur de parc, avec focus 21 & 52)"
+
+cible: les_deux
+profils_compatibles:
+  - pnf
+  - pnf_v2
+
+title:
+  line1: "Bilan des activités de police de l'environnement\nParc national de forêts"
+  line2_mode: auto
+
+options:
+  tub: false
+
+sections:
+  order:
+    - sec1
+    - sec2
+    - sec21
+    - sec22
+    - sec23
+    - sec4
+    - sec41
+    - sec42
+    - sec43
+    - sec44
+    - sec3
+    - sec31
+    - sec32
+    - sec33
+    - sec5
+    - sec6
+
+cartographie:
+  couches_vecteurs_extra:
+    - coeur_parc
+  show_coeur_parc: true
+  carte_coeur_parc_dediee: true
+  items_masques_brochure:
+    - titre_principal
+    - sous_titre
+    - bandeau_titre
+    - bandeau_logos_ofb
+    - logo_ofb_bas_droite
+    - bandeau_source
+
+layout:
+  type: grid
+  pages:
+    - page_number: 1
+      rows:
+        - columns:
+            - width: "100%"
+              widget:
+                type: stat_kpi_grid
+        - columns:
+            - width: "50%"
+              widget:
+                type: map
+            - width: "50%"
+              widget:
+                type: section_group
+                sections: [sec1, sec2]
+    - page_number: 2
+      rows:
+        - columns:
+            - width: "50%"
+              widget:
+                type: theme_breakdown_table
+            - width: "50%"
+              widget:
+                type: evolution_chart

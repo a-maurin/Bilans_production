@@ -363,6 +363,12 @@ profiles:
       sec5:
         show_map: true
 
+  pnf_v2:
+    scope: global
+    blocks:
+      sec5:
+        show_map: true
+
   # Exemple: profil avec PDF plus compact
   compact:
     blocks:

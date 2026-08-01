@@ -236,5 +236,14 @@ def test_resolve_items_masques_carte_fusion():
     assert masques == ["masque_profil_1", "masque_commun", "masque_gabarit_1"]
 
 
+def test_pnf_v2_gabarit_compatibility():
+    g_pnf = load_gabarit("pnf_v2")
+    assert g_pnf is not None
+    assert g_pnf["gabarit_id"] == "pnf_v2"
+    assert is_gabarit_compatible(g_pnf, profile_id="pnf_v2", cible="bilan") is True
+    assert is_gabarit_compatible(g_pnf, profile_id="pnf", cible="bilan") is True
+
+
+
 
 

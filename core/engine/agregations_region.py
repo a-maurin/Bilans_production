@@ -70,12 +70,15 @@ def analyse_region_par_departement(
     pej_global: pd.DataFrame | None = None,
     profil_id: str = "global",
 ) -> None:
-    if str(echelle).strip().lower() not in ("region", "bmi"):
+    if str(echelle).strip().lower() not in ("region", "bmi") and str(profil_id).strip().lower() not in ("pnf_v2", "pnf"):
         return
         
-    dept_codes = get_departements_pour_perimetre(echelle, code)
-    if not dept_codes or "FR" in dept_codes:
-        return
+    if str(profil_id).strip().lower() in ("pnf_v2", "pnf"):
+        dept_codes = ["21", "52"]
+    else:
+        dept_codes = get_departements_pour_perimetre(echelle, code)
+        if not dept_codes or "FR" in dept_codes:
+            return
         
     rows = []
     

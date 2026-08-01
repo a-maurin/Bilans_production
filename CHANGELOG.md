@@ -14,6 +14,8 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 * **Correctif Infobulles / Popups** : Résolution du dysfonctionnement qui empêchait l'affichage des popups interactifs au clic sur les entités de la carte.
 
 ### Édition PDF et Rapports
+* **Profil PNF v2 (Structure Régionale à 2 Parties)** : Restructuration du bilan complet multi-pages `pnf_v2` suivant l'organisation régionale à 2 parties (Partie 1 : Bilan consolidé PNF avec Carte N°1 des volumes par commune et tracé vert du Cœur de parc ; Partie 2 : Fiches synthétiques 1 page pour la Côte-d'Or 21 et la Haute-Marne 52 filtrées sur le périmètre PNF).
+* **Compatibilité Gabarits & Surcharges** : Déclaration de `pnf_v2` dans `profils_compatibles` du gabarit `pnf_v2.yaml` et correction du `DeprecationWarning` GeoPandas (`union_all`).
 * **Commentaires automatiques** : Système de commentaires introductifs auto-générés s'intercalant avant les tableaux et graphiques (`commentaires_auto.py`).
 * **Gabarits YAML configurables** : Fichier `config/presentation/commentaires_auto.yaml` permettant d'éditer facilement les conditions et templates de texte sans coder (support des balises HTML `<b>`).
 * **Accords & Formatage FR** : Formatage numérique selon les normes françaises (`1 250`, `31 %`) et gestion automatique des accords singulier/pluriel.

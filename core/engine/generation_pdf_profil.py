@@ -428,13 +428,20 @@ def _generate_pdf_content(
     sections = resolve_sections_for_toc(presentation_cfg, resolved_section_defs)
     section_title = {sid: title for sid, title in resolved_section_defs}
 
-    if echelle == "region":
+    if echelle == "region" or profile_id in ("pnf_v2", "pnf"):
         annexe_detaillee = bool((cli_options or {}).get("annexe_detaillee", False))
-        sections = [
-            ("sec_region_dashboard", "1. Synthèse régionale"),
-            ("sec_region_fiches", "2. Fiches départementales"),
-            ("sec5map", "3. Localisation cartographique"),
-        ]
+        if profile_id in ("pnf_v2", "pnf"):
+            sections = [
+                ("sec_region_dashboard", "1. Synthèse globale Parc national de forêts"),
+                ("sec_region_fiches", "2. Fiches départementales (Côte-d'Or & Haute-Marne)"),
+                ("sec5map", "3. Localisation cartographique"),
+            ]
+        else:
+            sections = [
+                ("sec_region_dashboard", "1. Synthèse régionale"),
+                ("sec_region_fiches", "2. Fiches départementales"),
+                ("sec5map", "3. Localisation cartographique"),
+            ]
         if annexe_detaillee:
             sections.append(("secregion", "4. Annexe technique : Détail par domaine et thème"))
             sections.append(("sec6", "5. Annexes méthodologiques"))

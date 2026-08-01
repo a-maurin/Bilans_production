@@ -1566,28 +1566,35 @@ def enrich_with_commune_from_geometry(
             enriched[nom_col] = pd.NA
         return enriched
 
-    # Convertit en GeoDataFrame si nécessaire tout en conservant les colonnes initiales.
-    gdf = df if isinstance(df, gpd.GeoDataFrame) else gpd.GeoDataFrame(df.copy(), geometry=geometry_col)
-
-    if gdf.crs is None:
-        # Hypothèse par défaut cohérente avec les autres chargeurs SIG.
-        gdf = gdf.set_crs(epsg=4326)
-    if communes.crs is None:
-        communes = communes.set_crs(gdf.crs)
-    elif gdf.crs != communes.crs:
-        gdf = gdf.to_crs(communes.crs)
-
-    left = gdf.copy()
+    left = df.copy()
     if insee_col not in left.columns:
         left[insee_col] = pd.NA
     if nom_col not in left.columns:
         left[nom_col] = pd.NA
-    # Préserve l'index d'origine pour éviter tout désalignement après jointure.
-    left["_orig_index_tmp"] = left.index
-    left["_row_id_tmp"] = range(len(left))
 
-    # Évite les collisions de noms de colonnes pendant la jointure.
-    join_left = left.drop(columns=[insee_col, nom_col], errors="ignore")
+    if fill_only_missing:
+        missing_mask = left[insee_col].map(_insee_cell_missing)
+        if not missing_mask.any():
+            left[insee_col] = left[insee_col].astype("string").str.strip().str.zfill(5)
+            return left
+        sub_df = left.loc[missing_mask].copy()
+    else:
+        missing_mask = pd.Series([True] * len(left), index=left.index)
+        sub_df = left.copy()
+
+    # Convertit en GeoDataFrame uniquement les lignes sans INSEE
+    gdf_sub = sub_df if isinstance(sub_df, gpd.GeoDataFrame) else gpd.GeoDataFrame(sub_df, geometry=geometry_col)
+    if gdf_sub.crs is None:
+        gdf_sub = gdf_sub.set_crs(epsg=4326)
+    if communes.crs is None:
+        communes = communes.set_crs(gdf_sub.crs)
+    elif gdf_sub.crs != communes.crs:
+        gdf_sub = gdf_sub.to_crs(communes.crs)
+
+    sub_left = gdf_sub.copy()
+    sub_left["_row_id_tmp"] = range(len(sub_left))
+
+    join_left = sub_left.drop(columns=[insee_col, nom_col], errors="ignore")
     joined = gpd.sjoin(
         join_left,
         communes[["insee_comm", "nom_commune", "geometry"]],
@@ -1595,30 +1602,20 @@ def enrich_with_commune_from_geometry(
         predicate="within",
     )
     joined = joined.sort_values("_row_id_tmp").drop_duplicates(subset=["_row_id_tmp"], keep="first")
-    joined = joined.set_index("_row_id_tmp")
-    left = left.set_index("_row_id_tmp")
+    joined.index = sub_df.index
 
-    if fill_only_missing:
-        insee_join = joined["insee_comm"] if "insee_comm" in joined.columns else pd.Series(index=left.index, dtype="object")
-        nom_join = joined["nom_commune"] if "nom_commune" in joined.columns else pd.Series(index=left.index, dtype="object")
-        left[insee_col] = left[insee_col].where(left[insee_col].notna(), insee_join)
-        left[nom_col] = left[nom_col].where(left[nom_col].notna(), nom_join)
-    else:
-        left[insee_col] = joined["insee_comm"] if "insee_comm" in joined.columns else pd.NA
-        left[nom_col] = joined["nom_commune"] if "nom_commune" in joined.columns else pd.NA
+    insee_join = joined["insee_comm"] if "insee_comm" in joined.columns else pd.Series(index=sub_df.index, dtype="object")
+    nom_join = joined["nom_commune"] if "nom_commune" in joined.columns else pd.Series(index=sub_df.index, dtype="object")
+
+    left.loc[missing_mask, insee_col] = insee_join
+    left.loc[missing_mask, nom_col] = nom_join
 
     left[insee_col] = left[insee_col].astype("string").str.strip().str.zfill(5)
     left[nom_col] = left[nom_col].astype("string").str.strip()
 
-    # Restaure l'index d'origine (important pour les reindex ultérieurs).
-    left = left.sort_index()
-    orig_index = left["_orig_index_tmp"]
-    left = left.drop(columns=["_orig_index_tmp"], errors="ignore")
-    left.index = orig_index
-    left.index.name = df.index.name
     if isinstance(df, gpd.GeoDataFrame):
-        return gpd.GeoDataFrame(left, geometry=geometry_col, crs=gdf.crs)
-    return pd.DataFrame(left)
+        return gpd.GeoDataFrame(left, geometry=geometry_col, crs=df.crs)
+    return left
 
 
 def _insee_cell_missing(v) -> bool:

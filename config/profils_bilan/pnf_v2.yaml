@@ -1,0 +1,90 @@
+# ========================================================================================
+# PROFIL DE BILAN THEMATHIQUE PNF V2 (`pnf_v2.yaml`)
+# ========================================================================================
+# Ce fichier définit le profil de bilan Parc national de forêts V2 qui applique la structure
+# et les adaptateurs des bilans régionaux (agrégations AOA, Cœur de parc, Côte-d'Or 21 & Haute-Marne 52).
+# ========================================================================================
+
+schema_version: 2
+id: pnf_v2
+label: "Parc national de forêts (v2 - Bilan Régional)"
+title_label: "Parc national de forêts"
+pipeline: global
+presentation_scope: global
+out_subdir: bilan_pnf_v2
+output_filename: bilan_pnf_v2.pdf
+
+restrict_geo: pnf
+
+filter:
+  type: all
+
+natinf_pve: []
+natinf_pej: []
+
+analyse_PVe: true
+
+sources:
+  point_ctrl: true
+  pej: true
+  pa: true
+  pve: true
+
+periode_analyse:
+  ventilation:
+    type: auto
+    seuil_jours: 366
+
+analyses:
+  type_usager: true
+  distinction_coeur_hors_coeur: true
+
+aggregation:
+  adapter: run_profile_aggregations
+
+pdf:
+  adapter: generate_profile_pdf_report
+
+capabilities:
+  combine: false
+  mix_batch: false
+  map_profiles:
+    - pnf_domaines
+    - pnf_usagers
+    - pnf_resultats
+    - pnf_procedures
+
+cartographie:
+  mode: dedie
+  cartes_actives:
+    - domaines
+    - usagers
+    - resultats
+    - procedures
+  fichiers:
+    - carte_pnf_domaines.png
+    - carte_pnf_usagers.png
+    - carte_pnf_resultats.png
+    - carte_pnf_procedures.png
+  pochoir: aoa
+  emprise: aoa
+  couches_vecteurs_extra:
+    - coeur_parc
+
+options:
+  pnf:
+    label: "Analyse PNF (ensemble + cœur)"
+    default: true
+    ask: false
+  tub:
+    label: "Analyse zones TUB"
+    default: false
+    ask: false
+  cartes:
+    label: "Intégration des cartes"
+    default: true
+    ask: false
+  par_commune:
+    label: "Indicateurs par commune"
+    default: true
+    ask: false

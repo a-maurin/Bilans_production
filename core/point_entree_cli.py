@@ -373,6 +373,11 @@ def main() -> int:
         if not profils_raw:
             return 1
 
+    from core.engine.catalogue_profils import resolve_profile_ids
+    profils_resolus = resolve_profile_ids(profils_raw)
+
+    is_fixed_geo = any(p in ("pnf", "pnf_v2", "pnf_foret") for p in profils_resolus)
+
     date_deb = args.date_deb
     date_fin = args.date_fin
     if args.dept_code and not args.code:
@@ -382,10 +387,14 @@ def main() -> int:
             logger.warning(
                 "--dept-code ignoré : utiliser --echelle departement --code %s", args.dept_code
             )
+    elif is_fixed_geo:
+        echelle = args.echelle or "national"
+        code = args.code or "PNF"
     else:
         echelle = args.echelle or "departement"
         code = args.code or "21"
-    if not date_deb or not date_fin or not args.echelle or (not args.code and not args.dept_code):
+
+    if (not date_deb or not date_fin or (not args.echelle and not is_fixed_geo) or (not args.code and not args.dept_code and not is_fixed_geo)):
         try:
             date_deb_str, date_fin_str, echelle_str, code_str = ask_periode_perimetre(
                 date_deb_default=date_deb,
@@ -403,15 +412,12 @@ def main() -> int:
 
     codes_list = [c.strip() for c in code.replace(",", " ").split() if c.strip()]
     if not codes_list:
-        codes_list = ["21"]
+        codes_list = ["PNF" if is_fixed_geo else "21"]
 
     if date_fin and len(date_fin.strip()) == 10:
         date_fin = f"{date_fin.strip()} 23:59:59"
 
-    from core.engine.catalogue_profils import resolve_profile_ids
     from core.engine.execution_lots_profils import run_profiles_batch
-
-    profils_resolus = resolve_profile_ids(profils_raw)
     from core.common.prompt_periode import ask_choice_list, _is_interactive
 
     cli_options: dict = {}

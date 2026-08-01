@@ -350,8 +350,8 @@ def _consolide_lignes_effectifs_par_fc_id(
     work[order_col] = range(len(work))
     fc_values = work["fc_id"].astype("string").str.strip()
     has_fc_id = fc_values.notna() & (fc_values != "")
-    if not has_fc_id.any():
-        return work.drop(columns=[order_col])
+    if not has_fc_id.any() or not fc_values[has_fc_id].duplicated().any():
+        return df
 
     grouped = work.loc[has_fc_id].copy()
     standalone = work.loc[~has_fc_id].copy()
@@ -359,6 +359,9 @@ def _consolide_lignes_effectifs_par_fc_id(
     target_columns = [col for col in dict.fromkeys(colonnes_metier) if col in grouped.columns]
 
     for fc_id, group in grouped.groupby("fc_id", sort=False, dropna=False):
+        if len(group) == 1:
+            merged_rows.append(group.iloc[0])
+            continue
         base_index = max(group.index, key=lambda idx: _score_effectif_group_row(group.loc[idx], order_col))
         merged = group.loc[base_index].copy()
         merged[order_col] = int(group[order_col].min())

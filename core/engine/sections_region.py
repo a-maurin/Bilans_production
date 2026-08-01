@@ -179,7 +179,7 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
 
                 # Découpage (clipping) strict aux frontières départementales
                 try:
-                    poly_geom = gdf_dept.geometry.unary_union
+                    poly_geom = gdf_dept.geometry.union_all() if hasattr(gdf_dept.geometry, "union_all") else gdf_dept.geometry.unary_union
                     patch = _shapely_to_pathpatch(poly_geom, ax.transData)
                     ax.add_patch(patch)
                     hb.set_clip_path(patch)

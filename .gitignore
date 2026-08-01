@@ -98,9 +98,15 @@ temp/
 _*.json
 
 ############################
+# Supports de démonstration
+############################
+demo/
+
+############################
 # Archives et fichiers lourds
 ############################
 data/sources_archive/
 releases/
 *.zip
 *.7z
+

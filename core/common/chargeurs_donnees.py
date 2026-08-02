@@ -40,6 +40,7 @@ Fonctionnalités avancées :
 from __future__ import annotations
 import logging
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -1880,6 +1881,25 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
         "Impossible de trouver une table de centroïdes communes : "
         "ni ref/programme/sig/communes-france-2025.csv ni shapefile/GeoPackage équivalent."
     )
+
+
+@lru_cache(maxsize=4)
+def _get_communes_centroids_dicts_cached(root_str: Optional[str]) -> tuple[dict[str, float], dict[str, float]]:
+    root = Path(root_str) if root_str else None
+    df = load_communes_france_centroids(root=root)
+    dict_x = dict(zip(df["code_insee"], df["lon"].astype(float)))
+    dict_y = dict(zip(df["code_insee"], df["lat"].astype(float)))
+    return dict_x, dict_y
+
+
+def get_communes_centroids_dicts(root: Optional[Path] = None) -> tuple[dict[str, float], dict[str, float]]:
+    """
+    Renvoie un tuple (dict_lon, dict_lat) indexé par code_insee (5 caractères)
+    mis en cache mémoire pour le centrage ultra-rapide des entités orphelines.
+    """
+    root_str = str(root.resolve()) if root else None
+    return _get_communes_centroids_dicts_cached(root_str)
+
 
 
 # ========================================================================================

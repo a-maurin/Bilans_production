@@ -204,6 +204,33 @@ def department_bounds(
     return (X_min, Y_min, X_max, Y_max)
 
 
+@lru_cache(maxsize=32)
+def _load_pochoir_gdf_cached(pochoir_id: str, dept_code: str, root_str: Optional[str]) -> gpd.GeoDataFrame:
+    """Version cachée (types primitifs) de load_pochoir_gdf."""
+    project_root = Path(root_str) if root_str else None
+    if not pochoir_id or pochoir_id in ("departement", "aucun", "pochoir_departement"):
+        return load_department_gdf(dept_code, project_root=project_root)
+
+    if pochoir_id in ("zone_a_risque", "zone_tub", "pochoir_zone_a_risque"):
+        root = project_root or PROJECT_ROOT
+        gdf = load_zone_tub_gdf(root)
+        dep_gdf = load_department_gdf(dept_code, project_root=project_root)
+        if gdf is not None and not gdf.empty and not dep_gdf.empty:
+            gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
+        return gdf
+
+    if pochoir_id in ("aoa", "pnf", "pochoir_aoa"):
+        root = project_root or PROJECT_ROOT
+        gdf = load_pnf_aoa_gdf(root)
+        dep_gdf = load_department_gdf(dept_code, project_root=project_root)
+        if not gdf.empty and not dep_gdf.empty:
+            gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
+        return gdf
+
+    logger.warning("Pochoir_id inconnu '%s', fallback sur département %s", pochoir_id, dept_code)
+    return load_department_gdf(dept_code, project_root=project_root)
+
+
 def load_pochoir_gdf(
     pochoir_id: str,
     dept_code: str,
@@ -213,28 +240,10 @@ def load_pochoir_gdf(
     """
     Charge le GeoDataFrame correspondant au pochoir demandé (departement, zone_a_risque, aoa...).
     Si pochoir_id est 'departement' ou 'aucun', on renvoie le département par défaut.
+    Résultat mis en cache LRU pour éviter les reprojections/découpes répétitives.
     """
-    if not pochoir_id or pochoir_id in ("departement", "aucun", "pochoir_departement"):
-        return load_department_gdf(dept_code, project_root=project_root)
-    
-    if pochoir_id in ("zone_a_risque", "zone_tub", "pochoir_zone_a_risque"):
-        root = project_root or PROJECT_ROOT
-        gdf = load_zone_tub_gdf(root)
-        dep_gdf = load_department_gdf(dept_code, project_root=project_root)
-        if gdf is not None and not gdf.empty and not dep_gdf.empty:
-            gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
-        return gdf
-        
-    if pochoir_id in ("aoa", "pnf", "pochoir_aoa"):
-        root = project_root or PROJECT_ROOT
-        gdf = load_pnf_aoa_gdf(root)
-        dep_gdf = load_department_gdf(dept_code, project_root=project_root)
-        if not gdf.empty and not dep_gdf.empty:
-            gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
-        return gdf
-        
-    logger.warning("Pochoir_id inconnu '%s', fallback sur département %s", pochoir_id, dept_code)
-    return load_department_gdf(dept_code, project_root=project_root)
+    root_str = str(project_root.resolve()) if project_root else None
+    return _load_pochoir_gdf_cached(pochoir_id, dept_code, root_str)
 
 
 def write_pochoir_gpkg(
@@ -275,6 +284,8 @@ def clip_gdf_to_pochoir(
     """
     Filtre spatialement un GeoDataFrame de points pour ne conserver que
     ceux à l'intérieur du polygone de pochoir.
+    Pré-filtrage par BoundingBox avant gpd.clip pour éviter les opérations
+    spatiales lourdes sur des points hors emprise.
     """
     if gdf_points.empty:
         return gdf_points
@@ -291,8 +302,20 @@ def clip_gdf_to_pochoir(
     if gdf_points.crs and target_crs and gdf_points.crs != target_crs:
         gdf_points = gdf_points.to_crs(target_crs)
 
-    # Intersection (clip)
-    clipped = gpd.clip(gdf_points, poly_gdf)
+    # Pré-filtrage rapide par BoundingBox avant l'opération spatiale coûteuse
+    xmin, ymin, xmax, ymax = poly_gdf.total_bounds
+    bbox_mask = (
+        (gdf_points.geometry.x >= xmin)
+        & (gdf_points.geometry.x <= xmax)
+        & (gdf_points.geometry.y >= ymin)
+        & (gdf_points.geometry.y <= ymax)
+    )
+    candidates = gdf_points[bbox_mask]
+    if candidates.empty:
+        return candidates
+
+    # Intersection précise (clip) uniquement sur les candidats dans l'emprise
+    clipped = gpd.clip(candidates, poly_gdf)
     return clipped
 
 

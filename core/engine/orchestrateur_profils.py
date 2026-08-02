@@ -67,6 +67,7 @@ from core.common.chargeurs_donnees import (
     load_pnf_commune_zone_maps,
     pnf_sig_union_membership_mask,
     tub_sig_union_membership_mask,
+    get_communes_centroids_dicts,
 )
 from core.common.percent_format import (
     format_pct_int_from_rate,
@@ -666,23 +667,13 @@ def _run_global_profile_via_yaml(
                 
                 missing = df_geo["_lon"].isna() | df_geo["_lat"].isna() | (df_geo["_lon"] == 0) | (df_geo["_lat"] == 0)
                 if missing.any():
-                    communes_shp = root / "ref" / "programme" / "sig" / "communes_21" / "communes.shp"
-                    if communes_shp.exists():
-                        try:
-                            coms = gpd.read_file(communes_shp)
-                            if coms.crs is None or coms.crs.to_epsg() != 4326:
-                                coms = coms.to_crs("EPSG:4326")
-                            if "long_centr" in coms.columns and "lat_centro" in coms.columns:
-                                dict_x = coms.set_index("INSEE_COM")["long_centr"].astype(float).to_dict()
-                                dict_y = coms.set_index("INSEE_COM")["lat_centro"].astype(float).to_dict()
-                            else:
-                                dict_x = pd.Series(coms.geometry.centroid.x.values, index=coms.INSEE_COM).to_dict()
-                                dict_y = pd.Series(coms.geometry.centroid.y.values, index=coms.INSEE_COM).to_dict()
-                            df_geo["insee_str"] = df_geo.get("INF-INSEE", pd.Series(dtype=str)).astype(str).str.zfill(5)
-                            df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
-                            df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
-                        except Exception as e_geom:
-                            gpkg_logger.warning(f"Impossible de centrer les PVe orphelins : {e_geom}")
+                    try:
+                        dict_x, dict_y = get_communes_centroids_dicts(root)
+                        df_geo["insee_str"] = df_geo.get("INF-INSEE", pd.Series(dtype=str)).astype(str).str.zfill(5)
+                        df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
+                        df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
+                    except Exception as e_geom:
+                        gpkg_logger.warning(f"Impossible de centrer les PVe orphelins : {e_geom}")
                 
                 mask_geo = df_geo["_lon"].notna() & df_geo["_lat"].notna() & (df_geo["_lon"] != 0) & (df_geo["_lat"] != 0)
                 if mask_geo.any():
@@ -3093,39 +3084,36 @@ def _export_csv(
                 root = Path(__file__).resolve().parent.parent.parent.parent
                 
                 if missing.any():
-                    communes_shp = root / "ref" / "programme" / "sig" / "communes_21" / "communes.shp"
-                    if communes_shp.exists():
-                        try:
-                            # Lire les communes et calculer les centroïdes en WGS84
-                            coms = gpd.read_file(communes_shp)
-                            if coms.crs is None or coms.crs.to_epsg() != 4326:
-                                coms = coms.to_crs("EPSG:4326")
-                            
-                            # Use long_centr and lat_centro if they exist, else compute
-                            if "long_centr" in coms.columns and "lat_centro" in coms.columns:
-                                dict_x = coms.set_index("INSEE_COM")["long_centr"].astype(float).to_dict()
-                                dict_y = coms.set_index("INSEE_COM")["lat_centro"].astype(float).to_dict()
-                            else:
-                                dict_x = pd.Series(coms.geometry.centroid.x.values, index=coms.INSEE_COM).to_dict()
-                                dict_y = pd.Series(coms.geometry.centroid.y.values, index=coms.INSEE_COM).to_dict()
-                            
-                            insee_s = coalesced_insee_series(df_geo)
-                            df_geo["insee_str"] = insee_s.astype(str).str.zfill(5)
-                            
-                            # Mettre à jour les valeurs manquantes via le dictionnaire
-                            df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
-                            df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
-                        except Exception as e_geom:
-                            logger.warning(f"Impossible de centrer les PEJ orphelins : {e_geom}")
+                    try:
+                        dict_x, dict_y = get_communes_centroids_dicts(root)
+                        insee_s = coalesced_insee_series(df_geo)
+                        df_geo["insee_str"] = insee_s.astype(str).str.zfill(5)
+                        df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
+                        df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
+                    except Exception as e_geom:
+                        logger.warning(f"Impossible de centrer les PEJ orphelins : {e_geom}")
                 
                 # Exporter seulement ceux qui ont des coordonnées finales valides
                 mask_geo = df_geo["_lon"].notna() & df_geo["_lat"].notna() & (df_geo["_lon"] != 0) & (df_geo["_lat"] != 0)
                 if mask_geo.any():
-                    gdf = gpd.GeoDataFrame(
-                        pej_filtered[mask_geo],
-                        geometry=gpd.points_from_xy(df_geo.loc[mask_geo, "_lon"], df_geo.loc[mask_geo, "_lat"]),
-                        crs="EPSG:4326"
-                    ).to_crs("EPSG:2154")
+                    try:
+                        from pyproj import Transformer
+                        transformer = Transformer.from_crs("EPSG:4326", "EPSG:2154", always_xy=True)
+                        x_2154, y_2154 = transformer.transform(
+                            df_geo.loc[mask_geo, "_lon"].values,
+                            df_geo.loc[mask_geo, "_lat"].values
+                        )
+                        gdf = gpd.GeoDataFrame(
+                            pej_filtered[mask_geo],
+                            geometry=gpd.points_from_xy(x_2154, y_2154),
+                            crs="EPSG:2154"
+                        )
+                    except Exception:
+                        gdf = gpd.GeoDataFrame(
+                            pej_filtered[mask_geo],
+                            geometry=gpd.points_from_xy(df_geo.loc[mask_geo, "_lon"], df_geo.loc[mask_geo, "_lat"]),
+                            crs="EPSG:4326"
+                        ).to_crs("EPSG:2154")
                     
                     for col in gdf.select_dtypes(include=['datetime64[ns, UTC]', 'datetime64[ns]', 'datetime64']).columns:
                         gdf[col] = gdf[col].astype(str)
@@ -3170,38 +3158,35 @@ def _export_csv(
                 root = Path(__file__).resolve().parent.parent.parent.parent
                 
                 if missing.any():
-                    communes_shp = root / "ref" / "programme" / "sig" / "communes_21" / "communes.shp"
-                    if communes_shp.exists():
-                        try:
-                            # Lire les communes et calculer les centroïdes en WGS84
-                            coms = gpd.read_file(communes_shp)
-                            if coms.crs is None or coms.crs.to_epsg() != 4326:
-                                coms = coms.to_crs("EPSG:4326")
-                            
-                            # Use long_centr and lat_centro if they exist, else compute
-                            if "long_centr" in coms.columns and "lat_centro" in coms.columns:
-                                dict_x = coms.set_index("INSEE_COM")["long_centr"].astype(float).to_dict()
-                                dict_y = coms.set_index("INSEE_COM")["lat_centro"].astype(float).to_dict()
-                            else:
-                                dict_x = pd.Series(coms.geometry.centroid.x.values, index=coms.INSEE_COM).to_dict()
-                                dict_y = pd.Series(coms.geometry.centroid.y.values, index=coms.INSEE_COM).to_dict()
-                            
-                            df_geo["insee_str"] = df_geo.get("INF-INSEE", pd.Series(dtype=str)).astype(str).str.zfill(5)
-                            
-                            # Mettre à jour les valeurs manquantes via le dictionnaire
-                            df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
-                            df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
-                        except Exception as e_geom:
-                            logger.warning(f"Impossible de centrer les PVe orphelins : {e_geom}")
+                    try:
+                        dict_x, dict_y = get_communes_centroids_dicts(root)
+                        df_geo["insee_str"] = df_geo.get("INF-INSEE", pd.Series(dtype=str)).astype(str).str.zfill(5)
+                        df_geo.loc[missing, "_lon"] = df_geo.loc[missing, "insee_str"].map(dict_x)
+                        df_geo.loc[missing, "_lat"] = df_geo.loc[missing, "insee_str"].map(dict_y)
+                    except Exception as e_geom:
+                        logger.warning(f"Impossible de centrer les PVe orphelins : {e_geom}")
                 
                 # Exporter seulement ceux qui ont des coordonnées finales valides
                 mask_geo = df_geo["_lon"].notna() & df_geo["_lat"].notna() & (df_geo["_lon"] != 0) & (df_geo["_lat"] != 0)
                 if mask_geo.any():
-                    gdf = gpd.GeoDataFrame(
-                        pve_filtered[mask_geo],
-                        geometry=gpd.points_from_xy(df_geo.loc[mask_geo, "_lon"], df_geo.loc[mask_geo, "_lat"]),
-                        crs="EPSG:4326"
-                    ).to_crs("EPSG:2154")
+                    try:
+                        from pyproj import Transformer
+                        transformer = Transformer.from_crs("EPSG:4326", "EPSG:2154", always_xy=True)
+                        x_2154, y_2154 = transformer.transform(
+                            df_geo.loc[mask_geo, "_lon"].values,
+                            df_geo.loc[mask_geo, "_lat"].values
+                        )
+                        gdf = gpd.GeoDataFrame(
+                            pve_filtered[mask_geo],
+                            geometry=gpd.points_from_xy(x_2154, y_2154),
+                            crs="EPSG:2154"
+                        )
+                    except Exception:
+                        gdf = gpd.GeoDataFrame(
+                            pve_filtered[mask_geo],
+                            geometry=gpd.points_from_xy(df_geo.loc[mask_geo, "_lon"], df_geo.loc[mask_geo, "_lat"]),
+                            crs="EPSG:4326"
+                        ).to_crs("EPSG:2154")
                     
                     for col in gdf.select_dtypes(include=['datetime64[ns, UTC]', 'datetime64[ns]', 'datetime64']).columns:
                         gdf[col] = gdf[col].astype(str)

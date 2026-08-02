@@ -4052,35 +4052,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const safeTitle = fullTitle.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim();
             document.title = `Bilan_OFB_${safeTitle}`;
 
-            // La largeur de l'A4 est désormais gérée proprement via @media print dans print.css
-            // (La modification de la largeur sur l'écran cassait le layout ChartJS)
-            const explorerPanel = document.querySelector('.explorer-panel');
-            const splitGrid = explorerPanel ? explorerPanel.querySelector('.dashboard-split-grid') : null;
-            const titleContainer = document.getElementById('print-title-container');
-            const statsCard = explorerPanel ? explorerPanel.querySelector('.card') : null;
-            const leftCol = splitGrid ? splitGrid.firstElementChild : null;
+            // ── Restauration après impression (Validée via /grill-me) ─────────
+            // Logique de restauration fluide :
+            // 1. Idempotence (hasRestored) et annulation du fallback timer (5s).
+            // 2. Restauration immédiate du document.title.
+            // 3. Réinitialisation des conteneurs HTML.
+            // 4. Attente du reflow DOM (~100ms) pour recadrer la carte (center & zoom d'origine),
+            //    réactiver la couche vectorielle et supprimer l'image temporaire sans clignotement blanc.
+            // 5. Redimensionnement et mise à jour complète de tous les graphiques ChartJS.
+            const prePrintCenter = (typeof map !== 'undefined' && map) ? map.getCenter() : null;
+            const prePrintZoom = (typeof map !== 'undefined' && map) ? map.getZoom() : null;
 
-            // Le titre reste en pleine largeur. On ne déplace plus la carte des indicateurs (statsCard)
-            // dans la colonne gauche pour éviter de casser le rendu PDF.
+            let hasRestored = false;
+            let fallbackTimer = null;
 
-
-
-
-            // ── Restauration après impression ────────────────────────────────
             const restore = () => {
-                // Délai pour s'assurer que la fenêtre d'impression a bien capté le titre
-                setTimeout(() => {
-                    document.title = originalDocumentTitle;
-                }, 2000);
+                if (hasRestored) return;
+                hasRestored = true;
+                if (fallbackTimer) clearTimeout(fallbackTimer);
+                window.removeEventListener('afterprint', restore);
 
-
-
-                // Supprimer l'image statique du Canvas Leaflet et restaurer le vecteur
-                document.querySelectorAll('.print-canvas-img').forEach(el => el.remove());
-                const overlayCanvas = document.querySelector('.leaflet-overlay-pane canvas');
-                if (overlayCanvas && overlayCanvas.dataset.origOpacity !== undefined) {
-                    overlayCanvas.style.opacity = overlayCanvas.dataset.origOpacity;
-                }
+                // Restauration immédiate du titre du document
+                document.title = originalDocumentTitle;
 
                 // Restaurer la hauteur des wrappers ChartJS
                 const wDom = document.getElementById('wrapper-domains');
@@ -4094,10 +4087,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (wThe.dataset.tmpMinH !== undefined) wThe.style.minHeight = wThe.dataset.tmpMinH;
                 }
 
-                // Recalculer la taille pour l'écran
-                if (typeof chartDomains !== 'undefined' && chartDomains) chartDomains.resize();
-                if (typeof chartThemes !== 'undefined' && chartThemes) chartThemes.resize();
-
                 const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
                 const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
                 if (wRes) {
@@ -4110,19 +4099,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (wUsa.dataset.tmpH !== undefined) wUsa.style.height = wUsa.dataset.tmpH;
                     wUsa.style.margin = '';
                 }
-                if (typeof chartResults !== 'undefined' && chartResults) chartResults.resize();
-                if (typeof chartUsagers !== 'undefined' && chartUsagers) chartUsagers.resize();
 
                 const mapContainer = document.getElementById('map');
                 if (mapContainer) {
                     if (mapContainer.dataset.tmpW !== undefined) mapContainer.style.width = mapContainer.dataset.tmpW;
                     if (mapContainer.dataset.tmpH !== undefined) mapContainer.style.height = mapContainer.dataset.tmpH;
                 }
-                if (typeof map !== 'undefined') map.invalidateSize();
 
-                window.removeEventListener('afterprint', restore);
+                // Attendre le reflow CSS avant d'invalider et re-centrer Leaflet et rafraîchir les graphiques
+                setTimeout(() => {
+                    if (typeof map !== 'undefined' && map) {
+                        map.invalidateSize({ animate: false });
+                        if (prePrintCenter && prePrintZoom !== null) {
+                            map.setView(prePrintCenter, prePrintZoom, { animate: false });
+                        }
+                        const overlayCanvas = document.querySelector('.leaflet-overlay-pane canvas');
+                        if (overlayCanvas && overlayCanvas.dataset.origOpacity !== undefined) {
+                            overlayCanvas.style.opacity = overlayCanvas.dataset.origOpacity;
+                        }
+                    }
+
+                    // Supprimer l'image temporaire d'impression après le redessin du vectoriel
+                    document.querySelectorAll('.print-canvas-img').forEach(el => el.remove());
+
+                    // Redimensionner et forcer la mise à jour de tous les graphiques ChartJS
+                    [chartDomains, chartThemes, chartResults, chartUsagers, typeof chartSeasonality !== 'undefined' ? chartSeasonality : null].forEach(c => {
+                        if (c) {
+                            try { c.resize(); c.update('none'); } catch (e) {}
+                        }
+                    });
+                }, 100);
             };
+
             window.addEventListener('afterprint', restore);
+            fallbackTimer = setTimeout(restore, 5000);
 
             setTimeout(() => {
 

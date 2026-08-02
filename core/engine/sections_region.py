@@ -98,7 +98,14 @@ def _shapely_to_pathpatch(geom, transform):
     return PathPatch(path, transform=transform, facecolor='none', edgecolor='none')
 
 
-def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_name: str, figure_scale: float = 1.0) -> Path:
+def _generate_dept_vignette(
+    dept_code: str,
+    out_dir: Path,
+    tmp_dir: Path,
+    img_name: str,
+    figure_scale: float = 1.0,
+    profile_id: str = "global",
+) -> Path:
     """
     Génère la vignette cartographique épurée du département avec conservation STRICTE du ratio d'aspect
     (1:1 carré, sans aucune déformation) et carte de chaleur de la pression de contrôle (Hexbin / Heatmap).
@@ -108,18 +115,38 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
     fig.patch.set_facecolor('white')
     ax.set_facecolor('#ffffff')
     
-    # CRITIQUE : Conserver l'échelle géographique 1:1 pour ne jamais déformer/écraser le département
     ax.set_aspect('equal')
     
     try:
         from core.cartographie.pochoir_helper import load_department_gdf
+        from core.common.chargeurs_donnees import load_pnf_aoa_gdf, load_pnf_coeur_gdf
         from core.chemins_projet import PROJECT_ROOT
-        gdf_dept = load_department_gdf(dept_code, project_root=PROJECT_ROOT)
+        
+        is_pnf = str(profile_id).strip().lower() in ("pnf_v2", "pnf") or "pnf" in str(out_dir.name).lower() or str(dept_code).strip() in ("21", "52") and "pnf" in str(out_dir).lower()
+        if is_pnf:
+            gdf_aoa = load_pnf_aoa_gdf(PROJECT_ROOT)
+            gdf_coeur = load_pnf_coeur_gdf(PROJECT_ROOT)
+            gdf_dept = gdf_aoa if gdf_aoa is not None and not gdf_aoa.empty else load_department_gdf(dept_code, project_root=PROJECT_ROOT)
+        else:
+            gdf_coeur = None
+            gdf_dept = load_department_gdf(dept_code, project_root=PROJECT_ROOT)
         
         if gdf_dept is not None and not gdf_dept.empty:
-            gdf_dept.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.2, aspect='equal')
+            if is_pnf and gdf_aoa is not None and not gdf_aoa.empty:
+                target_dept = str(dept_code).strip().zfill(2)
+                col_dep = next((c for c in gdf_aoa.columns if c.lower() in ("insee_dep", "num_depart", "code_dept", "insee_com")), None)
+                if col_dep:
+                    mask_dept = gdf_aoa[col_dep].astype(str).str.strip().str[:2] == target_dept
+                    gdf_aoa[~mask_dept].plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=0.7)
+                    gdf_aoa[mask_dept].plot(ax=ax, color='#bfdbfe', edgecolor='#003366', linewidth=1.1)
+                else:
+                    gdf_aoa.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=0.8)
+                
+                if gdf_coeur is not None and not gdf_coeur.empty:
+                    gdf_coeur.plot(ax=ax, facecolor='none', edgecolor='#16a34a', linewidth=1.8, label='Cœur de parc')
+            else:
+                gdf_dept.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.2, aspect='equal')
             
-            # Recherche multi-chemins du fichier GeoPackage des points de contrôle
             carto_dir_default = PROJECT_ROOT / "data" / "sources" / "sig" / "CARTO"
             gpkg_files = list(out_dir.rglob("controles_*.gpkg")) + list(out_dir.glob("controles_*.gpkg"))
             gpkg_files += list(carto_dir_default.glob("controles_*.gpkg"))
@@ -154,12 +181,10 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                             gdf_pts = gdf_pts.to_crs("EPSG:2154")
                     
                     target_dept = str(dept_code).strip().split('.')[0].zfill(2)
-                    # Priorité 1 : filtrage attributaire rapide par num_depart / INSEE
                     if "num_depart" in gdf_pts.columns:
                         dept_clean = gdf_pts["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
                         pts_dept = gdf_pts[dept_clean == target_dept]
                     
-                    # Secours (Priorité 2) : sjoin spatial uniquement si le filtrage attributaire ne donne rien
                     if pts_dept is None or pts_dept.empty:
                         try:
                             pts_dept = gpd.sjoin(gdf_pts, gdf_dept, predicate="within")
@@ -168,7 +193,6 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                 except Exception:
                     pts_dept = None
             
-            # Carte de chaleur / Hexbin de la densité de la pression de contrôle
             if pts_dept is not None and not pts_dept.empty:
                 x_coords = pts_dept.geometry.x
                 y_coords = pts_dept.geometry.y
@@ -181,7 +205,6 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                     edgecolors='none'
                 )
 
-                # Découpage (clipping) strict aux frontières départementales
                 try:
                     poly_geom = gdf_dept.geometry.union_all() if hasattr(gdf_dept.geometry, "union_all") else gdf_dept.geometry.unary_union
                     patch = _shapely_to_pathpatch(poly_geom, ax.transData)
@@ -194,7 +217,6 @@ def _generate_dept_vignette(dept_code: str, out_dir: Path, tmp_dir: Path, img_na
                 cbar.set_label('Pression de contrôle (Faible -> Forte)', fontsize=6.5, color='#003366')
                 cbar.ax.tick_params(labelsize=5.5)
 
-            # Emprise carrée (1:1) centrée garantissant des dimensions d'images identiques pour tous les départements
             minx, miny, maxx, maxy = gdf_dept.total_bounds
             cx = (minx + maxx) / 2.0
             cy = (miny + maxy) / 2.0
@@ -218,7 +240,9 @@ def _generate_region_choropleth(
     dept_code: str,
     tmp_dir: Path,
     img_name: str,
-    figure_scale: float = 1.0
+    figure_scale: float = 1.0,
+    out_dir: Path | None = None,
+    profile_id: str = "global",
 ) -> Path:
     """Génère la carte choroplèthe régionale (aplat par département selon le volume d'opérations)."""
     out_path = tmp_dir / img_name
@@ -229,11 +253,24 @@ def _generate_region_choropleth(
     
     try:
         from core.cartographie.pochoir_helper import load_department_gdf
+        from core.common.chargeurs_donnees import load_pnf_aoa_gdf, load_pnf_coeur_gdf
         from core.chemins_projet import PROJECT_ROOT
-        gdf_region = load_department_gdf(dept_code, project_root=PROJECT_ROOT, dissolve=False)
+        
+        is_pnf = (
+            str(profile_id).strip().lower() in ("pnf_v2", "pnf")
+            or (out_dir and "pnf" in str(out_dir.name).lower())
+            or "pnf" in str(dept_code).lower()
+        )
+        if is_pnf:
+            gdf_region = load_pnf_aoa_gdf(PROJECT_ROOT)
+            gdf_coeur = load_pnf_coeur_gdf(PROJECT_ROOT)
+        else:
+            gdf_coeur = None
+            gdf_region = load_department_gdf(dept_code, project_root=PROJECT_ROOT, dissolve=False)
+
         if gdf_region is not None and not gdf_region.empty:
-            col_dep = "insee_dep" if "insee_dep" in gdf_region.columns else ("INSEE_DEP" if "INSEE_DEP" in gdf_region.columns else gdf_region.columns[0])
-            gdf_region["dep_code_clean"] = gdf_region[col_dep].astype(str).str.strip().str.upper()
+            col_dep = next((c for c in gdf_region.columns if c.lower() in ("insee_dep", "num_depart", "code_dept", "insee_com")), gdf_region.columns[0])
+            gdf_region["dep_code_clean"] = gdf_region[col_dep].astype(str).str.strip().str.upper().str[:2]
             gdf_region["nb_ops"] = gdf_region["dep_code_clean"].map(
                 lambda d: dept_counts.get(d, dept_counts.get(d.zfill(2), dept_counts.get(str(int(d)) if d.isdigit() else d, 0)))
             ).fillna(0)
@@ -253,6 +290,9 @@ def _generate_region_choropleth(
                     "label": "Volume d'opérations de contrôle"
                 }
             )
+
+            if is_pnf and gdf_coeur is not None and not gdf_coeur.empty:
+                gdf_coeur.plot(ax=ax, facecolor='none', edgecolor='#16a34a', linewidth=1.8, label='Cœur de parc')
             
             # Affinage de la typographie de la colorbar (6pt pour le titre, 5.5pt pour les ticks)
             if len(fig.axes) > 1:
@@ -336,7 +376,8 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     body_style = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
 
     # Visuel 1 : Carte choroplèthe régionale centrée (54 % de largeur)
-    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale)
+    prof_id = str((ctx.profile or {}).get("id", "")) if hasattr(ctx, "profile") else "global"
+    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale, out_dir=ctx.out_dir, profile_id=prof_id)
     if carto_path.exists():
         img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.54, "Carte régionale indisponible", ctx.builder.styles)
     else:
@@ -516,6 +557,12 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
     depts = sorted(df["departement"].unique().tolist())
 
     dept_dir = ctx.out_dir / "departements"
+    if dept_dir.exists():
+        for old_f in dept_dir.glob("Fiche_Dept_*.pdf"):
+            try:
+                old_f.unlink()
+            except Exception:
+                pass
     dept_dir.mkdir(parents=True, exist_ok=True)
 
     title_sec2 = ctx.section_title.get("sec_region_fiches", "2. Fiches départementales")
@@ -564,7 +611,8 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
 
             pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
             
-            vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale)
+            prof_id = str((ctx.profile or {}).get("id", "")) if hasattr(ctx, "profile") else "global"
+            vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale, profile_id=prof_id)
             img_vignette = _create_proportional_rl_image(vignette_path, ctx.avail_w * 0.46, "Vignette cartographique", ctx.builder.styles)
 
             if pie_dict:

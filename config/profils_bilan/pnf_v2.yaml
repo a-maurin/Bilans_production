@@ -16,6 +16,9 @@ output_filename: bilan_pnf_v2.pdf
 
 restrict_geo: pnf
 
+# Départements couverts par ce profil (utilisé pour le titre des fiches et les agrégations)
+departements: ["21", "52"]
+
 filter:
   type: all
 

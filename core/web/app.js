@@ -680,7 +680,6 @@ document.addEventListener('DOMContentLoaded', () => {
             cartes: cartesCheckbox.checked,
             'annexe-detaillee': document.getElementById('annexe-detaillee') ? document.getElementById('annexe-detaillee').checked : false,
             cartes_selection: cartesSelection,
-            pnf: document.getElementById('pnf').checked,
             brochure: document.getElementById('brochure').checked,
             diffusion: document.getElementById('diffusion').value,
             preset: document.getElementById('preset').value,

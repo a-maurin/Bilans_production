@@ -376,7 +376,7 @@ def main() -> int:
     from core.engine.catalogue_profils import resolve_profile_ids
     profils_resolus = resolve_profile_ids(profils_raw)
 
-    is_fixed_geo = any(p in ("pnf", "pnf_v2", "pnf_foret") for p in profils_resolus)
+    is_fixed_geo = any(p in ("pnf", "pnf_v2") for p in profils_resolus)
 
     date_deb = args.date_deb
     date_fin = args.date_fin
@@ -462,7 +462,10 @@ def main() -> int:
         cli_options["cartes_profil"] = args.cartes_profil
 
     pnf = args.pnf
-    if pnf is None and _is_interactive():
+    # Forcer pnf=True pour les profils à restrict_geo=pnf, sauf si --no-pnf explicite
+    if pnf is None and is_fixed_geo:
+        pnf = True
+    elif pnf is None and _is_interactive():
         pnf_rep = ask_choice_list("Analyse PNF (cœur / hors-cœur)", [(True, "Oui"), (False, "Non")], False)
         pnf = bool(pnf_rep)
     if pnf is not None:

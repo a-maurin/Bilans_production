@@ -95,6 +95,18 @@ def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
     return []
 
 
+def get_pnf_departements(profile: dict) -> list[str]:
+    """Retourne la liste des codes départementaux couverts par un profil à restrict_geo=pnf.
+
+    Lit la clé ``departements`` du profil YAML (ex: ``["21", "52"]``).
+    Fallback sur ``["21", "52"]`` (PNF historique) si la clé est absente.
+    """
+    depts = profile.get("departements") if isinstance(profile, dict) else None
+    if depts and isinstance(depts, list):
+        return [str(d).strip() for d in depts if str(d).strip()]
+    return ["21", "52"]
+
+
 def get_region_name(code: str) -> str:
     """Retourne le nom officiel d'une région depuis son code."""
     cfg = _load_regions_config()

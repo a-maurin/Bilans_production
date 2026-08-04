@@ -1832,6 +1832,7 @@ def _run_spatial_analyses(
     options: dict,
     cfg: BilanConfig,
     profil_id: str | None = None,
+    restrict_geo: str = "",
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     """Calcule les découpages spatiaux (PNF, TUB) si les options le demandent."""
     results: dict[str, Any] = {}
@@ -1879,7 +1880,7 @@ def _run_spatial_analyses(
         results["agg_pnf"] = agg_pnf
         results["point_with_pnf"] = pt
         # Bilan PNF : détail par zone (cœur vs aire d'adhésion).
-        if str(profil_id or "").strip().lower() == "pnf":
+        if restrict_geo == "pnf":
             rows = []
             if "pnf_zone_sig" in pt.columns:
                 coeur = pt[pt["pnf_zone_sig"] == "Coeur_PNF"].copy()
@@ -1921,8 +1922,7 @@ def _run_spatial_analyses(
         pve_insee = _get_insee_col(pve_filtered)
         if pve_insee:
             base_z = _zone_count(pve_filtered, pve_insee, tub_codes, pnf_codes)
-            pid = str(profil_id or "").strip().lower()
-            if pid == "pnf":
+            if restrict_geo == "pnf":
                 insee = pve_filtered[pve_insee].astype(str).str.zfill(5)
                 mask_pnf = insee.isin(pnf_codes)
                 nb_ensemble = int(mask_pnf.sum())
@@ -5906,6 +5906,7 @@ def _run_engine_thematic_pipeline(
         spatial, point_filtered = _run_spatial_analyses(
             point_filtered, pej_filtered, pve_filtered,
             resolved_opts, cfg, profil_id=profil_id,
+            restrict_geo=str(profile.get("restrict_geo") or "").strip().lower(),
         )
 
     # ── Agrégations ──

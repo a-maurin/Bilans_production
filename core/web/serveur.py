@@ -496,7 +496,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if params.get("gabarit"):
                     cmd.extend(["--gabarit", str(params["gabarit"])])
 
-                # Options oui/non (cartes, pnf, brochure)
+                # Options oui/non (cartes, brochure)
                 if params.get("cartes") is True:
                     cmd.append("--cartes")
                     if isinstance(params.get("cartes_selection"), list):
@@ -506,11 +506,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 cmd.extend(["--carte", c_clean])
                 elif params.get("cartes") is False:
                     cmd.append("--no-cartes")
-
-                if params.get("pnf") is True:
-                    cmd.append("--pnf")
-                elif params.get("pnf") is False:
-                    cmd.append("--no-pnf")
 
                 if params.get("brochure") is True:
                     cmd.append("--brochure")

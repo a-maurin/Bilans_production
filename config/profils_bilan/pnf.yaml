@@ -1,13 +1,18 @@
-# Profil thématique PNF : activité du service à l'intérieur du parc
+# Profil thématique PNF : activité du service à l'intérieur du parc — structure classique (sec1-sec6)
 schema_version: 2
 id: pnf
 label: "PNF"
 title_label: "Parc national de forêts"
+pipeline: global
+presentation_scope: global
 out_subdir: bilan_pnf
 
 # Restreindre l'analyse à toutes les communes du périmètre du parc
 # (aire d'adhésion + cœur), selon le référentiel PNF chargé par load_pnf.
 restrict_geo: pnf
+
+# Départements couverts par ce profil (utilisé pour le titre des fiches et les agrégations)
+departements: ["21", "52"]
 
 filter:
   type: all
@@ -30,6 +35,12 @@ periode_analyse:
 
 analyses:
   distinction_coeur_hors_coeur: true
+
+aggregation:
+  adapter: run_profile_aggregations
+
+pdf:
+  adapter: generate_profile_pdf_report
 
 options:
   pnf:

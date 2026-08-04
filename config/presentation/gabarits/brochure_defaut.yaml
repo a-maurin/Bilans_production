@@ -33,7 +33,7 @@ cartographie:
     - logo_ofb_bas_droite
     - bandeau_source
 
-layout:
+layout_grid:
   type: grid
   pages:
     - page_number: 1

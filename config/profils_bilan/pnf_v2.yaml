@@ -73,6 +73,8 @@ cartographie:
   emprise: aoa
   couches_vecteurs_extra:
     - coeur_parc
+  show_coeur_parc: true
+  carte_coeur_parc_dediee: true
 
 options:
   pnf:

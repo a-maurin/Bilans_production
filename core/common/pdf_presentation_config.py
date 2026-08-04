@@ -436,16 +436,16 @@ def resolve_pdf_presentation_config(
         gabarit_data = load_gabarit(gabarit_id, root)
         target_cible = "brochure" if is_brochure else "bilan"
         if gabarit_data and is_gabarit_compatible(gabarit_data, profile_id=profile_id, cible=target_cible):
-            raw_layout = gabarit_data.get("layout", "standard")
+            raw_layout = gabarit_data.get("layout_grid", gabarit_data.get("layout", "standard"))
             if isinstance(raw_layout, dict):
-                layout_mode = "brochure_custom"
+                layout_mode = "standard"
             else:
                 layout_mode = str(raw_layout).strip()
             gabarit_overrides = {
                 k: v for k, v in gabarit_data.items()
                 if k not in (
                     "version", "gabarit_id", "label", "description",
-                    "cible", "organisation", "profils_compatibles", "layout"
+                    "cible", "organisation", "profils_compatibles", "layout", "layout_grid"
                 )
             }
             if gabarit_overrides:

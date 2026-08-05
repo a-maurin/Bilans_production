@@ -325,6 +325,8 @@ def pochoir_cache_path(dept_code: str, cache_dir: Path) -> Path:
 
 # Libellés historiques SD21 dans les titres YAML
 _TITLE_DEPT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\{departement\}", re.IGNORECASE), "{dept_name}"),
+    (re.compile(r"\{dept_name\}", re.IGNORECASE), "{dept_name}"),
     (re.compile(r"Côte[- ]d['']Or", re.IGNORECASE), "{dept_name}"),
     (re.compile(r"Cote d['']?Or", re.IGNORECASE), "{dept_name}"),
     (re.compile(r"\bSD21\b", re.IGNORECASE), "SD{dept_code}"),

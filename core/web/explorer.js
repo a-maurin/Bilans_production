@@ -780,7 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Fin de la logique Quick Years ---
 
 
-    fetch('/api/profils')
+    fetch('/api/profils?target=explorer')
         .then(res => res.json())
         .then(data => {
             const selectProfil = document.getElementById('profil-select');
@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectProfil.innerHTML = '';
                 window.profilsMetadata = {};
                 data.forEach(p => {
-                    if (p.value === 'types_usager_cible') return; // Désactivé dans l'explorer
+                    if (p.value === 'types_usager_cible' || p.value === 'pnf_v2' || p.value === 'procedures_pve') return; // Désactivé dans l'explorer
                     window.profilsMetadata[p.value] = p;
                     const opt = document.createElement('option');
                     opt.value = p.value;

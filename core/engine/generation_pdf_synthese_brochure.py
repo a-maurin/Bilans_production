@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)  # Journaliseur propre à ce fichier
 # Modules de configuration de la présentation PDF
 from core.common.pdf_presentation_config import (
     apply_diffusion_pdf_suffix,  # Ajoute le suffixe (ex: _int pour interne) au fichier PDF
+    format_perimetre_title_label,  # Formate l'intitulé du périmètre (ex: Département de la Côte-d'Or)
     normalize_dept_typography,  # Nettoie la typographie du nom du département
     resolve_pdf_presentation_config,  # Récupère la configuration visuelle du bilan
 )
@@ -1021,7 +1022,7 @@ def _generate_srp_r27_brochure_pdf(
         textColor=COLOR_PRIMARY,
     )
     year_val = date_fin.year
-    perimetre_display = f"Région {dept_name_typo}" if not dept_name_typo.lower().startswith("région") else dept_name_typo
+    perimetre_display = format_perimetre_title_label(echelle, dept_name_typo)
     header_text = f"<b>Bilan Police</b> — {perimetre_display} — Année {year_val}"
 
     # Construction du tableau d'en-tête (Logo République/OFB à gauche + Titre à droite)
@@ -1041,20 +1042,7 @@ def _generate_srp_r27_brochure_pdf(
     else:
         builder.story.append(Paragraph(header_text, title_style))
 
-    # Fine ligne séparatrice horizontale bleue/grise
-    sep_tbl = Table([[""]], colWidths=[avail_w])
-    sep_tbl.hAlign = "LEFT"
-    sep_tbl.setStyle(
-        TableStyle([
-            ("LINEBELOW", (0, 0), (-1, -1), 1.0, COLOR_PRIMARY),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ])
-    )
-    builder.story.append(sep_tbl)
-    builder.story.append(Spacer(1, 0.5 * mm))
+    builder.story.append(Spacer(1, 2.0 * mm))
 
     # ── CALCUL DES COLONNES DE PAGE 1 ──
     gap_w = 6.0 * mm
@@ -1603,11 +1591,7 @@ def _generate_synthese_brochure_pdf(
         if cfg.echelle == "departement"
         else cfg.perimetre_name
     )
-    perimetre_display = (
-        f"Région {dept_name_typo}"
-        if cfg.echelle == "region" and not dept_name_typo.lower().startswith("région")
-        else dept_name_typo
-    )
+    perimetre_display = format_perimetre_title_label(cfg.echelle, dept_name_typo)
     report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
 

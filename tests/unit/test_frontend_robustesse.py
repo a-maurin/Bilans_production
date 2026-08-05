@@ -85,11 +85,11 @@ def test_validate_form_called_before_generate():
 # ── Mission 5 : Cohérence source profils ─────────────────────────────────────
 
 def test_both_js_use_same_profils_api_endpoint():
-    """explorer.js et app.js consomment tous deux /api/profils — source unique."""
+    """explorer.js et app.js consomment tous deux /api/profils avec leur cible respective."""
     explorer = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
     app = (Path(__file__).resolve().parents[2] / "core" / "web" / "app.js").read_text(encoding="utf-8")
-    assert "fetch('/api/profils')" in explorer, "/api/profils absent de explorer.js"
-    assert "fetch('/api/profils')" in app, "/api/profils absent de app.js"
+    assert "fetch('/api/profils?target=explorer')" in explorer, "/api/profils?target=explorer absent de explorer.js"
+    assert "fetch('/api/profils?target=editor')" in app, "/api/profils?target=editor absent de app.js"
 
 
 def test_no_debug_pve_in_serveur():
@@ -175,6 +175,19 @@ def test_map_fullscreen_layout_fix():
     assert "map.invalidateSize" in js_source, "Invalidation de taille de carte absente dans explorer.js"
     assert "flex-wrap: wrap;" in html_source, "flex-wrap: wrap absent de la barre d'outils carte dans explorer.html"
     assert "transform: translateY" not in html_source, "transform: translateY ne doit pas être présent dans dataFadeIn"
+
+
+def test_api_profils_target_filtering_in_serveur():
+    """
+    Vérifie que la route /api/profils dans serveur.py gère le paramètre target
+    et filtre pnf_v2, types_usager_cible et procedures_pve pour target=explorer.
+    """
+    serveur_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "serveur.py").read_text(encoding="utf-8")
+    assert 'target = (qs.get("target") or [None])[0]' in serveur_source
+    assert 'if target == "explorer":' in serveur_source
+    assert '"pnf_v2"' in serveur_source
+    assert '"procedures_pve"' in serveur_source
+
 
 
 

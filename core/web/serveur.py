@@ -360,6 +360,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed_path == "/api/profils":
             try:
                 import yaml
+                from urllib.parse import parse_qs, urlparse
+                qs = parse_qs(urlparse(self.path).query)
+                target = (qs.get("target") or [None])[0]
                 def yaml_include_dummy_constructor(loader, node):
                     return []
                 try:
@@ -376,6 +379,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "has_natinf_filter": False,
                     "has_custom_stats": False
                 }]
+                excluded_ids = {"pnf_foret", "_defaults", "types_usager", "synthese_activite_PA_PJ"}
+                if target == "explorer":
+                    excluded_ids.update({"pnf_v2", "types_usager_cible", "procedures_pve"})
+
                 if profiles_dir.exists():
                     for yaml_file in profiles_dir.glob("*.yaml"):
                         try:
@@ -388,7 +395,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if val_id and val_label:
                                 if any(p["value"] == val_id for p in profils_list):
                                     continue
-                                if val_id in {"pnf_foret", "_defaults", "types_usager", "synthese_activite_PA_PJ"}:
+                                if val_id in excluded_ids:
                                     continue
                                     
                                 sources_cfg = data.get("sources", {})

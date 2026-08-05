@@ -96,4 +96,36 @@ def test_build_matrice_themes_table_srp_other_row():
     assert isinstance(tbl, Table)
 
 
+def test_format_perimetre_and_title_lines_srp_r27():
+    from core.common.pdf_presentation_config import format_perimetre_title_label, build_title_lines_from_cfg
+
+    # 1. Échelle Département (21 -> Côte-d'Or)
+    lbl_dept = format_perimetre_title_label("departement", "Côte-d'Or")
+    assert lbl_dept == "Département de la Côte-d'Or"
+
+    effective_cfg_srp = {"gabarit_id": "srp_r27", "title": {"line2_mode": "fixed", "line2_fixed": "Service Régional Police – BFC"}}
+    cover_lines, header_lines = build_title_lines_from_cfg(
+        effective_cfg_srp,
+        profile_label="global",
+        perimetre_name_typo="Côte-d'Or",
+        echelle="departement",
+    )
+    assert "Département de la Côte-d'Or" in header_lines
+    assert "Service départemental de la Côte-d'Or — Service Régional Police" in header_lines
+
+    # 2. Échelle Région (r27 -> Bourgogne-Franche-Comté)
+    lbl_reg = format_perimetre_title_label("region", "Bourgogne-Franche-Comté")
+    assert lbl_reg == "Région Bourgogne-Franche-Comté"
+
+    cover_lines_reg, header_lines_reg = build_title_lines_from_cfg(
+        effective_cfg_srp,
+        profile_label="global",
+        perimetre_name_typo="Bourgogne-Franche-Comté",
+        echelle="region",
+    )
+    assert "Région Bourgogne-Franche-Comté" in header_lines_reg
+    assert "Service Régional Police – BFC" in header_lines_reg
+
+
+
 

@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let profilesList = [];
     let gabaritsList = [];
     
-    fetch('/api/profils')
+    fetch('/api/profils?target=editor')
         .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();

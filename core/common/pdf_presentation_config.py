@@ -968,6 +968,44 @@ def normalize_dept_typography(name: str) -> str:
     return " ".join(s.split())
 
 
+def get_dept_coord(dept_name: str) -> str:
+    """Retourne l'article grammatical du département (ex: 'de la', 'du', 'des', 'd'')."""
+    from core.chemins_projet import PROJECT_ROOT
+    import yaml
+
+    dept_key = str(dept_name).strip()
+    try:
+        cfg_path = PROJECT_ROOT / "config" / "departements.yaml"
+        if cfg_path.exists():
+            with cfg_path.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+                coord_map = data.get("coordination_departement", {})
+                if dept_key in coord_map:
+                    return coord_map[dept_key]
+    except Exception:
+        pass
+    return "de la"
+
+
+def format_perimetre_title_label(echelle: str, perimetre_name_typo: str) -> str:
+    """Formate l'intitulé du périmètre pour les titres PDF selon l'échelle et la grammaire française."""
+    e_norm = str(echelle).strip().lower()
+    p_name = str(perimetre_name_typo).strip()
+    if not p_name:
+        return ""
+    if e_norm == "departement":
+        if p_name.lower().startswith("département"):
+            return p_name
+        coord = get_dept_coord(p_name)
+        return f"Département {coord} {p_name}"
+    elif e_norm == "region":
+        if p_name.lower().startswith("région"):
+            return p_name
+        return f"Région {p_name}"
+    else:
+        return p_name
+
+
 def build_title_lines_from_cfg(
     effective_cfg: dict[str, Any],
     *,
@@ -982,13 +1020,20 @@ def build_title_lines_from_cfg(
     if not isinstance(title_cfg, dict):
         title_cfg = {}
 
+    gabarit_id = effective_cfg.get("gabarit_id") if isinstance(effective_cfg, dict) else None
+
     line1 = str(title_cfg.get("line1", default_line1)).strip() or default_line1
 
     line2_mode = str(title_cfg.get("line2_mode", "profile_label")).strip().lower()
     if line2_mode == "none":
         line2 = ""
     elif line2_mode == "fixed":
-        line2 = str(title_cfg.get("line2_fixed", "")).strip()
+        fixed_val = str(title_cfg.get("line2_fixed", "")).strip()
+        if gabarit_id == "srp_r27" and echelle == "departement" and perimetre_name_typo:
+            coord = get_dept_coord(perimetre_name_typo)
+            line2 = f"Service départemental {coord} {perimetre_name_typo} — Service Régional Police"
+        else:
+            line2 = fixed_val
     else:
         line2 = str(profile_label).strip()
 
@@ -996,28 +1041,7 @@ def build_title_lines_from_cfg(
     if line3_mode == "fixed":
         line3 = str(title_cfg.get("line3_fixed", "")).strip()
     else:
-        if echelle == "departement":
-            from core.chemins_projet import PROJECT_ROOT
-            import yaml
-
-            coord = "de la"
-            try:
-                cfg_path = PROJECT_ROOT / "config" / "departements.yaml"
-                if cfg_path.exists():
-                    with cfg_path.open("r", encoding="utf-8") as f:
-                        data = yaml.safe_load(f) or {}
-                        coord_map = data.get("coordination_departement", {})
-                        dept_key = str(perimetre_name_typo).strip()
-                        if dept_key in coord_map:
-                            coord = coord_map[dept_key]
-            except Exception:
-                pass
-
-            line3 = f"Département {coord} {perimetre_name_typo}"
-        elif echelle == "region":
-            line3 = f"Région {perimetre_name_typo}"
-        else:
-            line3 = f"Périmètre {perimetre_name_typo}"
+        line3 = format_perimetre_title_label(echelle, perimetre_name_typo)
 
     def _flatten(text: str) -> str:
         return " ".join(part.strip() for part in str(text).splitlines() if part.strip())

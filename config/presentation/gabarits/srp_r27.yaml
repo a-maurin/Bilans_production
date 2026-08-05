@@ -25,6 +25,7 @@ label: "R27 - Service Régional Police (BFC)"
 description: "Gabarit de présentation avec mise en page brochure condensée pour le SRP Bourgogne-Franche-Comté"
 
 cible: les_deux
+layout_mode: brochure_custom
 organisation:
   code_region: r27
   service: srp

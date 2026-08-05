@@ -414,14 +414,13 @@ def resolve_items_masques_carte(
     # 2. Additif : Éléments masqués par le gabarit (pochoir cartographique gabarit)
     g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
     if isinstance(g_carto, dict):
-        if "items_masques_brochure" in g_carto:
+        if is_brochure and "items_masques_brochure" in g_carto:
             res = g_carto.get("items_masques_brochure")
             if isinstance(res, list):
                 masques.extend(str(x) for x in res)
-        if "items_masques" in g_carto:
-            res = g_carto.get("items_masques")
-            if isinstance(res, list):
-                masques.extend(str(x) for x in res)
+        g_def = g_carto.get("items_masques_defaut", g_carto.get("items_masques", []))
+        if isinstance(g_def, list):
+            masques.extend(str(x) for x in g_def)
 
     # Conserver l'ordre d'apparition sans doublons
     seen: set[str] = set()

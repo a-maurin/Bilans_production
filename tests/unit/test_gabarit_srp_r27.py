@@ -61,6 +61,7 @@ def test_generate_profile_pdf_report_brochure_routing(tmp_path):
         echelle="departement",
         code="21",
         cartes=False,
+        diffusion="interne",
         cli_options={"gabarit": "srp_r27"},
     )
     generated_pdf = tmp_path / "global_brochure_int.pdf"

@@ -62,7 +62,7 @@ def test_expand_options_from_secheresse_profile() -> None:
     root = Path(__file__).resolve().parents[2]
     import yaml
 
-    path = root / "config" / "profils_bilan" / "controles_secheresse.yaml.disabled"
+    path = root / "config" / "profils_bilan" / "agrainage.yaml"
     profile = yaml.safe_load(path.read_text(encoding="utf-8"))
     fields = expand_dynamic_options(profile)
     paths = {f.path for f in fields}

@@ -418,9 +418,10 @@ def resolve_items_masques_carte(
             res = g_carto.get("items_masques_brochure")
             if isinstance(res, list):
                 masques.extend(str(x) for x in res)
-        g_def = g_carto.get("items_masques_defaut", g_carto.get("items_masques", []))
-        if isinstance(g_def, list):
-            masques.extend(str(x) for x in g_def)
+        else:
+            g_def = g_carto.get("items_masques_defaut", g_carto.get("items_masques", []))
+            if isinstance(g_def, list):
+                masques.extend(str(x) for x in g_def)
 
     # Conserver l'ordre d'apparition sans doublons
     seen: set[str] = set()

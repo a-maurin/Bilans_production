@@ -1,5 +1,5 @@
-1. Total in cache: 98
-Max date MIF in cache: 2025-12-20 00:00:00
-Max date INTG in cache: 2025-12-23 00:00:00
-2. After Dept filter: 22
-3. After Date filter (INF-DATE-MIF between 2025-01-01 00:00:00 and 2025-12-31 23:59:59): 22
+1. Total in cache: 242
+Max date MIF in cache: 2025-12-28 00:00:00
+Max date INTG in cache: 2026-01-06 00:00:00
+2. After Dept filter: 242
+3. After Date filter (INF-DATE-MIF between 2025-01-01 00:00:00 and 2025-12-31 23:59:59): 242

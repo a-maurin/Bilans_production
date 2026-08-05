@@ -1715,33 +1715,29 @@ def _generate_synthese_brochure_pdf(
         map_id = str(profile.get("_map_id") or profil_id)
         cartes_dir = get_cartes_dir()
 
-        # Liste des noms de fichiers de cartes possibles par ordre de priorité
+        # Liste des noms de fichiers de cartes possibles par ordre de priorité (out_dir du run courant prioritaire)
         res_brochure_candidates = [
             out_dir / f"carte_{map_id}_resultats_brochure.png",
-            cartes_dir / f"carte_{map_id}_resultats_brochure.png",
+            out_dir / f"carte_{map_id}_resultats.png",
             out_dir / f"carte_{map_id}_domaines_brochure.png",
-            cartes_dir / f"carte_{map_id}_domaines_brochure.png",
+            out_dir / f"carte_{map_id}_domaines.png",
             out_dir / f"carte_{map_id}_brochure.png",
+            out_dir / f"carte_{map_id}.png",
+            cartes_dir / f"carte_{map_id}_resultats_brochure.png",
+            cartes_dir / f"carte_{map_id}_resultats.png",
+            cartes_dir / f"carte_{map_id}_domaines_brochure.png",
+            cartes_dir / f"carte_{map_id}_domaines.png",
             cartes_dir / f"carte_{map_id}_brochure.png",
+            cartes_dir / f"carte_{map_id}.png",
         ]
         found_brochure = next((p for p in res_brochure_candidates if p.exists()), None)
         if not found_brochure:
-            brochure_globs = list(out_dir.glob(f"carte_{map_id}_*_brochure.png")) + list(cartes_dir.glob(f"carte_{map_id}_*_brochure.png"))
+            brochure_globs = list(out_dir.glob(f"carte_{map_id}_*.png")) + list(cartes_dir.glob(f"carte_{map_id}_*.png"))
             if brochure_globs:
                 found_brochure = brochure_globs[0]
 
         if found_brochure:
             map_paths.append(found_brochure)
-        else:
-            res_std_candidates = [
-                out_dir / f"carte_{map_id}_resultats.png",
-                cartes_dir / f"carte_{map_id}_resultats.png",
-                out_dir / f"carte_{map_id}.png",
-                cartes_dir / f"carte_{map_id}.png",
-            ]
-            found_std = next((p for p in res_std_candidates if p.exists()), None)
-            if found_std:
-                map_paths.append(found_std)
 
     has_maps = bool(map_paths)
 

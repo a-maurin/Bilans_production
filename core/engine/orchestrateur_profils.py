@@ -970,8 +970,6 @@ def prompt_cartography_integration(
 
         all_exist = all(_carte_ready(name) for name in expected_names) if expected_names else False
         if all_exist:
-            print("\n--- Cartographie ---")
-            print(f"Les {len(expected_names)} cartes attendues ont été générées ou trouvées avec succès dans {cartes_dir}.")
             return
 
         section_hint = "section 5 (localisation cartographique — une carte par page)"
@@ -1015,14 +1013,8 @@ def prompt_cartography_integration(
         presentation_cfg=pres_cfg if isinstance(pres_cfg, dict) else None,
         target_dir=cartes_dir,
     )
-    if actual_paths:
-        # Les cartes sont déjà présentes !
-        print("\n--- Cartographie ---")
-        if len(actual_paths) == 1:
-            print(f"La carte attendue a été générée ou trouvée avec succès : {actual_paths[0].name}")
-        else:
-            print(f"Les {len(actual_paths)} cartes attendues ont été générées ou trouvées avec succès.")
-        return
+    # Ignorer le cache pour forcer la régénération systématique à chaque execution
+    pass
 
     if not expected_names:
         expected_names = [f"carte_{map_id}.png", f"carte_{map_id}_2.png"]

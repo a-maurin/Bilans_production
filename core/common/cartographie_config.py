@@ -295,8 +295,12 @@ def resolve_qgis_profile_ids(
         return []
 
     mode = infer_cartographie_mode(profile, profil_id)
-    if mode in ("none", "manuel", "catalog"):
+    if mode in ("none", "manuel"):
         return []
+
+    if mode == "catalog":
+        sel = (profile or {}).get("_cartes_selection") or resolve_cartes_selection(profile, opts)
+        return [str(s) for s in sel if s]
 
     if mode == "synthese":
         carto = (profile or {}).get("cartographie") or {}

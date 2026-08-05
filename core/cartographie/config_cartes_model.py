@@ -97,7 +97,7 @@ class LayerSymbologyConfig:
     # Couleur unique pour single symbol
     color_rgb: Optional[tuple] = None
     # Taille symbole (mm) pour centroïdes / points
-    symbol_size_mm: float = 4.0
+    symbol_size_mm: float = 1.2
     # Forme pour points : circle, square, diamond, etc.
     symbol_shape: str = "circle"
     # Dict {valeur_categorie: couleur_hex} pour renderer_type=categorized — surcharge la palette cyclique

@@ -347,7 +347,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
                 classification_mode='quantile',
                 num_classes=5,
                 palette='#003A76',
-                symbol_size_mm=1.9,
+                symbol_size_mm=1.2,
                 symbol_shape='circle'
             ),
             'localisation_infrac_FAITS_20260205': LayerSymbologyConfig(
@@ -400,7 +400,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         classification_mode='quantile',
         num_classes=5,
         palette='#003A76',
-        symbol_size_mm=1.9,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
             'localisation_infrac_FAITS_20260205': LayerSymbologyConfig(
@@ -495,7 +495,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         classification_mode='quantile',
         num_classes=5,
         palette='#003A76,#53AB60,#F4A261,#E76F51,#90BF83,#4296CE',
-        symbol_size_mm=1.9,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
         },
@@ -563,7 +563,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         classification_mode='quantile',
         num_classes=5,
         palette='Blues',
-        symbol_size_mm=1.5,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
         },
@@ -603,7 +603,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         classification_mode='quantile',
         num_classes=5,
         palette='#53AB60',
-        symbol_size_mm=1.9,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
         },
@@ -646,7 +646,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         num_classes=5,
         palette='#53AB60,#E76F51,#F4A261,#003A76',
         color_rgb=(31, 120, 180),
-        symbol_size_mm=1.5,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
         },
@@ -687,7 +687,7 @@ DEFAULT_PROFILES: Dict[str, ProfileConfig] = {
         classification_mode='quantile',
         num_classes=5,
         palette='#E74C3C,#1E8449,#008080,#2980B9,#00B4D8,#D35400,#6C5CE7,#7F8C8D',
-        symbol_size_mm=1.9,
+        symbol_size_mm=1.2,
         symbol_shape='circle'
     ),
         },

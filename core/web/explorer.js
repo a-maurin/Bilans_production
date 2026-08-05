@@ -620,6 +620,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputCode = document.getElementById('code');
     const codeHelper = document.getElementById('code-helper');
 
+    // --- Accordéon : Filtres optionnels ---
+    const accordHeader = document.getElementById('accordion-filtres-header');
+    const accordBody = document.getElementById('accordion-filtres-body');
+    const filtresBadge = document.getElementById('filtres-badge');
+    const filtresInputs = [
+        document.getElementById('type-usager'),
+        document.getElementById('domaine-snc'),
+        document.getElementById('theme-snc'),
+        document.getElementById('type-action-snc'),
+        document.getElementById('resultat-select')
+    ];
+
+    function updateFiltresBadge() {
+        if (!filtresBadge) return;
+        const count = filtresInputs.filter(el => el && el.value.trim() !== '').length;
+        if (count > 0) {
+            filtresBadge.textContent = count;
+            filtresBadge.classList.remove('hidden');
+        } else {
+            filtresBadge.classList.add('hidden');
+        }
+    }
+
+    filtresInputs.forEach(el => {
+        if (el) el.addEventListener('input', updateFiltresBadge);
+    });
+
+    if (accordHeader && accordBody) {
+        accordHeader.addEventListener('click', () => {
+            const isOpen = accordBody.classList.contains('open');
+            accordBody.classList.toggle('open', !isOpen);
+            accordHeader.classList.toggle('open', !isOpen);
+        });
+    }
+
     const btnToggleCodes = document.getElementById('btn-toggle-codes');
     const codesDropdown = document.getElementById('codes-dropdown');
 

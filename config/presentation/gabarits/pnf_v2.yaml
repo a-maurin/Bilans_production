@@ -1,8 +1,22 @@
 # ========================================================================================
 # GABARIT DE PRESENTATION : PARC NATIONAL DE FORETS V2 (`pnf_v2.yaml`)
 # ========================================================================================
-# Ce fichier régit le gabarit de présentation PDF pour le Parc national de forêts (v2),
-# reprenant l'architecture et les composants des bilans régionaux :
+#
+# RÔLE : Gabarit de PRÉSENTATION uniquement (mise en page, ordre des sections, titres visuels).
+# → Ce fichier ne contient AUCUNE logique métier (filtres, sources de données, périmètre géo).
+# → Pour la logique métier (restrict_geo, analyses, sources...), voir :
+#   config/profils_bilan/pnf_v2.yaml
+#
+# Relation Profil / Gabarit :
+#   - Le PROFIL définit QUOI analyser : périmètre géo, sources, agrégations, options métier.
+#   - Le GABARIT définit COMMENT présenter : grille de pages, widgets, ordre des chapitres.
+#   - Ce gabarit est compatible avec les profils `pnf` et `pnf_v2` (voir `profils_compatibles`).
+#
+# Note : La clé `options.tub: false` présente dans ce fichier est une exception temporaire
+# (logique métier tolérée ici car liée à la présentation des tableaux TUB). Elle devrait
+# à terme migrer vers config/profils_bilan/pnf_v2.yaml.
+#
+# Contenu du gabarit :
 #   - Synthèse globale AOA avec chiffres clés, cartes et graphiques complets.
 #   - Focus dédié au Cœur de parc.
 #   - Déclinaisons départementales (21 - Côte-d'Or & 52 - Haute-Marne).

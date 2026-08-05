@@ -90,9 +90,9 @@ def validate_gabarit_schema(data: dict[str, Any]) -> tuple[bool, list[str]]:
     if not isinstance(data, dict):
         return False, ["Le contenu du gabarit n'est pas un dictionnaire."]
 
-    layout = data.get("layout")
+    layout = data.get("layout_grid", data.get("layout"))
     if not isinstance(layout, dict):
-        errors.append("La clé 'layout' doit être un dictionnaire.")
+        errors.append("La clé 'layout_grid' ou 'layout' doit être un dictionnaire.")
         return False, errors
 
     pages = layout.get("pages")
@@ -160,6 +160,7 @@ def load_gabarit_from_path(file_path: Path) -> dict[str, Any] | None:
             logger.warning(f"Fichier de gabarit non conforme au schéma : {file_path}. Erreurs: {errors}")
             return None
 
+        content.setdefault("layout", content.get("layout_grid", {}))
         return content
     except Exception as e:
         logger.warning(f"Erreur lors de la lecture du gabarit {file_path} : {e}")
@@ -410,14 +411,14 @@ def resolve_items_masques_carte(
             if isinstance(p_def, list):
                 masques.extend(str(x) for x in p_def)
 
-    # 2. Additif : Éléments masqués par le gabarit
+    # 2. Additif : Éléments masqués par le gabarit (pochoir cartographique gabarit)
     g_carto = (gabarit_data or {}).get("cartographie", {}) if isinstance(gabarit_data, dict) else {}
     if isinstance(g_carto, dict):
-        if is_brochure and "items_masques_brochure" in g_carto:
+        if "items_masques_brochure" in g_carto:
             res = g_carto.get("items_masques_brochure")
             if isinstance(res, list):
                 masques.extend(str(x) for x in res)
-        elif "items_masques" in g_carto:
+        if "items_masques" in g_carto:
             res = g_carto.get("items_masques")
             if isinstance(res, list):
                 masques.extend(str(x) for x in res)

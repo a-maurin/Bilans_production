@@ -279,7 +279,7 @@ def main() -> int:
         help=(
             "Périmètre de diffusion du PDF : interne (détail nominatif des procédures) "
             "ou externe (sans listes PEJ/PA/PVe avec numéro de dossier ni localisation). "
-            "Par défaut : valeur du profil YAML (sinon interne). "
+            "Par défaut : valeur du profil YAML (sinon externe). "
             "Les cartes sont conservées dans les deux cas."
         ),
     )
@@ -477,8 +477,8 @@ def main() -> int:
     if not diffusion and _is_interactive():
         diffusion = ask_choice_list(
             "Périmètre de diffusion",
-            [("interne", "Interne"), ("externe", "Externe")],
-            "interne"
+            [("externe", "Externe"), ("interne", "Interne")],
+            "externe"
         )
     if diffusion:
         cli_options["diffusion"] = diffusion

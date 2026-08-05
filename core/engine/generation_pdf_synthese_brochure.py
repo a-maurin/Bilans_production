@@ -1054,7 +1054,7 @@ def _generate_srp_r27_brochure_pdf(
         ])
     )
     builder.story.append(sep_tbl)
-    builder.story.append(Spacer(1, 1.5 * mm))
+    builder.story.append(Spacer(1, 0.5 * mm))
 
     # ── CALCUL DES COLONNES DE PAGE 1 ──
     gap_w = 6.0 * mm
@@ -1100,11 +1100,11 @@ def _generate_srp_r27_brochure_pdf(
                 "srp_pie_usagers.png",
                 legend_percent_only=True,
                 donut=True,
-                figure_scale=0.85,
-                legend_fontsize=8.5,
+                figure_scale=1.0,
+                legend_fontsize=9.5,
             )
         )
-        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=42.0 * mm, scale_to_fill=True)
+        img = _image_fit(builder, chart_path, max_width=encadre_inner_width(left_w, pad_pt=_PAD_STD_PT), max_height=50.0 * mm, scale_to_fill=True)
         if img:
             pie_body = [img]
     if not pie_body:
@@ -1140,7 +1140,7 @@ def _generate_srp_r27_brochure_pdf(
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ])
     )
     builder.story.append(p1_tbl)
@@ -1771,7 +1771,7 @@ def _generate_synthese_brochure_pdf(
         diffusion=diffusion,
         content_only=True,
         pagesize=BROCHURE_PAGE_SIZE,
-        margin_bottom=10 * mm,
+        margin_bottom=5 * mm,
         skip_first_page_header=True,
     )
     kpi_mm, lower_mm = _layout_page1_heights(builder, has_maps=has_maps)

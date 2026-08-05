@@ -323,7 +323,7 @@ def _message_fin_generation_pdf(
     resolved_opts: dict,
 ) -> str:
     """Message console indiquant le dossier et le nom du PDF produit."""
-    diffusion = str(resolved_opts.get("diffusion", "interne"))
+    diffusion = str(resolved_opts.get("diffusion", "externe"))
     base = str(profile.get("output_filename", "")).strip() or f"{profile.get('id', 'global')}.pdf"
     if str(profile.get("id", "global")).strip() == "global":
         filter_label = None
@@ -720,7 +720,14 @@ def _run_global_profile_via_yaml(
             gabarit_id_opt = options.get("gabarit")
             from core.common.chargeur_gabarits import load_gabarit
             g_data = load_gabarit(gabarit_id_opt) if gabarit_id_opt else None
-            is_brochure_mode = bool(options.get("brochure"))
+            brochure_opt = options.get("brochure")
+            if brochure_opt is True:
+                is_brochure_mode = True
+            elif brochure_opt is False:
+                is_brochure_mode = False
+            else:
+                layout_mode = (profile or {}).get("layout_mode") or "standard"
+                is_brochure_mode = layout_mode in ("brochure", "brochure_custom") or gabarit_id_opt in ("srp_r27", "brochure_defaut")
             ensure_maps_for_profiles(
                 map_profiles,
                 date_deb=date_deb,
@@ -728,7 +735,7 @@ def _run_global_profile_via_yaml(
                 echelle=echelle, code=code,
                 bilan_profiles={profil_id: profile},
                 target_dir=out_dir,
-                diffusion=str(resolved_opts.get("diffusion", "interne")),
+                diffusion=str(resolved_opts.get("diffusion", "externe")),
                 force_regen=True,
                 is_brochure=is_brochure_mode,
                 gabarit_data=g_data,
@@ -803,7 +810,7 @@ def _run_global_profile_via_yaml(
             "ventilation_mode": ventilation_mode,
             "chart_preset": chart_preset,
             "output_filename": output_filename,
-            "diffusion": str(resolved_opts.get("diffusion", "interne")),
+            "diffusion": str(resolved_opts.get("diffusion", "externe")),
             "cartes": bool(resolved_opts.get("cartes", False)),
         }
         import inspect
@@ -892,7 +899,7 @@ def _finalize_cartes_selection(
             echelle=echelle, code=code,
             bilan_profiles={bilan_key: profile},
             target_dir=target_dir,
-            diffusion=str(resolved_opts.get("diffusion", "interne")),
+            diffusion=str(resolved_opts.get("diffusion", "externe")),
             force_regen=True,
             is_brochure=is_brochure_mode,
             gabarit_data=g_data,
@@ -3636,7 +3643,7 @@ def _generate_pdf(
     single_label = str(single_cfg.get("label", "")).strip()
     export_prefix = profile.get("_export_prefix") or profil_id
     display_label = single_label if (is_single_usager and single_label) else label
-    diffusion = str(options.get("diffusion", "interne")).strip().lower()
+    diffusion = str(options.get("diffusion", "externe")).strip().lower()
     gabarit_id = options.get("gabarit")
     resolved_presentation_cfg = resolve_pdf_presentation_config(
         PROJECT_ROOT,
@@ -6015,7 +6022,7 @@ def _run_engine_thematic_pipeline(
                 echelle=echelle, code=code,
                 bilan_profiles={profil_id: profile},
                 target_dir=out_dir,
-                diffusion=str(resolved_opts.get("diffusion", "interne")),
+                diffusion=str(resolved_opts.get("diffusion", "externe")),
                 force_regen=True,
             )
         except Exception as e:

@@ -17,7 +17,7 @@ points_agrainage:
   filter_type: point_ctrl_agrainage
   renderer_type: single
   palette: "#C0392B"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -25,7 +25,7 @@ points_chasse:
   filter_type: point_ctrl_chasse
   renderer_type: single
   palette: "#2C3E50"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -33,7 +33,7 @@ points_piegeage:
   filter_type: point_ctrl_piegeage
   renderer_type: single
   palette: "#8E44AD"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -41,7 +41,7 @@ points_global:
   filter_type: point_ctrl_global
   renderer_type: single
   palette: "#003A76"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -65,7 +65,7 @@ points_global_resultats:
     "Infraction et manquement": "#E67E22"
     "Conforme": "#2ECC71"
     "Autre": "#95A5A6"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -91,7 +91,7 @@ points_global_usagers:
     "Entreprise": "#E74C3C"
     "Acteur sylvicole": "#16A085"
     "Autre": "#95A5A6"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 
@@ -111,7 +111,7 @@ points_global_domaines:
     "Sujets transversaux": "#D35400"
     "Sécurité publique et Prévention des inondations": "#6C5CE7"
     "Hors domaine": "#7F8C8D"
-  symbol_size_mm: 2.4
+  symbol_size_mm: 1.5
   symbol_shape: circle
   visible: true
 

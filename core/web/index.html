@@ -164,56 +164,66 @@ Composants principaux :
             <div class="card">
                 <h2>Configuration du Bilan</h2>
                 <form id="config-form">
-                    <div class="form-group">
-                        <label for="profil">Profil thématique</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="profil" name="profil"
-                                placeholder="Rechercher ou sélectionner un profil..." required value="global"
-                                autocomplete="off">
-                            <button type="button" id="btn-toggle-profils" class="select-arrow-btn">▼</button>
-                            <div id="profils-dropdown" class="select-dropdown hidden"></div>
+                    <!-- 1. Thématique & Périmètre géographique (Quoi & Où) -->
+                    <div class="form-section">
+                        <div class="form-section-title">1. Thématique & Périmètre Spatiale</div>
+                        <div class="form-group">
+                            <label for="profil">Profil thématique</label>
+                            <div class="custom-select-container">
+                                <input type="text" id="profil" name="profil"
+                                    placeholder="Rechercher ou sélectionner un profil..." required value="global"
+                                    autocomplete="off">
+                                <button type="button" id="btn-toggle-profils" class="select-arrow-btn">▼</button>
+                                <div id="profils-dropdown" class="select-dropdown hidden"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="echelle">Échelle spatiale</label>
+                                <select id="echelle" name="echelle" required>
+                                    <option value="departement" selected>Département</option>
+                                    <option value="region">Région</option>
+                                    <option value="bmi">BMI (Interrégional)</option>
+                                    <option value="national">National</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="code" id="label-code">Code géographique</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="code" name="code" value="21"
+                                        placeholder="Rechercher ou sélectionner..." required autocomplete="off">
+                                    <button type="button" id="btn-toggle-codes" class="select-arrow-btn">▼</button>
+                                    <div id="codes-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                                <div id="code-helper" class="code-helper">Exemples : 21, 27</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="gabarit">Gabarit de présentation PDF</label>
-                        <select id="gabarit" name="gabarit">
-                            <option value="">Automatique (par profil)</option>
-                        </select>
-                    </div>
-
-                    <!-- Période temporelle -->
-                    <div class="form-row">
+                    <!-- 2. Restitution PDF (Comment) -->
+                    <div class="form-section">
+                        <div class="form-section-title">2. Restitution PDF</div>
                         <div class="form-group">
-                            <label for="date-deb">Date de début</label>
-                            <input type="date" id="date-deb" name="date-deb" value="2025-01-01" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="date-fin">Date de fin</label>
-                            <input type="date" id="date-fin" name="date-fin" value="2025-12-31" required>
-                        </div>
-                    </div>
-
-                    <!-- Périmètre géographique -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="echelle">Échelle spatiale</label>
-                            <select id="echelle" name="echelle" required>
-                                <option value="departement" selected>Département</option>
-                                <option value="region">Région</option>
-                                <option value="bmi">BMI (Interrégional)</option>
-                                <option value="national">National</option>
+                            <label for="gabarit">Gabarit de présentation PDF</label>
+                            <select id="gabarit" name="gabarit">
+                                <option value="">Automatique (par profil)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="code" id="label-code">Code géographique</label>
-                            <div class="custom-select-container">
-                                <input type="text" id="code" name="code" value="21"
-                                    placeholder="Rechercher ou sélectionner..." required autocomplete="off">
-                                <button type="button" id="btn-toggle-codes" class="select-arrow-btn">▼</button>
-                                <div id="codes-dropdown" class="select-dropdown hidden"></div>
+                    </div>
+
+                    <!-- 3. Période temporelle (Quand) -->
+                    <div class="form-section">
+                        <div class="form-section-title">3. Période Temporelle</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="date-deb">Date de début</label>
+                                <input type="date" id="date-deb" name="date-deb" value="2025-01-01" required>
                             </div>
-                            <div id="code-helper" class="code-helper">Exemples : 21, 27</div>
+                            <div class="form-group">
+                                <label for="date-fin">Date de fin</label>
+                                <input type="date" id="date-fin" name="date-fin" value="2025-12-31" required>
+                            </div>
                         </div>
                     </div>
 
@@ -334,8 +344,8 @@ Composants principaux :
                         <div class="form-group">
                             <label for="diffusion">Type de diffusion</label>
                             <select id="diffusion" name="diffusion">
-                                <option value="interne" selected>Interne (Détaillé)</option>
-                                <option value="externe">Externe (Anonymisé)</option>
+                                <option value="externe" selected>Externe (Anonymisé)</option>
+                                <option value="interne">Interne (Détaillé)</option>
                             </select>
                         </div>
                         <div class="form-group">

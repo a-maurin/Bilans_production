@@ -577,146 +577,160 @@ Composants principaux :
                 </div>
                 <form id="config-form">
 
-                    <!-- Profil Thématique -->
-                    <div class="form-group"
-                        style="background: #eef2ff; padding: 8px; border-radius: 6px; border: 1px solid #c7d2fe; margin-bottom: 12px !important;">
-                        <label for="profil-select" style="font-weight: 600; color: #4338ca;">Profil Thématique</label>
-                        <select id="profil-select" name="profil"
-                            style="width: 100%; border-color: #a5b4fc; font-weight: 500;">
-                            <option value="global">Tous (Sans profil)</option>
-                        </select>
-                    </div>
-
-                    <!-- Filtre Département PNF -->
-                    <div id="pnf-dept-container" class="form-group hidden"
-                        style="background: #f0fdf4; padding: 8px; border-radius: 6px; border: 1px solid #bbf7d0; margin-bottom: 12px !important;">
-                        <label for="pnf-dept-select" style="font-weight: 600; color: #166534;">Département (PNF)</label>
-                        <select id="pnf-dept-select" name="pnf_dept"
-                            style="width: 100%; border-color: #86efac; font-weight: 500;">
-                            <option value="">Tous (Total PNF)</option>
-                            <option value="21">Côte-d'Or (21)</option>
-                            <option value="52">Haute-Marne (52)</option>
-                        </select>
-                    </div>
-
-                    <!-- Période temporelle -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="date-deb">Date de début</label>
-                            <input type="date" id="date-deb" name="date-deb" value="2025-01-01" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="date-fin">Date de fin</label>
-                            <input type="date" id="date-fin" name="date-fin" value="2025-12-31" required>
-                        </div>
-                    </div>
-
-                    <!-- Comparaison temporelle N vs N-1 -->
-                    <div class="form-group"
-                        style="background: var(--color-bg-light); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px !important;">
-                        <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                            <input type="checkbox" id="compare-active" name="compare-active" style="margin: 0;">
-                            <label for="compare-active"
-                                style="margin: 0 !important; cursor: pointer; font-weight: 600; color: var(--color-primary);">Comparer
-                                deux périodes (N vs N-1)</label>
-                        </div>
-                        <div id="compare-dates-container" class="hidden" style="margin-top: 8px;">
-                            <div class="form-row" style="margin-bottom: 0 !important;">
-                                <div class="form-group">
-                                    <label for="compare-date-deb">Date début N-1</label>
-                                    <input type="date" id="compare-date-deb" name="compare-date-deb" value="2024-01-01">
-                                </div>
-                                <div class="form-group">
-                                    <label for="compare-date-fin">Date fin N-1</label>
-                                    <input type="date" id="compare-date-fin" name="compare-date-fin" value="2024-12-31">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Périmètre géographique -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="echelle">Échelle spatiale</label>
-                            <select id="echelle" name="echelle" required>
-                                <option value="departement" selected>Département</option>
-                                <option value="region">Région</option>
-                                <option value="bmi">BMI (Interrégional)</option>
-                                <option value="national">National</option>
-                                <option value="pnf">PNF (Parc National)</option>
+                    <!-- 1. Thématique & Filtres Métier (Quoi) -->
+                    <div class="form-section">
+                        <div class="form-section-title">1. Thématique & Filtres Métier</div>
+                        <!-- Profil Thématique -->
+                        <div class="form-group"
+                            style="background: #eef2ff; padding: 8px; border-radius: 6px; border: 1px solid #c7d2fe; margin-bottom: 8px !important;">
+                            <label for="profil-select" style="font-weight: 600; color: #4338ca;">Profil Thématique</label>
+                            <select id="profil-select" name="profil"
+                                style="width: 100%; border-color: #a5b4fc; font-weight: 500;">
+                                <option value="global">Tous (Sans profil)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="code" id="label-code">Code géographique</label>
-                            <div class="custom-select-container">
-                                <input type="text" id="code" name="code" value="21"
-                                    placeholder="Rechercher ou sélectionner..." required autocomplete="off">
-                                <button type="button" id="btn-toggle-codes" class="select-arrow-btn">▼</button>
-                                <div id="codes-dropdown" class="select-dropdown hidden"></div>
+
+                        <!-- Filtre Département PNF -->
+                        <div id="pnf-dept-container" class="form-group hidden"
+                            style="background: #f0fdf4; padding: 8px; border-radius: 6px; border: 1px solid #bbf7d0; margin-bottom: 0 !important;">
+                            <label for="pnf-dept-select" style="font-weight: 600; color: #166534;">Département (PNF)</label>
+                            <select id="pnf-dept-select" name="pnf_dept"
+                                style="width: 100%; border-color: #86efac; font-weight: 500;">
+                                <option value="">Tous (Total PNF)</option>
+                                <option value="21">Côte-d'Or (21)</option>
+                                <option value="52">Haute-Marne (52)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 2. Périmètre géographique (Où) -->
+                    <div class="form-section">
+                        <div class="form-section-title">2. Périmètre Géographique</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="echelle">Échelle spatiale</label>
+                                <select id="echelle" name="echelle" required>
+                                    <option value="departement" selected>Département</option>
+                                    <option value="region">Région</option>
+                                    <option value="bmi">BMI (Interrégional)</option>
+                                    <option value="national">National</option>
+                                    <option value="pnf">PNF (Parc National)</option>
+                                </select>
                             </div>
-                            <div id="code-helper" class="code-helper">Exemples : 21, 27</div>
+                            <div class="form-group">
+                                <label for="code" id="label-code">Code géographique</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="code" name="code" value="21"
+                                        placeholder="Rechercher ou sélectionner..." required autocomplete="off">
+                                    <button type="button" id="btn-toggle-codes" class="select-arrow-btn">▼</button>
+                                    <div id="codes-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                                <div id="code-helper" class="code-helper">Exemples : 21, 27</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Commune de recherche -->
-                    <div class="form-group">
-                        <label for="filter-commune">Commune (Optionnel)</label>
-                        <input type="text" id="filter-commune" name="filter-commune" placeholder="Toutes les communes"
-                            autocomplete="off">
-                    </div>
+                    <!-- 3. Période temporelle & Comparaison (Quand) -->
+                    <div class="form-section">
+                        <div class="form-section-title">3. Période Temporelle & Comparaison</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="date-deb">Date de début</label>
+                                <input type="date" id="date-deb" name="date-deb" value="2025-01-01" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="date-fin">Date de fin</label>
+                                <input type="date" id="date-fin" name="date-fin" value="2025-12-31" required>
+                            </div>
+                        </div>
 
-                    <!-- Type usager cible -->
-                    <div class="form-group">
-                        <label for="type-usager">Type d'usager cible (Optionnel)</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="type-usager" name="type-usager"
-                                placeholder="Tous les types d'usagers" autocomplete="off">
-                            <button type="button" id="btn-toggle-usagers" class="select-arrow-btn">▼</button>
-                            <div id="usagers-dropdown" class="select-dropdown hidden"></div>
+                        <!-- Comparaison temporelle N vs N-1 -->
+                        <div class="form-group"
+                            style="background: var(--color-bg-light); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border); margin-top: 10px; margin-bottom: 0 !important;">
+                            <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="compare-active" name="compare-active" style="margin: 0;">
+                                <label for="compare-active"
+                                    style="margin: 0 !important; cursor: pointer; font-weight: 600; color: var(--color-primary); line-height: 1.2;">Comparer deux périodes<br>(N vs N-1)</label>
+                            </div>
+                            <div id="compare-dates-container" class="hidden" style="margin-top: 8px;">
+                                <div class="form-row" style="margin-bottom: 0 !important;">
+                                    <div class="form-group">
+                                        <label for="compare-date-deb">Date début N-1</label>
+                                        <input type="date" id="compare-date-deb" name="compare-date-deb" value="2024-01-01">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="compare-date-fin">Date fin N-1</label>
+                                        <input type="date" id="compare-date-fin" name="compare-date-fin" value="2024-12-31">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Domaines de la SNC -->
-                    <div class="form-group">
-                        <label for="domaine-snc">Domaines de la SNC (Optionnel)</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="domaine-snc" name="domaine-snc" placeholder="Tous les domaines"
-                                autocomplete="off">
-                            <button type="button" id="btn-toggle-domaines-snc" class="select-arrow-btn">▼</button>
-                            <div id="domaines-snc-dropdown" class="select-dropdown hidden"></div>
+                    <!-- 4. Filtres optionnels (accordéon déroulant) -->
+                    <div class="accordion-section" id="accordion-filtres" style="margin-top: 16px;">
+                        <div class="accordion-header" id="accordion-filtres-header">
+                            <span class="accordion-title">
+                                <span>Filtres optionnels</span>
+                                <span class="accordion-badge hidden" id="filtres-badge">0</span>
+                            </span>
+                            <span class="accordion-arrow">&#9660;</span>
                         </div>
-                    </div>
+                        <div class="accordion-body" id="accordion-filtres-body">
+                            <!-- Type usager cible -->
+                            <div class="form-group">
+                                <label for="type-usager">Type d'usager cible</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="type-usager" name="type-usager"
+                                        placeholder="Tous les types d'usagers" autocomplete="off">
+                                    <button type="button" id="btn-toggle-usagers" class="select-arrow-btn">▼</button>
+                                    <div id="usagers-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                            </div>
 
-                    <!-- Thèmes de la SNC -->
-                    <div class="form-group">
-                        <label for="theme-snc">Thèmes de la SNC (Optionnel)</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="theme-snc" name="theme-snc" placeholder="Tous les thèmes"
-                                autocomplete="off">
-                            <button type="button" id="btn-toggle-themes-snc" class="select-arrow-btn">▼</button>
-                            <div id="themes-snc-dropdown" class="select-dropdown hidden"></div>
-                        </div>
-                    </div>
+                            <!-- Domaines de la SNC -->
+                            <div class="form-group">
+                                <label for="domaine-snc">Domaines de la SNC</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="domaine-snc" name="domaine-snc" placeholder="Tous les domaines"
+                                        autocomplete="off">
+                                    <button type="button" id="btn-toggle-domaines-snc" class="select-arrow-btn">▼</button>
+                                    <div id="domaines-snc-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                            </div>
 
-                    <!-- Type d'action (Optionnel) -->
-                    <div class="form-group">
-                        <label for="type-action-snc">Type d'action (Optionnel)</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="type-action-snc" name="type-action-snc"
-                                placeholder="Tous les types d'action" autocomplete="off">
-                            <button type="button" id="btn-toggle-types-action" class="select-arrow-btn">▼</button>
-                            <div id="types-action-dropdown" class="select-dropdown hidden"></div>
-                        </div>
-                    </div>
+                            <!-- Thèmes de la SNC -->
+                            <div class="form-group">
+                                <label for="theme-snc">Thèmes de la SNC</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="theme-snc" name="theme-snc" placeholder="Tous les thèmes"
+                                        autocomplete="off">
+                                    <button type="button" id="btn-toggle-themes-snc" class="select-arrow-btn">▼</button>
+                                    <div id="themes-snc-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                            </div>
 
-                    <!-- Résultat du contrôle (Optionnel) -->
-                    <div class="form-group">
-                        <label for="resultat-select">Résultat du contrôle (Optionnel)</label>
-                        <div class="custom-select-container">
-                            <input type="text" id="resultat-select" name="resultat-select"
-                                placeholder="Tous les résultats" autocomplete="off" readonly>
-                            <button type="button" id="btn-toggle-resultats" class="select-arrow-btn">▼</button>
-                            <div id="resultats-dropdown" class="select-dropdown hidden"></div>
+                            <!-- Type d'action -->
+                            <div class="form-group">
+                                <label for="type-action-snc">Type d'action</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="type-action-snc" name="type-action-snc"
+                                        placeholder="Tous les types d'action" autocomplete="off">
+                                    <button type="button" id="btn-toggle-types-action" class="select-arrow-btn">▼</button>
+                                    <div id="types-action-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                            </div>
+
+                            <!-- Résultat du contrôle -->
+                            <div class="form-group">
+                                <label for="resultat-select">Résultat du contrôle</label>
+                                <div class="custom-select-container">
+                                    <input type="text" id="resultat-select" name="resultat-select"
+                                        placeholder="Tous les résultats" autocomplete="off" readonly>
+                                    <button type="button" id="btn-toggle-resultats" class="select-arrow-btn">▼</button>
+                                    <div id="resultats-dropdown" class="select-dropdown hidden"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">

@@ -165,7 +165,7 @@ class PDFReportBuilder:
         *,
         tables_layout: dict[str, Any] | None = None,
         charte_config: dict[str, Any] | None = None,
-        diffusion: str = "interne",
+        diffusion: str = "externe",
         title_page_config: dict[str, Any] | None = None,
         content_only: bool = False,
         pagesize: tuple[float, float] | None = None,
@@ -528,13 +528,12 @@ class PDFReportBuilder:
         y_foot = 8 * mm
         canvas.setFont(f"{FONT_FAMILY}", 7)
         canvas.setFillColor(rl_colors.HexColor(COLOR_SECONDARY))
-        canvas.drawString(MARGIN_LEFT, y_foot + 12, self.footer_line1)
-        canvas.drawString(MARGIN_LEFT, y_foot + 3, self.footer_line2)
+        canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot + 26, f"{doc.page}")
+        canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot + 17, self.footer_line1)
+        canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot + 8, self.footer_line2)
         italic_suffix = "-Oblique" if FONT_FAMILY == "Helvetica" else "-Italic"
         canvas.setFont(f"{FONT_FAMILY}{italic_suffix}", 6)
-        canvas.drawString(MARGIN_LEFT, y_foot - 5, "Généré avec OFBilan - Logiciel libre (GNU GPLv3). Auteur : Aguirre MAURIN")
-        canvas.setFont(f"{FONT_FAMILY}", 7)
-        canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot + 3, f"{doc.page}")
+        canvas.drawRightString(self._page_w - MARGIN_RIGHT, y_foot - 1, "Généré avec OFBilan - Logiciel libre (GNU GPLv3). Auteur : Aguirre MAURIN")
         canvas.restoreState()
 
     # ========================================================================================

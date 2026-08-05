@@ -95,7 +95,7 @@ profiles:
 
 
 def test_normalize_diffusion() -> None:
-    assert normalize_diffusion(None) == "interne"
+    assert normalize_diffusion(None) == "externe"
     assert normalize_diffusion("externe") == "externe"
     assert normalize_diffusion("EXTERNAL") == "externe"
 
@@ -104,7 +104,7 @@ def test_internal_diffusion_title_notice() -> None:
     assert "Diffusion restreinte" in INTERNAL_DIFFUSION_TITLE_NOTICE
     assert should_show_internal_diffusion_title_notice("interne") is True
     assert should_show_internal_diffusion_title_notice("externe") is False
-    assert should_show_internal_diffusion_title_notice(None) is True
+    assert should_show_internal_diffusion_title_notice(None) is False
 
 
 def test_resolve_internal_diffusion_notice_config_defaults() -> None:
@@ -136,7 +136,7 @@ defaults:
 def test_diffusion_pdf_suffix() -> None:
     assert diffusion_pdf_suffix("interne") == "_int"
     assert diffusion_pdf_suffix("externe") == "_ext"
-    assert diffusion_pdf_suffix(None) == "_int"
+    assert diffusion_pdf_suffix(None) == "_ext"
 
 
 def test_apply_diffusion_pdf_suffix() -> None:

@@ -458,7 +458,7 @@ def get_effective_config():
 
 class _ConfigExportOverride:
     """Wrapper autour de CONFIG pour surcharger departement_code et diffusion (export cartes)."""
-    def __init__(self, base_config, departement_code_override: str, diffusion: str = "interne"):
+    def __init__(self, base_config, departement_code_override: str, diffusion: str = "externe"):
         self._base = base_config
         self._dept = departement_code_override
         self._diffusion = diffusion
@@ -942,7 +942,7 @@ def get_numeric_fields(layer) -> List[str]:
     ]
 
 
-def apply_layer_symbology(layer, config: "LayerSymbologyConfig", geometry_mode_override: Optional[str] = None, diffusion: str = "interne") -> None:
+def apply_layer_symbology(layer, config: "LayerSymbologyConfig", geometry_mode_override: Optional[str] = None, diffusion: str = "externe") -> None:
     """Applique la symbologie définie dans config à la couche."""
     from config_cartes import LayerSymbologyConfig
 
@@ -2525,7 +2525,7 @@ def run_export(
     dept_code: Optional[str] = None,
     *,
     qgis_overrides: Optional[Dict[str, dict]] = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     items_a_masquer: Optional[List[str]] = None,
 ) -> None:
     """Génère les cartes en mode non interactif à partir de la config."""
@@ -2825,7 +2825,7 @@ def run_export(
                         prof_sym_src,
                         global_sym_src,
                     ):
-                        apply_layer_symbology(layer, lcfg, diffusion=getattr(carto_config, "diffusion", "interne"))
+                        apply_layer_symbology(layer, lcfg, diffusion=getattr(carto_config, "diffusion", "externe"))
                     else:
                         logger.debug("  Symbologie QGIS conservée pour '%s'", resolved_name)
 

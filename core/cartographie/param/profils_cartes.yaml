@@ -1,0 +1,89 @@
+# ========================================================================================
+# PROFILS CARTOGRAPHIQUES PAR DÉFAUT (`profils_cartes.yaml`)
+# ========================================================================================
+#
+# RÔLE : Déclare les profils de cartes QGIS disponibles pour l'export PNG.
+#
+# Fonctionnement :
+#   - Le bloc `default` active le chargement dynamique : les profils bilan (config/profils_bilan/)
+#     génèrent automatiquement un ProfileConfig cartographique à partir de leur section `cartographie:`.
+#   - Les `cartes_definitions` décrivent les 4 types de cartes standard (domaines, usagers,
+#     resultats, procedures) avec leurs couches et symbologies QGIS.
+#   - La symbologie effective des couches est définie dans param/symbologies.yaml.
+#
+# Pour ajouter un profil carto sur-mesure : ajouter un bloc dans config/profils_cartes.yaml
+# (le fichier utilisateur, qui prend priorité sur ce fichier).
+# ========================================================================================
+
+symbology_source: yaml
+
+default:
+  cartes_actives:
+    - domaines
+    - usagers
+    - resultats
+    - procedures
+  pochoir: departement
+  couches_vecteurs_extra: []
+
+  cartes_definitions:
+    domaines:
+      suffixe_nom: _domaines
+      title_main: "Contrôles par domaine d'activité"
+      layers:
+        point_ctrl:
+          symbology_ref: points_global_domaines
+          legend_label: "Contrôles (localisations)"
+          filter_type: point_ctrl_global
+          geometry_mode: point
+          renderer_type: categorized
+          field: domaine
+          symbology_source: yaml
+
+    usagers:
+      suffixe_nom: _usagers
+      title_main: "Contrôles par type d'usager"
+      layers:
+        point_ctrl:
+          symbology_ref: points_global_usagers
+          legend_label: "Contrôles (localisations)"
+          filter_type: point_ctrl_global
+          geometry_mode: point
+          renderer_type: categorized
+          field: type_usager
+          symbology_source: yaml
+
+    resultats:
+      suffixe_nom: _resultats
+      title_main: "Résultats des contrôles"
+      layers:
+        point_ctrl:
+          symbology_ref: points_global_resultats
+          legend_label: "Contrôles (localisations)"
+          filter_type: point_ctrl_global
+          geometry_mode: point
+          renderer_type: categorized
+          field: resultat
+          symbology_source: yaml
+
+    procedures:
+      suffixe_nom: _procedures
+      title_main: "Procédures (PA, PEJ, PVe)"
+      layers:
+        point_ctrl:
+          symbology_ref: points_global
+          legend_label: "Contrôles (localisations)"
+          filter_type: point_ctrl_global
+          geometry_mode: point
+          renderer_type: categorized
+          field: resultat
+          symbology_source: yaml
+        localisation_infrac_FAITS:
+          legend_label: "Procédures judiciaires (PEJ)"
+          filter_type: pj
+          geometry_mode: point
+          renderer_type: single
+          palette: "#C0392B"
+          symbol_size_mm: 2.5
+          symbol_shape: triangle
+          symbology_source: yaml

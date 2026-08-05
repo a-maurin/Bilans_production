@@ -144,7 +144,7 @@ def generate_profile_pdf_report(
     ventilation_mode: str = "globale",
     chart_preset: str | None = None,
     output_filename: str | None = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     cartes: bool = True,
     cli_options: dict | None = None,
 ) -> None:
@@ -229,7 +229,7 @@ def generate_pdf_report(
     ventilation_mode: str = "globale",
     chart_preset: str | None = None,
     output_filename: str | None = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     cartes: bool = True,
     cli_options: dict | None = None,
 ) -> None:
@@ -263,7 +263,7 @@ def _generate_pdf_content(
     ventilation_mode: str = "globale",
     chart_preset: str | None = None,
     output_filename: str | None = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     cartes: bool = True,
     cli_options: dict | None = None,
 ) -> None:
@@ -274,9 +274,16 @@ def _generate_pdf_content(
     resolved_presentation_cfg = resolve_pdf_presentation_config(
         _ROOT, scope=scope, profile_id=profile_id, diffusion=diffusion, gabarit_id=gabarit_id
     )
-    layout_mode = str((resolved_presentation_cfg or {}).get("layout_mode", "standard")).strip()
-    is_brochure_req = bool((cli_options or {}).get("brochure"))
-    if is_brochure_req or layout_mode in ("brochure", "brochure_custom") or gabarit_id in ("srp_r27", "gabarit_defaut", "brochure_defaut"):
+    brochure_opt = (cli_options or {}).get("brochure")
+    if brochure_opt is True:
+        is_brochure_mode = True
+    elif brochure_opt is False:
+        is_brochure_mode = False
+    else:
+        layout_mode = (profile or {}).get("layout_mode") or "standard"
+        is_brochure_mode = layout_mode in ("brochure", "brochure_custom") or gabarit_id in ("srp_r27", "brochure_defaut")
+
+    if is_brochure_mode:
         from core.engine.generation_pdf_synthese_brochure import (
             generate_synthese_brochure_pdf_report,
         )

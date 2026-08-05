@@ -390,7 +390,7 @@ def generate_maps(
     dept_code: Optional[str] = None,
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     items_a_masquer: Optional[List[str]] = None,
     is_brochure: bool = False,
 ) -> List[Path]:
@@ -518,7 +518,7 @@ def ensure_maps_for_profiles(
     dept_code: Optional[str] = None,
     bilan_profiles: dict[str, dict] | None = None,
     target_dir: Path | None = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
     force_regen: bool = False,
     items_a_masquer: Optional[List[str]] = None,
     is_brochure: bool = False,

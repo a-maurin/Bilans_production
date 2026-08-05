@@ -1,7 +1,16 @@
 # ========================================================================================
 # ALIAS RÉTROCOMPATIBILITÉ : BROCHURE DEFAULT (`brochure_defaut.yaml`)
 # ========================================================================================
-# Ce fichier redirige vers gabarit_defaut.yaml pour assurer la rétrocompatibilité.
+#
+# RÔLE : Gabarit de PRÉSENTATION uniquement (mise en page, ordre des sections, titres visuels).
+# → Ce fichier ne contient AUCUNE logique métier (filtres, sources de données, périmètre géo).
+# → Pour la logique métier, voir : config/profils_bilan/<profil>.yaml
+#
+# Relation Profil / Gabarit :
+#   - Le PROFIL définit QUOI analyser : périmètre géo, sources, agrégations, options métier.
+#   - Le GABARIT définit COMMENT présenter : grille de pages, widgets, ordre des chapitres.
+#
+# Note : Ce fichier est un alias de rétrocompatibilité vers `gabarit_defaut.yaml`.
 # ========================================================================================
 
 version: 1

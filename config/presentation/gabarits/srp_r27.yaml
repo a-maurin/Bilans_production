@@ -1,14 +1,22 @@
 # ========================================================================================
 # GABARIT DE PRESENTATION : SERVICE REGIONAL POLICE BFC (`srp_r27.yaml`)
 # ========================================================================================
-# Ce fichier régit le gabarit visuel sur-mesure pour le Service Régional de Police (SRP)
-# de Bourgogne-Franche-Comté (Région R27).
 #
-# Explication des clés pour les non-spécialistes :
-#   - `gabarit_id` : identifiant unique du gabarit répertorié par le moteur d'édition Web/CLI.
-#   - `layout.pages` : grille de widgets personnalisée pour le SRP R27.
-#   - `title` : ligne de sous-titre fixe ("Service Régional Police – BFC").
-#   - `sections.order` : ordre personnalisé d'enchaînement des chapitres dans le rapport PDF.
+# RÔLE : Gabarit de PRÉSENTATION uniquement (mise en page, ordre des sections, titres visuels).
+# → Ce fichier ne contient AUCUNE logique métier (filtres, sources de données, périmètre géo).
+# → La logique métier (région, service) est portée par les données à l'exécution
+#   et non par un fichier profil dédié (ce gabarit s'applique à tous profils de la région R27).
+#
+# Relation Profil / Gabarit :
+#   - Le PROFIL définit QUOI analyser : périmètre géo, sources, agrégations, options métier.
+#   - Le GABARIT définit COMMENT présenter : grille de pages, widgets, ordre des chapitres.
+#   - Ce gabarit cible les deux formats (bilan et brochure) pour la région BFC / SRP.
+#
+# Spécificités de ce gabarit :
+#   - `organisation.code_region` / `organisation.service` : métadonnées de ciblage institutionnel.
+#   - `title.line2_fixed` : sous-titre fixe "Service Régional Police – BFC".
+#   - `sections.order` : ordre personnalisé d'enchaînement des chapitres.
+#   - `layout_grid` : grille 2 pages sur-mesure (KPI + carte + sections + tableau thématique).
 # ========================================================================================
 
 version: 1

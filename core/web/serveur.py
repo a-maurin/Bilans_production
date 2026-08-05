@@ -415,6 +415,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     "value": val_id,
                                     "label": val_label,
                                     "sources": sources,
+                                    "departements": data.get("departements", []),
                                     "has_action_filter": has_action_filter,
                                     "has_natinf_filter": has_natinf_filter,
                                     "has_custom_stats": has_custom_stats

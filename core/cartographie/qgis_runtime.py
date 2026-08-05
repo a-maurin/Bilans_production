@@ -177,7 +177,7 @@ def run_cartography_export_subprocess(
     date_fin: str,
     dept_code: str,
     target_dir: Optional[Path] = None,
-    diffusion: str = "interne",
+    diffusion: str = "externe",
 ) -> bool:
     """
     Lance l'export QGIS via Python QGIS direct ou le lanceur Windows historique.

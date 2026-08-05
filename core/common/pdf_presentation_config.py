@@ -395,7 +395,7 @@ def resolve_pdf_presentation_config(
     *,
     scope: str,
     profile_id: str | None = None,
-    diffusion: str | None = "interne",
+    diffusion: str | None = "externe",
     gabarit_id: str | None = None,
     is_brochure: bool = False,
 ) -> dict[str, Any]:
@@ -478,10 +478,10 @@ INTERNAL_DIFFUSION_TITLE_NOTICE = (
 
 def normalize_diffusion(value: str | None) -> str:
     """Valide le mode de diffusion du rapport (`interne` ou `externe`)."""
-    s = str(value or "interne").strip().lower()
-    if s in ("externe", "external", "ext"):
-        return "externe"
-    return "interne"
+    s = str(value or "externe").strip().lower()
+    if s in ("interne", "internal", "int"):
+        return "interne"
+    return "externe"
 
 
 def should_show_internal_diffusion_title_notice(diffusion: str | None) -> bool:
@@ -865,23 +865,59 @@ def resolve_sections_for_toc(
         if str(x).strip()
     ]
 
-    ordered: list[tuple[str, str]] = []
-    seen: set[str] = set()
+    def get_parent_id(sid: str) -> str:
+        if sid.startswith("sec2"):
+            return "sec2"
+        if sid.startswith("sec3"):
+            return "sec3"
+        if sid.startswith("sec4"):
+            return "sec4"
+        return sid
+
+    # Construire la liste étendue des order_ids en incluant les sous-sections de section_defs rattachées
+    expanded_order_ids: list[str] = []
+    seen_ids: set[str] = set()
+
     for sid in order_ids:
+        if sid in by_id and sid not in seen_ids:
+            expanded_order_ids.append(sid)
+            seen_ids.add(sid)
+        
+        # Insérer les sous-sections de section_defs rattachées à cette section principale
+        for def_sid, _ in section_defs:
+            if def_sid not in order_ids and def_sid not in seen_ids:
+                if def_sid.startswith(sid) or get_parent_id(def_sid) == sid:
+                    expanded_order_ids.append(def_sid)
+                    seen_ids.add(def_sid)
+
+    # Récupérer les éléments ordonnés selon l'ordre étendu
+    ordered_tuples: list[tuple[str, str]] = []
+    seen_in_ordered: set[str] = set()
+    for sid in expanded_order_ids:
         sec = by_id.get(sid)
         if sec is None:
             continue
         if is_section_enabled(effective_cfg, sid, True):
-            ordered.append(sec)
-        seen.add(sid)
+            ordered_tuples.append(sec)
+            seen_in_ordered.add(sid)
+
+    # Assembler le sommaire final en préservant l'ordre canonique de section_defs pour les reliquats (ex: sec5)
+    final_ordered: list[tuple[str, str]] = []
+    ordered_dict = {sid: title for sid, title in ordered_tuples}
 
     for sid, title in section_defs:
-        if sid in seen:
-            continue
-        if is_section_enabled(effective_cfg, sid, True):
-            ordered.append((sid, title))
+        if sid in ordered_dict:
+            final_ordered.append((sid, ordered_dict[sid]))
+        elif is_section_enabled(effective_cfg, sid, True) and sid not in seen_in_ordered:
+            final_ordered.append((sid, title))
+            seen_in_ordered.add(sid)
 
-    return ordered
+    # Ajouter les éventuels éléments de ordered_tuples non présents dans section_defs
+    for sid, title in ordered_tuples:
+        if (sid, title) not in final_ordered:
+            final_ordered.append((sid, title))
+
+    return final_ordered
 
 
 def resolve_section_titles(

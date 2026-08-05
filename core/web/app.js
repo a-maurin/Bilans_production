@@ -113,22 +113,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentVal = selectGabarit.value;
         const targetVal = currentVal || userDefaultGabarit;
         const selectedProfil = inputProfil ? inputProfil.value.trim() : '';
+        const selectedEchelle = selectEchelle ? selectEchelle.value : '';
+        const selectedCode = inputCode ? inputCode.value.trim().toLowerCase() : '';
 
         selectGabarit.innerHTML = '<option value="">Automatique (par profil)</option>';
+        let hasSelectedMatch = false;
+
         gabaritsList.forEach(g => {
+            // Filtrage par profil
             if (g.profils_compatibles && Array.isArray(g.profils_compatibles) && g.profils_compatibles.length > 0) {
                 if (selectedProfil && !g.profils_compatibles.includes(selectedProfil)) {
                     return;
                 }
             }
+            // Filtrage par région si spécifiée dans l'organisation du gabarit
+            if (g.organisation && g.organisation.code_region) {
+                const reqRegion = String(g.organisation.code_region).toLowerCase();
+                if (selectedEchelle === 'region' && selectedCode && selectedCode !== reqRegion) {
+                    return;
+                }
+            }
+
             const opt = document.createElement('option');
             opt.value = g.gabarit_id;
             opt.textContent = g.label || g.gabarit_id;
             if (g.gabarit_id === targetVal) {
                 opt.selected = true;
+                hasSelectedMatch = true;
             }
             selectGabarit.appendChild(opt);
         });
+
+        // Si la valeur cible n'est plus éligible, sélectionner le premier gabarit éligible ou 'Automatique'
+        if (targetVal && !hasSelectedMatch && selectGabarit.options.length > 1) {
+            selectGabarit.selectedIndex = 1;
+        } else if (targetVal && !hasSelectedMatch) {
+            selectGabarit.selectedIndex = 0;
+        }
     }
 
     function normalizeStr(str) {
@@ -160,6 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 inputProfil.value = p.value;
                 profilsDropdown.classList.add('hidden');
                 renderGabaritsOptions();
+                if (p.departements && p.departements.length > 0) {
+                    inputCode.value = p.departements.join(', ');
+                }
             });
             profilsDropdown.appendChild(opt);
         });
@@ -333,7 +357,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getActiveCodesList() {
         const scale = selectEchelle.value;
-        if (scale === 'departement') return deptsList;
+        if (scale === 'departement') {
+            const currentVal = inputProfil.value.trim();
+            const profObj = profilesList.find(p => p.value === currentVal);
+            if (profObj && profObj.departements && profObj.departements.length > 0) {
+                const depts = profObj.departements;
+                const fullCode = depts.join(', ');
+                const labels = depts.map(d => {
+                    const found = deptsList.find(x => x.value === d);
+                    return found ? found.label : d;
+                });
+                const resList = [
+                    { value: fullCode, label: `${fullCode} - Ensemble du périmètre (${labels.join(' & ')})` }
+                ];
+                depts.forEach(d => {
+                    const found = deptsList.find(x => x.value === d);
+                    if (found) resList.push(found);
+                    else resList.push({ value: d, label: d });
+                });
+                return resList;
+            }
+            return deptsList;
+        }
         if (scale === 'region') return regionsList;
         if (scale === 'bmi') return bmisList;
         if (scale === 'national') return nationalList;
@@ -574,7 +619,14 @@ document.addEventListener('DOMContentLoaded', () => {
             inputCode.placeholder = 'ex : FR';
             codeHelper.textContent = 'Code national : FR';
         }
+        renderGabaritsOptions();
     });
+
+    if (inputCode) {
+        inputCode.addEventListener('input', () => {
+            renderGabaritsOptions();
+        });
+    }
 
     function setProgress(percent, status) {
         progressBar.style.width = `${percent}%`;

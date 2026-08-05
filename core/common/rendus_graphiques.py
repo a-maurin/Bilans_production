@@ -437,15 +437,15 @@ def chart_pie_legend_right(
         1,
         2,
         figsize=(fig_w, fig_h),
-        gridspec_kw={"width_ratios": [0.95, 1.65], "wspace": 0.02},
+        gridspec_kw={"width_ratios": [1.7, 1.1], "wspace": 0.02},
     )
     if donut:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.75, wedgeprops=dict(width=0.70, edgecolor="white"))
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=2.1, wedgeprops=dict(width=0.85, edgecolor="white"))
     else:
-        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=1.75)
+        wedges, _ = ax_pie.pie(values, startangle=90, counterclock=False, colors=colors_pie, radius=2.1)
     ax_pie.set_aspect("equal")
-    ax_pie.set_xlim(-1.85, 1.85)
-    ax_pie.set_ylim(-1.85, 1.85)
+    ax_pie.set_xlim(-2.2, 2.2)
+    ax_pie.set_ylim(-2.2, 2.2)
     ax_pie.axis("off")
     if str(title).strip():
         title_wrapped = textwrap.fill(str(title).strip(), width=45)

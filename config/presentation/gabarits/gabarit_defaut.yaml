@@ -1,11 +1,20 @@
 # ========================================================================================
 # GABARIT DE PRESENTATION : INSTITUTIONNEL PAR DEFAUT (`gabarit_defaut.yaml`)
 # ========================================================================================
-# Ce fichier régit le gabarit de présentation par défaut pour l'édition des bilans et brochures PDF.
 #
-# Explication des clés pour les non-spécialistes :
+# RÔLE : Gabarit de PRÉSENTATION uniquement (mise en page, ordre des sections, titres visuels).
+# → Ce fichier ne contient AUCUNE logique métier (filtres, sources de données, périmètre géo).
+# → Pour la logique métier, voir : config/profils_bilan/<profil>.yaml
+#
+# Relation Profil / Gabarit :
+#   - Le PROFIL définit QUOI analyser : périmètre géo, sources, agrégations, options métier.
+#   - Le GABARIT définit COMMENT présenter : grille de pages, widgets, ordre des chapitres.
+#   - Un même gabarit peut s'appliquer à plusieurs profils (voir `profils_compatibles`).
+#   - Un même profil peut être rendu avec différents gabarits selon le destinataire.
+#
+# Explication des clés :
 #   - `gabarit_id` : identifiant unique du gabarit (répertorié dans les menus Web/CLI).
-#   - `layout.pages` : grille déclarative de widgets répartis sur 2 pages.
+#   - `layout_grid.pages` : grille déclarative de widgets répartis sur 2 pages.
 #   - `cible` : `les_deux` (s'applique aussi bien au bilan PDF qu'à la brochure PDF).
 #   - `sections.order` : ordre d'enchaînement des chapitres dans le document.
 # ========================================================================================
@@ -24,8 +33,19 @@ sections:
   order:
     - sec1
     - sec2
+    - sec21
+    - sec22
+    - sec23
     - sec4
+    - sec41
+    - sec42
+    - sec43
+    - sec44
     - sec3
+    - sec31
+    - sec32
+    - sec33
+    - sec5
     - sec6
 
 cartographie:

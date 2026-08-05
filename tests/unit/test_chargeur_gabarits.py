@@ -244,6 +244,22 @@ def test_pnf_v2_gabarit_compatibility():
     assert is_gabarit_compatible(g_pnf, profile_id="pnf", cible="bilan") is True
 
 
+def test_resolve_items_masques_carte_gabarit_brochure_key_non_brochure_mode():
+    from core.common.chargeur_gabarits import resolve_items_masques_carte, load_gabarit
+
+    g_srp = load_gabarit("srp_r27")
+    masques = resolve_items_masques_carte(profil_data=None, gabarit_data=g_srp, is_brochure=False)
+    assert masques == [
+        "titre_principal",
+        "sous_titre",
+        "bandeau_titre",
+        "bandeau_logos_ofb",
+        "logo_ofb_bas_droite",
+        "bandeau_source",
+    ]
+
+
+
 
 
 

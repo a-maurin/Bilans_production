@@ -1701,9 +1701,7 @@ def _apply_legend_labels(
         legend_labels_map = {}
         for lc in prof.layers.values():
             lbl = lc.legend_label or lc.layer_name
-            if lbl.startswith("localisation_infrac_FAITS"):
-                lbl = "Localisation des infractions"
-            elif lbl == "emprise_dep":
+            if lbl == "emprise_dep":
                 lbl = "Périmètre de l'étude"
             legend_labels_map[lc.layer_name] = lbl
     if not legend_labels_map:
@@ -1885,6 +1883,14 @@ def resolve_map_title(prof: "ProfileConfig", dept_code: Optional[str] = None) ->
     """Résout le titre de la carte en gérant le département et la période de manière sécurisée."""
     from core.common.utilitaires_metier import get_dept_name
     dept_name = get_dept_name(dept_code) if dept_code else ""
+    
+    is_pnf_prof = (
+        getattr(prof, "restrict_geo", None) == "pnf"
+        or str(getattr(prof, "id", "")).startswith("pnf")
+        or getattr(prof, "emprise", None) == "aoa"
+    )
+    if is_pnf_prof:
+        dept_name = "Parc national de forêts"
     
     base_title = getattr(prof, "title_main", "") or ""
     if not base_title:
@@ -2187,26 +2193,46 @@ def export_layout(
                         item.setTitle("")
                     except Exception:
                         pass
+                    
+                    # Détection du nombre d'éléments pour passage automatique en 2 colonnes
+                    num_nodes = 0
+                    try:
+                        model = item.model()
+                        if model:
+                            num_nodes = model.rowCount()
+                    except Exception:
+                        pass
+
+                    if num_nodes > 6 or len(layers_to_render or []) > 5:
+                        try:
+                            item.setColumnCount(2)
+                            item.setSplitLayer(True)
+                        except Exception:
+                            pass
+                        font_size = 4.5
+                    else:
+                        font_size = 5.5
+
                     for s_type in (QgsLegendStyle.Title, QgsLegendStyle.Group, QgsLegendStyle.Subgroup, QgsLegendStyle.SymbolLabel):
                         try:
                             f = item.rstyle(s_type).font()
-                            f.setPointSizeF(5.5)
+                            f.setPointSizeF(font_size)
                             item.rstyle(s_type).setFont(f)
                         except Exception:
                             try:
                                 st = item.style(s_type)
                                 f = st.font()
-                                f.setPointSizeF(5.5)
+                                f.setPointSizeF(font_size)
                                 st.setFont(f)
                                 item.setStyle(s_type, st)
                             except Exception:
                                 pass
 
-                    item.setSymbolWidth(3.5)
-                    item.setSymbolHeight(2.5)
-                    item.setBoxSpace(1.0)
-                    item.setColumnSpace(1.5)
-                    item.setSymbolSpace(1.0)
+                    item.setSymbolWidth(3.0 if font_size == 4.5 else 3.5)
+                    item.setSymbolHeight(2.0 if font_size == 4.5 else 2.5)
+                    item.setBoxSpace(0.8)
+                    item.setColumnSpace(1.2)
+                    item.setSymbolSpace(0.8)
                     try:
                         item.updateLegend()
                     except Exception:
@@ -3356,6 +3382,8 @@ def _draw_legend_on_image(image_path, legend_data):
 
     is_brochure = "_brochure" in image_path.name.lower()
 
+    total_items = sum(len(g.get("items", [])) for g in legend_data)
+
     if is_brochure:
         padding = 12
         rect_size = 16
@@ -3367,15 +3395,16 @@ def _draw_legend_on_image(image_path, legend_data):
         line_step_text = 18
         line_step_item = 22
     else:
-        padding = 30
-        rect_size = 35
-        line_spacing = 50
-        title_spacing = 55
-        section_spacing = 20
-        font_title_sz = 35
-        font_text_sz = 28
-        line_step_text = 35
-        line_step_item = 35
+        scale_f = min(1.0, 5.0 / total_items) if total_items > 5 else 1.0
+        padding = max(14, int(30 * scale_f))
+        rect_size = max(18, int(35 * scale_f))
+        line_spacing = max(24, int(50 * scale_f))
+        title_spacing = max(26, int(55 * scale_f))
+        section_spacing = max(10, int(20 * scale_f))
+        font_title_sz = max(18, int(35 * scale_f))
+        font_text_sz = max(14, int(28 * scale_f))
+        line_step_text = max(18, int(35 * scale_f))
+        line_step_item = max(18, int(35 * scale_f))
 
     font_title = None
     font_text = None

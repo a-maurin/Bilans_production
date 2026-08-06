@@ -1886,7 +1886,7 @@ def load_communes_centroides(root: Path) -> pd.DataFrame:
 @lru_cache(maxsize=4)
 def _get_communes_centroids_dicts_cached(root_str: Optional[str]) -> tuple[dict[str, float], dict[str, float]]:
     root = Path(root_str) if root_str else None
-    df = load_communes_france_centroids(root=root)
+    df = load_communes_centroides(root=root)
     dict_x = dict(zip(df["code_insee"], df["lon"].astype(float)))
     dict_y = dict(zip(df["code_insee"], df["lat"].astype(float)))
     return dict_x, dict_y

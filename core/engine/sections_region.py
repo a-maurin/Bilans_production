@@ -32,6 +32,7 @@ Rôles :
 import logging
 import re
 from pathlib import Path
+from typing import Any
 import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image as PILImage
@@ -244,10 +245,11 @@ def _generate_region_choropleth(
     figure_scale: float = 1.0,
     out_dir: Path | None = None,
     profile_id: str = "global",
+    total_unique_ops: int | None = None,
 ) -> Path:
     """Génère la carte choroplèthe régionale (aplat par département selon le volume d'opérations)."""
     out_path = tmp_dir / img_name
-    fig, ax = plt.subplots(figsize=(4.2 * figure_scale, 2.1 * figure_scale), dpi=150)
+    fig, ax = plt.subplots(figsize=(5.8 * figure_scale, 3.6 * figure_scale), dpi=150)
     fig.patch.set_facecolor('white')
     ax.set_facecolor('#ffffff')
     ax.set_aspect('equal')
@@ -258,13 +260,84 @@ def _generate_region_choropleth(
         from core.chemins_projet import PROJECT_ROOT
         
         is_pnf = (
-            str(profile_id).strip().lower() in ("pnf_v2", "pnf")
-            or (out_dir and "pnf" in str(out_dir.name).lower())
+            "pnf" in str(profile_id).strip().lower()
+            or (out_dir and ("pnf" in str(out_dir.name).lower() or "21_52" in str(out_dir.name).lower()))
             or "pnf" in str(dept_code).lower()
         )
         if is_pnf:
             gdf_region = load_pnf_aoa_gdf(PROJECT_ROOT)
             gdf_coeur = load_pnf_coeur_gdf(PROJECT_ROOT)
+            total_ops = total_unique_ops if total_unique_ops is not None else (int(round(sum(dept_counts.values()))) if dept_counts else 0)
+            
+            if gdf_region is not None and not gdf_region.empty:
+                if gdf_region.crs is None or gdf_region.crs.to_epsg() != 2154:
+                    gdf_region = gdf_region.set_crs("EPSG:2154") if gdf_region.crs is None else gdf_region.to_crs("EPSG:2154")
+                    
+                if gdf_coeur is not None and not gdf_coeur.empty:
+                    if gdf_coeur.crs is None or gdf_coeur.crs.to_epsg() != 2154:
+                        gdf_coeur = gdf_coeur.set_crs("EPSG:2154") if gdf_coeur.crs is None else gdf_coeur.to_crs("EPSG:2154")
+
+                gdf_region.plot(ax=ax, color='#f1f5f9', edgecolor='#003366', linewidth=1.0)
+                
+                # Chargement des points de contrôle pour l'affichage de la grille de densité (hexbin)
+                carto_dir_default = PROJECT_ROOT / "data" / "sources" / "sig" / "CARTO"
+                gpkg_files = list(out_dir.rglob("controles_*.gpkg")) + list(out_dir.glob("controles_*.gpkg")) if out_dir else []
+                gpkg_files += list(carto_dir_default.glob("controles_*.gpkg"))
+                
+                pts_pnf = None
+                from core.cartographie.pochoir_helper import gpd
+                if gpd is not None and gpkg_files:
+                    try:
+                        gdf_pts = gpd.read_file(gpkg_files[0])
+                        if gdf_pts.crs is None or gdf_pts.crs.to_epsg() != 2154:
+                            gdf_pts = gdf_pts.set_crs("EPSG:2154") if gdf_pts.crs is None else gdf_pts.to_crs("EPSG:2154")
+                        try:
+                            pts_pnf = gpd.sjoin(gdf_pts, gdf_region, predicate="within")
+                        except Exception:
+                            pts_pnf = gdf_pts
+                    except Exception:
+                        pts_pnf = None
+
+                if pts_pnf is not None and not pts_pnf.empty:
+                    x_coords = pts_pnf.geometry.x
+                    y_coords = pts_pnf.geometry.y
+                    hb = ax.hexbin(
+                        x_coords, y_coords,
+                        gridsize=18,
+                        cmap='YlGnBu',
+                        mincnt=1,
+                        bins='log',
+                        alpha=0.85,
+                        edgecolors='none'
+                    )
+
+                    try:
+                        poly_geom = gdf_region.geometry.union_all() if hasattr(gdf_region.geometry, "union_all") else gdf_region.geometry.unary_union
+                        patch = _shapely_to_pathpatch(poly_geom, ax.transData)
+                        ax.add_patch(patch)
+                        hb.set_clip_path(patch)
+                    except Exception:
+                        pass
+
+                    cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.70, aspect=18)
+                    cbar.ax.set_title('Pression de contrôle', fontsize=9.0, color='#003366', pad=4)
+                    cbar.ax.tick_params(labelsize=8.0)
+
+                if gdf_coeur is not None and not gdf_coeur.empty:
+                    gdf_coeur.plot(ax=ax, facecolor='none', edgecolor='#16a34a', linewidth=1.0, linestyle='--', label='Cœur de parc')
+
+                minx, miny, maxx, maxy = gdf_region.total_bounds
+                cx = (minx + maxx) / 2.0
+                cy = (miny + maxy) / 2.0
+                max_span = max(maxx - minx, maxy - miny) * 0.55
+                ax.set_xlim(cx - max_span, cx + max_span)
+                ax.set_ylim(cy - max_span, cy + max_span)
+
+                ax.set_axis_off()
+                fig.tight_layout(pad=0.05)
+                fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+                plt.close(fig)
+                return out_path
         else:
             gdf_coeur = None
             gdf_region = load_department_gdf(dept_code, project_root=PROJECT_ROOT, dissolve=False)
@@ -278,40 +351,23 @@ def _generate_region_choropleth(
             
             gdf_region.plot(
                 column="nb_ops",
-                cmap="YlGnBu",
-                linewidth=0.8,
                 ax=ax,
+                cmap="YlGnBu",
                 edgecolor="#003366",
+                linewidth=0.8,
                 legend=True,
-                legend_kwds={
-                    "orientation": "horizontal",
-                    "shrink": 0.25,
-                    "aspect": 12,
-                    "pad": 0.02,
-                    "label": "Volume d'opérations de contrôle"
-                }
+                legend_kwds={'label': "Opérations de contrôle", 'orientation': "horizontal", 'shrink': 0.5}
             )
-
-            if is_pnf and gdf_coeur is not None and not gdf_coeur.empty:
-                gdf_coeur.plot(ax=ax, facecolor='none', edgecolor='#16a34a', linewidth=1.8, label='Cœur de parc')
-            
-            # Affinage de la typographie de la colorbar (6pt pour le titre, 5.5pt pour les ticks)
-            if len(fig.axes) > 1:
-                cbar_ax = fig.axes[-1]
-                cbar_ax.tick_params(labelsize=5.5)
-                cbar_ax.xaxis.label.set_size(6.0)
-                cbar_ax.xaxis.label.set_color('#003366')
-
             for _, row in gdf_region.iterrows():
                 centroid = row.geometry.centroid
-                dep = row["dep_code_clean"]
-                ops = int(row["nb_ops"])
+                val = int(row["nb_ops"])
+                code_d = str(row["dep_code_clean"])
                 ax.annotate(
-                    f"{dep}\n({ops})",
+                    f"{code_d}\n({val})",
                     xy=(centroid.x, centroid.y),
                     ha="center",
                     va="center",
-                    fontsize=6.0,
+                    fontsize=5.5,
                     fontweight="bold",
                     color="#002b49",
                     bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.65)
@@ -322,38 +378,58 @@ def _generate_region_choropleth(
             fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
             plt.close(fig)
             return out_path
-    except Exception as e:
-        plt.close(fig)
-        logger.warning(f"Impossible de générer la carte choroplèthe régionale : {e}")
+    except Exception:
+        pass
     return out_path
 
 
-def render_sec_region_dashboard(ctx: PdfContext) -> None:
-    """
-    Rendu de la Partie 1 : Synthèse Régionale structurée de manière équilibrée sur 2 pages A4.
-    
-    PAGE 1 :
-      - En-tête de section "1. Synthèse régionale"
-      - Pavés KPI Cards Régionaux (Ops, Localisations, Procédures)
-      - Carte choroplèthe régionale centrée (58 % de largeur)
-      - Diagramme Donut par domaine centré (Légende 3 colonnes sous l'anneau, 0 % filtrés)
-      - Saut de page strict (PageBreak)
-      
-    PAGE 2 :
-      - Tableau comparatif interdépartemental (Ops, Locs, PEJ, PA, PVe)
-      - Graphique en barres empilées de l'activité procédurale par département
-    """
+def render_sec_region_dashboard(ctx: Any) -> None:
+    """Rendu structuré et aéré du tableau de bord régional / PNF v2 (Page 1 à 3)."""
     title = ctx.section_title.get("sec_region_dashboard", "1. Synthèse régionale")
     ctx.builder.add_section("sec_region_dashboard", title)
 
-    # 1. Pavés KPI Cards Régionaux
+    # 1. Pavés KPI Cards Régionaux / PNF Grand Angle
+    prof_id = str(getattr(ctx, "profile_id", "")) or str((ctx.profile or {}).get("id", ""))
+    out_dir_str = str(getattr(ctx, "out_dir", "")).lower()
+    dept_code_str = str(getattr(ctx, "dept_code", "")).lower()
+    is_pnf = "pnf" in prof_id.lower() or "pnf" in out_dir_str or "pnf" in dept_code_str or "21, 52" in dept_code_str or "21_52" in out_dir_str
+    
     kf: list[tuple[str, str]] = []
-    if ctx.nb_ops:
-        kf.append((str(ctx.nb_ops), "Opérations de contrôle"))
-    if ctx.nb_localisations:
-        kf.append((str(ctx.nb_localisations), "Localisations de contrôle"))
-    if ctx.nb_pej or ctx.nb_pa or ctx.nb_pve:
-        kf.append((f"{ctx.nb_pej or 0} / {ctx.nb_pa or 0} / {ctx.nb_pve or 0}", "Procédures PEJ / PA / PVe"))
+    csv_coeur_path = ctx.out_dir / "pnf_coeur_vs_aoa.csv"
+    if is_pnf:
+        if not csv_coeur_path.exists():
+            try:
+                from core.chemins_projet import PROJECT_ROOT
+                from core.engine.agregations_region import agregation_region_coeur_vs_aoa
+                agregation_region_coeur_vs_aoa(ctx.point, ctx.pej, ctx.pve, ctx.dept_code, ctx.out_dir, ctx.echelle, ctx.code, project_root=PROJECT_ROOT)
+            except Exception:
+                pass
+
+        if csv_coeur_path.exists():
+            try:
+                df_coeur = pd.read_csv(csv_coeur_path, sep=";", encoding="utf-8")
+                if not df_coeur.empty:
+                    ops_coeur = int(df_coeur[df_coeur["zonage"] == "Cœur de parc"]["nb_operations"].sum())
+                    ops_total = int(df_coeur["nb_operations"].sum()) or int(ctx.nb_ops or 0)
+                    
+                    pej_tot = int(df_coeur["nb_pej"].sum()) or int(ctx.nb_pej or 0)
+                    pa_tot = int(df_coeur["nb_pa"].sum()) or int(ctx.nb_pa or 0)
+                    pve_tot = int(df_coeur["nb_pve"].sum()) or int(ctx.nb_pve or 0)
+                    
+                    kf.append((f"{ops_total}", "Opérations AOA (Total PNF)"))
+                    kf.append((f"{ops_coeur}", "Opérations en Cœur de parc"))
+                    kf.append((f"{pve_tot} PVe | {pej_tot} PEJ | {pa_tot} PA", "Procédures sur le périmètre PNF"))
+            except Exception:
+                pass
+
+    if not kf:
+        if ctx.nb_ops:
+            kf.append((str(ctx.nb_ops), "Opérations de contrôle"))
+        if ctx.nb_localisations:
+            kf.append((str(ctx.nb_localisations), "Localisations de contrôle"))
+        if ctx.nb_pej or ctx.nb_pa or ctx.nb_pve:
+            kf.append((f"{ctx.nb_pej or 0} | {ctx.nb_pa or 0} | {ctx.nb_pve or 0}", "Procédures PEJ / PA / PVe"))
+            
     ctx.builder.add_key_figures(kf)
     ctx.builder.add_spacer(6)
 
@@ -365,7 +441,7 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
         except Exception:
             df = pd.DataFrame()
 
-    # --- PAGE 1 VISUELS SUPERPOSÉS : CARTE CHOROPLÈTHE & DONUT PAR DOMAINE ---
+    # --- PAGE 1 VISUELS SUPERPOSÉS VERTICALEMENT : CARTE CHOROPLÈTHE (HAUT) & DONUT DOMAINES (BAS) ---
     dept_counts: dict[str, int] = {}
     domain_counts: dict[str, int] = {}
     if not df.empty:
@@ -376,11 +452,11 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
 
     body_style = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
 
-    # Visuel 1 : Carte choroplèthe régionale centrée (54 % de largeur)
-    prof_id = str((ctx.profile or {}).get("id", "")) if hasattr(ctx, "profile") else "global"
-    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale, out_dir=ctx.out_dir, profile_id=prof_id)
+    # Visuel 1 : Carte choroplèthe régionale centrée en haut
+    total_unique = int(ctx.nb_ops) if ctx.nb_ops else None
+    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale, out_dir=ctx.out_dir, profile_id=prof_id, total_unique_ops=total_unique)
     if carto_path.exists():
-        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.54, "Carte régionale indisponible", ctx.builder.styles)
+        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.72, "Carte régionale indisponible", ctx.builder.styles, max_h=230.0)
     else:
         img_carto = Paragraph("<para align='center'><i>Carte régionale non disponible</i></para>", body_style)
 
@@ -395,11 +471,11 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     ]))
     ctx.builder.story.append(tbl_carto)
 
-    # Note explicative dynamique bidirectionnelle sous la carte régionale en cas d'écart de comptage
-    somme_dept = sum(dept_counts.values()) if dept_counts else 0
+    # Note explicative sous la carte si nécessaire
+    somme_dept = int(round(sum(dept_counts.values()))) if dept_counts else 0
     total_reg = int(ctx.nb_ops) if ctx.nb_ops else 0
     if somme_dept > 0 and total_reg > 0 and somme_dept != total_reg:
-        diff = abs(somme_dept - total_reg)
+        diff = int(abs(somme_dept - total_reg))
         str_somme = f"{somme_dept:,}".replace(",", "\u00a0")
         str_total = f"{total_reg:,}".replace(",", "\u00a0")
         if somme_dept > total_reg:
@@ -420,24 +496,25 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
             textColor=colors.HexColor("#555555"),
             alignment=TA_CENTER,
         )
-        ctx.builder.story.append(Spacer(1, 1))
+        ctx.builder.story.append(Spacer(1, 2))
         ctx.builder.story.append(Paragraph(note_txt, style_note))
 
     ctx.builder.add_spacer(4)
 
-    # Visuel 2 : Diagramme Donut par Domaine (82 % de largeur, Donut agrandi avec légende à droite sur 1 colonne)
+    # Visuel 2 : Diagramme Donut par Domaine sous la carte (légende sous l'anneau sur 2 colonnes)
     domain_counts_filtered = {k: int(v) for k, v in domain_counts.items() if int(v) > 0}
     if domain_counts_filtered and sum(domain_counts_filtered.values()) > 0:
-        donut_path = chart_pie_legend_right(
+        donut_path = chart_pie(
             domain_counts_filtered,
             "Répartition par Domaine de contrôle",
             ctx.tmp_dir,
             "region_domaines_donut.png",
             figure_scale=ctx.figure_scale,
             donut=True,
+            legend_ncol=2,
             legend_fontsize=8.5
         )
-        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.82, "Graphique domaines indisponible", ctx.builder.styles)
+        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.78, "Graphique domaines indisponible", ctx.builder.styles, max_h=240.0)
     else:
         img_donut = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
 
@@ -452,10 +529,142 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
     ]))
     ctx.builder.story.append(tbl_donut)
 
-    # --- SAUT DE PAGE VERS LA PAGE 2 DE LA SYNTHÈSE RÉGIONALE ---
+    # --- SAUT DE PAGE VERS LA PAGE 2 DE LA SYNTHÈSE RÉGIONALE / PNF ---
     ctx.builder.story.append(PageBreak())
 
-    # --- PAGE 2 : TABLEAU COMPARATIF INTERDÉPARTEMENTAL & GRAPHIQUE DES PROCÉDURES ---
+    # --- PAGE 2 PNF V2 : FOCUS CŒUR VS AOA & TYPOLOGIE DES USAGERS ---
+    if is_pnf:
+        ctx.builder.add_paragraph("<b>1.2 Répartition spatiale (Cœur de parc vs AOA) et Typologie des Usagers</b>", style="Heading2")
+        ctx.builder.add_spacer(4)
+
+        # 1. Tableau Cœur vs AOA vs Non géolocalisé (agrégé globalement sans décomposition 21/52)
+        csv_coeur = ctx.out_dir / "pnf_coeur_vs_aoa.csv"
+        if csv_coeur.exists():
+            try:
+                df_c = pd.read_csv(csv_coeur, sep=";", encoding="utf-8")
+                if not df_c.empty:
+                    df_c_grouped = df_c.groupby("zonage")[["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]].sum().reset_index()
+                    
+                    order_map = {"AOA (Hors cœur)": 1, "Cœur de parc": 2, "Non géolocalisé (AOA)": 3}
+                    df_c_grouped["order"] = df_c_grouped["zonage"].map(lambda z: order_map.get(z, 99))
+                    df_c_grouped = df_c_grouped.sort_values("order")
+
+                    c_data = [["Zonage / Territoire", "Opérations", "Localisations", "PEJ", "PA", "PVe"]]
+                    tot_ops_c, tot_locs_c, tot_pej_c, tot_pa_c, tot_pve_c = 0, 0, 0, 0, 0
+                    
+                    for _, r in df_c_grouped.iterrows():
+                        zon = str(r["zonage"])
+                        ops = int(r["nb_operations"])
+                        locs = int(r["nb_localisations"])
+                        pej = int(r["nb_pej"])
+                        pa = int(r["nb_pa"])
+                        pve = int(r["nb_pve"])
+
+                        tot_ops_c += ops
+                        tot_locs_c += locs
+                        tot_pej_c += pej
+                        tot_pa_c += pa
+                        tot_pve_c += pve
+
+                        c_data.append([
+                            zon,
+                            f"{ops:,}".replace(",", "\u202f"),
+                            f"{locs:,}".replace(",", "\u202f"),
+                            f"{pej:,}".replace(",", "\u202f"),
+                            f"{pa:,}".replace(",", "\u202f"),
+                            f"{pve:,}".replace(",", "\u202f")
+                        ])
+
+                    c_data.append([
+                        "Total PNF",
+                        f"{tot_ops_c:,}".replace(",", "\u202f"),
+                        f"{tot_locs_c:,}".replace(",", "\u202f"),
+                        f"{tot_pej_c:,}".replace(",", "\u202f"),
+                        f"{tot_pa_c:,}".replace(",", "\u202f"),
+                        f"{tot_pve_c:,}".replace(",", "\u202f")
+                    ])
+
+                    c_widths = [0.38 * ctx.avail_w, 0.15 * ctx.avail_w, 0.17 * ctx.avail_w, 0.10 * ctx.avail_w, 0.10 * ctx.avail_w, 0.10 * ctx.avail_w]
+                    c_aligns = ["L", "R", "R", "R", "R", "R"]
+                    tbl_c = ofb_table(c_data, col_widths=c_widths, col_aligns=c_aligns)
+                    ctx.builder.story.append(tbl_c)
+                    
+                    note_coeur_txt = (
+                        "<i>* Note : Les PA et PEJ sont géolocalisés à partir des coordonnées précises de l'opération ou de l'infraction. "
+                        "Les PVe sont affectés selon le centroïde de leur commune d'infraction.</i>"
+                    )
+                    style_note_coeur = ParagraphStyle(
+                        "CoeurVsAoaNote",
+                        parent=ctx.builder.styles.get("BodySmall", ctx.builder.styles["BodyText"]),
+                        fontSize=7,
+                        leading=8.5,
+                        textColor=colors.HexColor("#555555"),
+                        alignment=TA_CENTER,
+                    )
+                    ctx.builder.story.append(Spacer(1, 2))
+                    ctx.builder.story.append(Paragraph(note_coeur_txt, style_note_coeur))
+                    ctx.builder.add_spacer(6)
+            except Exception:
+                pass
+
+        # 2. Infographie Typologie des Usagers
+        csv_usag = ctx.out_dir / "controles_global_par_usager.csv"
+        if csv_usag.exists():
+            try:
+                df_u = pd.read_csv(csv_usag, sep=";", encoding="utf-8")
+                if not df_u.empty:
+                    u_data = [["Catégorie d'usager contrôlé", "Opérations", "Localisations", "Part (%)"]]
+                    u_chart_dict = {}
+                    tot_ops_u = sum(df_u["nb_operations"].astype(int)) if "nb_operations" in df_u.columns else 1
+                    
+                    for _, r in df_u.iterrows():
+                        u_name = str(r["type_usager"]).split(' (')[0]
+                        u_ops = int(r["nb_operations"]) if "nb_operations" in r else int(r["nb"])
+                        u_locs = int(r["nb"]) if "nb" in r else u_ops
+                        pct = round((u_ops / tot_ops_u * 100), 1) if tot_ops_u > 0 else 0
+                        
+                        u_chart_dict[u_name] = u_ops
+                        u_data.append([
+                            u_name,
+                            f"{u_ops:,}".replace(",", "\u202f"),
+                            f"{u_locs:,}".replace(",", "\u202f"),
+                            f"{pct} %"
+                        ])
+
+                    u_widths = [0.46 * ctx.avail_w, 0.18 * ctx.avail_w, 0.20 * ctx.avail_w, 0.16 * ctx.avail_w]
+                    u_aligns = ["L", "R", "R", "R"]
+                    tbl_u = ofb_table(u_data, col_widths=u_widths, col_aligns=u_aligns)
+                    
+                    # Chart donut usagers à côté du tableau
+                    if u_chart_dict:
+                        u_chart_path = chart_pie_legend_right(
+                            u_chart_dict,
+                            "Répartition des contrôles par Type d'usager",
+                            ctx.tmp_dir,
+                            "pnf_usagers_donut.png",
+                            figure_scale=ctx.figure_scale,
+                            donut=True,
+                            legend_fontsize=8.0
+                        )
+                        img_u_chart = _create_proportional_rl_image(Path(u_chart_path), ctx.avail_w * 0.85, "Graphique usagers indisponible", ctx.builder.styles)
+                        
+                        grid_table = Table([[tbl_u], [Spacer(1, 4)], [img_u_chart]], colWidths=[ctx.avail_w])
+                        grid_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                            ('TOPPADDING', (0, 0), (-1, -1), 0),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                        ]))
+                        ctx.builder.story.append(grid_table)
+                    else:
+                        ctx.builder.story.append(tbl_u)
+            except Exception:
+                pass
+
+        ctx.builder.story.append(PageBreak())
+
+    # --- PAGE 3 : TABLEAU COMPARATIF INTERDÉPARTEMENTAL & GRAPHIQUE DES PROCÉDURES ---
     if not df.empty:
         df["departement"] = df["departement"].astype(str)
         depts = sorted(df["departement"].unique().tolist())
@@ -491,7 +700,7 @@ def render_sec_region_dashboard(ctx: PdfContext) -> None:
         # Ligne de totalisation régionale
         table_data.append([
             "Total",
-            "Périmètre régional",
+            "Périmètre PNF" if is_pnf else "Périmètre régional",
             f"{tot_ops:,}".replace(",", "\u202f"),
             f"{tot_locs:,}".replace(",", "\u202f"),
             f"{tot_pej:,}".replace(",", "\u202f"),
@@ -588,11 +797,33 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
         total_pa = int(df_dept["nb_pa"].sum()) if not df_dept.empty else 0
         total_pve = int(df_dept["nb_pve"].sum()) if not df_dept.empty else 0
 
-        dept_kfis = [
-            (str(total_ops), "Opérations"),
-            (str(total_locs), "Localisations"),
-            (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
-        ]
+        prof_id = str((ctx.profile or {}).get("id", "")) if hasattr(ctx, "profile") else "global"
+        is_pnf = str(prof_id).strip().lower() in ("pnf_v2", "pnf")
+        csv_coeur_path = ctx.out_dir / "pnf_coeur_vs_aoa.csv"
+        
+        ops_coeur_dept = 0
+        if is_pnf and csv_coeur_path.exists():
+            try:
+                df_coeur = pd.read_csv(csv_coeur_path, sep=";", encoding="utf-8")
+                if not df_coeur.empty:
+                    df_coeur["departement"] = df_coeur["departement"].astype(str)
+                    sub_c = df_coeur[(df_coeur["departement"] == dept_str) & (df_coeur["zonage"] == "Cœur de parc")]
+                    ops_coeur_dept = int(sub_c["nb_operations"].sum()) if not sub_c.empty else 0
+            except Exception:
+                pass
+
+        if is_pnf and ops_coeur_dept > 0:
+            dept_kfis = [
+                (str(total_ops), "Opérations AOA"),
+                (f"{ops_coeur_dept}", "dont Cœur de parc"),
+                (f"{total_pve} / {total_pej} / {total_pa}", "PVe / PEJ / PA")
+            ]
+        else:
+            dept_kfis = [
+                (str(total_ops), "Opérations"),
+                (str(total_locs), "Localisations"),
+                (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
+            ]
 
         # 1. Traitement pour le Rapport Consolidé Régional (1 Page A4 portrait)
         if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):

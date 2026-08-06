@@ -667,6 +667,9 @@ def _run_global_profile_via_yaml(
                         gdf_pts["domaine"] = "Hors domaine"
                     else:
                         gdf_pts["domaine"] = gdf_pts["domaine"].fillna("Hors domaine")
+                    if "type_usager" not in gdf_pts.columns:
+                        alt_col = next((c for c in ["usager", "type_usager_cible", "types_usager_cible", "cat_usager"] if c in gdf_pts.columns), None)
+                        gdf_pts["type_usager"] = gdf_pts[alt_col] if alt_col else "Autre"
                     gpkg_path_pts = carto_dir / f"controles_{prefix}_export_automatique.gpkg"
                     gdf_pts.to_file(gpkg_path_pts, driver="GPKG")
                     gpkg_logger.info(f"Couche géographique Contrôles générée pour QGIS : {gpkg_path_pts} ({mask_geo.sum()} points)")
@@ -3030,6 +3033,9 @@ def _export_csv(
                         gdf_pts["domaine"] = "Hors domaine"
                     else:
                         gdf_pts["domaine"] = gdf_pts["domaine"].fillna("Hors domaine")
+                    if "type_usager" not in gdf_pts.columns:
+                        alt_col = next((c for c in ["usager", "type_usager_cible", "types_usager_cible", "cat_usager"] if c in gdf_pts.columns), None)
+                        gdf_pts["type_usager"] = gdf_pts[alt_col] if alt_col else "Autre"
                         
                     root = Path(__file__).resolve().parent.parent.parent.parent
                     carto_dir = root / "data" / "sources" / "sig" / "CARTO"
@@ -3155,6 +3161,34 @@ def _export_csv(
     # PA
     if not pa_filtered.empty:
         pa_filtered.to_csv(out_dir / f"pa_{prefix}.csv", sep=";", index=False)
+        try:
+            from core.common.utilitaires_metier import filter_points_induisant_pa
+            pt_pa = filter_points_induisant_pa(point)
+            if not pt_pa.empty and gpd is not None:
+                lon_c = next((c for c in ["longitude", "x_lambert93", "x_faits"] if c in pt_pa.columns), None)
+                lat_c = next((c for c in ["latitude", "y_lambert93", "y_faits"] if c in pt_pa.columns), None)
+                if lon_c and lat_c:
+                    df_geo_pa = pt_pa.copy()
+                    df_geo_pa["_lon"] = pd.to_numeric(df_geo_pa[lon_c], errors="coerce")
+                    df_geo_pa["_lat"] = pd.to_numeric(df_geo_pa[lat_c], errors="coerce")
+                    mask_pa = df_geo_pa["_lon"].notna() & df_geo_pa["_lat"].notna() & (df_geo_pa["_lon"] != 0)
+                    if mask_pa.any():
+                        gdf_pa = gpd.GeoDataFrame(
+                            df_geo_pa[mask_pa],
+                            geometry=gpd.points_from_xy(df_geo_pa.loc[mask_pa, "_lon"], df_geo_pa.loc[mask_pa, "_lat"]),
+                            crs="EPSG:4326" if lon_c == "longitude" else "EPSG:2154"
+                        )
+                        if gdf_pa.crs.to_epsg() != 2154:
+                            gdf_pa = gdf_pa.to_crs("EPSG:2154")
+                        for col in gdf_pa.select_dtypes(include=['datetime64[ns, UTC]', 'datetime64[ns]', 'datetime64']).columns:
+                            gdf_pa[col] = gdf_pa[col].astype(str)
+                        carto_dir = root / "data" / "sources" / "sig" / "CARTO"
+                        carto_dir.mkdir(parents=True, exist_ok=True)
+                        gpkg_path_pa = carto_dir / f"pa_{prefix}_export_automatique.gpkg"
+                        gdf_pa.to_file(gpkg_path_pa, driver="GPKG")
+                        logger.info(f"Couche géographique PA générée pour QGIS : {gpkg_path_pa}")
+        except Exception as e_pa_gpkg:
+            logger.warning(f"Impossible d'exporter la couche QGIS des PA : {e_pa_gpkg}")
     if "pa_par_theme" in results:
         results["pa_par_theme"].to_csv(
             out_dir / f"pa_{prefix}_par_theme.csv", sep=";", index=False

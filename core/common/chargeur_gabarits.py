@@ -75,6 +75,7 @@ ALLOWED_WIDGET_TYPES: set[str] = {
     "map",
     "section_group",
     "stat_kpi_grid",
+    "pnf_grand_angle_kpi",
     "theme_breakdown_table",
     "evolution_chart",
     "custom_text_box",

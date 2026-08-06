@@ -75,9 +75,8 @@ CHART_FIG_HEIGHT_PIE_COMPACT = 5.0
 # Références typographiques : "Résultats des contrôles par type d'usager".
 CHART_TITLE_FONT_SIZE_REF = 11
 CHART_LEGEND_FONT_SIZE_REF = 8
-# Ajustement demandé : réduire la taille du disque des camemberts
-# sans modifier la taille des légendes.
-CHART_PIE_DISK_SCALE = 0.38
+# Harmonisation de la taille du disque des donuts
+CHART_PIE_DISK_SCALE = 0.60
 # Hauteur des barres / barres groupées-empilées : +50 % vs ancienne base pour lisibilité PDF.
 CHART_FIG_HEIGHT_BAR = 3.5 * 1.5
 CHART_FIG_HEIGHT_WITH_LEGEND = 4.15 * 1.5
@@ -274,7 +273,7 @@ def chart_pie(
     legend_percent_only: bool = False,
     apply_mpl: bool = True,
     palette: list[str] | None = None,
-    donut: bool = False,
+    donut: bool = True,
     group_below_pct: float = 1.0,
     other_label: str = "Autres domaines",
 ) -> str:
@@ -391,7 +390,7 @@ def chart_pie_legend_right(
     legend_fontsize: float = 8.5,
     apply_mpl: bool = True,
     palette: list[str] | None = None,
-    donut: bool = False,
+    donut: bool = True,
     group_below_pct: float = 1.0,
     other_label: str = "Autres domaines",
 ) -> str:

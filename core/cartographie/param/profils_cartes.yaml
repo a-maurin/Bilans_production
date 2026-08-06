@@ -83,7 +83,25 @@ default:
           filter_type: pj
           geometry_mode: point
           renderer_type: single
-          palette: "#C0392B"
-          symbol_size_mm: 2.5
+          palette: "#003366"
+          symbol_size_mm: 3.5
+          symbol_shape: triangle
+          symbology_source: yaml
+        pa:
+          legend_label: "Procédures administratives (PA)"
+          filter_type: pa
+          geometry_mode: point
+          renderer_type: single
+          palette: "#8e44ad"
+          symbol_size_mm: 3.5
+          symbol_shape: triangle
+          symbology_source: yaml
+        pve:
+          legend_label: "Procès-Verbaux Électroniques (PVe)"
+          filter_type: pve
+          geometry_mode: point
+          renderer_type: single
+          palette: "#e67e22"
+          symbol_size_mm: 3.5
           symbol_shape: triangle
           symbology_source: yaml

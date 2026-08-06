@@ -93,3 +93,16 @@ options:
     label: "Indicateurs par commune"
     default: true
     ask: false
+
+mapping_pnf:
+  charte_themes:
+    foret: ["Forêt", "Coupe", "Défrichisme", "Boisement"]
+    biodiversite: ["Nature", "Faune", "Flore", "Espèces protégées", "Chasse"]
+    eau: ["Eau", "Milieu aquatique", "Zone humide", "Pollution"]
+    circulation: ["Circulation", "VTM", "Voie", "Chemin"]
+  usagers_cibles:
+    professionnels: ["Professionnel", "Exploitant forestier", "Entreprise", "Artisan"]
+    chasseurs: ["Chasseur", "Gestionnaire cynégétique", "Société de chasse"]
+    promeneurs: ["Promeneur", "Particulier", "Randonneur", "Public"]
+    petitionnaires: ["Pétitionnaire", "Aménageur", "Propriétaire"]
+

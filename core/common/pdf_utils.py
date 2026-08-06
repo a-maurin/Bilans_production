@@ -566,10 +566,10 @@ def key_figures_table(
 
     if cols_per_row <= 3:
         scale = 1.0
-        val_pad, lbl_pad = 8, 8
+        val_pad, lbl_pad = 5, 5
     else:
         scale = 0.85
-        val_pad, lbl_pad = 6, 6
+        val_pad, lbl_pad = 4, 4
 
     val_style = ParagraphStyle(
         "KFDynVal",
@@ -588,7 +588,18 @@ def key_figures_table(
         header = []
         labels = []
         for val, lbl in figures:
-            header.append(Paragraph(f"<b>{val}</b>", val_style))
+            v_text = str(val)
+            if len(v_text) > 18:
+                v_scale = max(0.55, min(1.0, 18.0 / len(v_text)))
+                v_style = ParagraphStyle(
+                    f"KFDynValLong_{len(v_text)}",
+                    parent=val_style,
+                    fontSize=val_style.fontSize * v_scale,
+                    leading=val_style.leading * v_scale,
+                )
+            else:
+                v_style = val_style
+            header.append(Paragraph(f"<nobr><b>{v_text}</b></nobr>", v_style))
             labels.append(Paragraph(lbl, lbl_style))
         total_w = float(table_width) if table_width is not None else (PAGE_W - MARGIN_LEFT - MARGIN_RIGHT)
         col_w = total_w / n

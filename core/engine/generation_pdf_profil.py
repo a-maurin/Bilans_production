@@ -445,8 +445,13 @@ def _generate_pdf_content(
             depts_label = " & ".join(get_dept_name(d) for d in pnf_depts)
             sections = [
                 ("sec_region_dashboard", "1. Synthèse globale Parc national de forêts"),
-                ("sec_region_fiches", f"2. Fiches départementales ({depts_label})"),
-                ("sec5map", "3. Localisation cartographique"),
+                ("sec22", "2. Répartition de l'activité par domaine de contrôle"),
+                ("sec22theme", "3. Répartition par thèmes et Charte du Parc"),
+                ("sec22res", "4. Résultats des contrôles"),
+                ("sec4", "5. Activité par typologie d’usager"),
+                ("sec3", "6. Procédures judiciaires et administratives (PEJ, PA, PVe)"),
+                ("sec_region_fiches", f"7. Fiches départementales ({depts_label})"),
+                ("sec5map", "8. Localisation cartographique"),
             ]
         else:
             sections = [

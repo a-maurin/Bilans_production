@@ -122,7 +122,9 @@ def load_department_gdf(
     elif code_upper.startswith("BMI-") or echelle == "bmi":
         target_depts = get_departements_pour_perimetre("bmi", dept_code)
     else:
-        target_depts = [normalize_dept_code(dept_code)]
+        raw_tokens = [normalize_dept_code(c) for c in dept_code.replace("_", " ").replace(",", " ").split() if c.strip()]
+        target_depts = raw_tokens if raw_tokens else [normalize_dept_code(dept_code)]
+
     
     mask = gdf[_INSEE_DEP_COL].astype(str).str.strip().str.upper().isin(target_depts)
     subset = gdf.loc[mask].copy()
@@ -208,10 +210,16 @@ def department_bounds(
 def _load_pochoir_gdf_cached(pochoir_id: str, dept_code: str, root_str: Optional[str]) -> gpd.GeoDataFrame:
     """Version cachée (types primitifs) de load_pochoir_gdf."""
     project_root = Path(root_str) if root_str else None
-    if not pochoir_id or pochoir_id in ("departement", "aucun", "pochoir_departement"):
+    norm_id = str(pochoir_id or "").lower().strip()
+    if norm_id.startswith("pochoir_"):
+        norm_id = norm_id.replace("pochoir_", "", 1)
+    if "_sd" in norm_id:
+        norm_id = norm_id.split("_sd")[0]
+
+    if not norm_id or norm_id in ("departement", "aucun", "dep"):
         return load_department_gdf(dept_code, project_root=project_root)
 
-    if pochoir_id in ("zone_a_risque", "zone_tub", "pochoir_zone_a_risque"):
+    if norm_id in ("zone_a_risque", "zone_tub", "tub"):
         root = project_root or PROJECT_ROOT
         gdf = load_zone_tub_gdf(root)
         dep_gdf = load_department_gdf(dept_code, project_root=project_root)
@@ -219,15 +227,13 @@ def _load_pochoir_gdf_cached(pochoir_id: str, dept_code: str, root_str: Optional
             gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
         return gdf
 
-    if pochoir_id in ("aoa", "pnf", "pochoir_aoa"):
+    if norm_id in ("aoa", "pnf"):
         root = project_root or PROJECT_ROOT
         gdf = load_pnf_aoa_gdf(root)
-        dep_gdf = load_department_gdf(dept_code, project_root=project_root)
-        if not gdf.empty and not dep_gdf.empty:
-            gdf = gpd.clip(gdf.to_crs(dep_gdf.crs), dep_gdf)
+        # On ne clip pas l'AOA aux limites départementales, on veut l'afficher entièrement
         return gdf
 
-    logger.warning("Pochoir_id inconnu '%s', fallback sur département %s", pochoir_id, dept_code)
+    logger.warning("Pochoir_id inconnu '%s' (norm_id='%s'), fallback sur département %s", pochoir_id, norm_id, dept_code)
     return load_department_gdf(dept_code, project_root=project_root)
 
 
@@ -268,6 +274,8 @@ def write_pochoir_gpkg(
         layer_n = pochoir_layer_name(dept_code)
     else:
         norm_id = pochoir_id.replace("pochoir_", "", 1) if pochoir_id.startswith("pochoir_") else pochoir_id
+        if "_sd" in norm_id:
+            norm_id = norm_id.split("_sd")[0]
         layer_n = f"pochoir_{norm_id}_sd{normalize_dept_code(dept_code)}"
         
     gdf.to_file(output_path, driver="GPKG", layer=layer_n)

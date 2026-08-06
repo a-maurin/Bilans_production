@@ -75,6 +75,7 @@ from core.common.percent_format import (
     tab_counts_to_pct_strings,
 )
 from core.common.utilitaires_metier import (
+    resolve_code_subdir_suffix,
     est_chasse_point,
     coalesced_insee_series,
     extract_insee_code_series,
@@ -424,8 +425,10 @@ def _run_global_profile_via_yaml(
     out_subdir = str(profile.get("out_subdir", f"bilan_{profile.get('id', 'global')}")).strip()
     if not out_subdir:
         out_subdir = "bilan_global"
-    if code_norm:
-        out_subdir = f"{out_subdir}_{code_norm}"
+    code_suffix = resolve_code_subdir_suffix(profile, code)
+    if code_suffix:
+        out_subdir = f"{out_subdir}_{code_suffix}"
+
         
     out_dir = get_out_dir(out_subdir)
 
@@ -638,6 +641,16 @@ def _run_global_profile_via_yaml(
                     df_pts["_lat"] = pd.to_numeric(df_pts[lat_col], errors="coerce")
 
             if "_lon" in df_pts.columns and "_lat" in df_pts.columns:
+                missing = df_pts["_lon"].isna() | df_pts["_lat"].isna() | (df_pts["_lon"] == 0) | (df_pts["_lat"] == 0)
+                if missing.any():
+                    try:
+                        dict_x, dict_y = get_communes_centroids_dicts(root)
+                        insee_s = coalesced_insee_series(df_pts)
+                        df_pts["insee_str"] = insee_s.astype(str).str.zfill(5)
+                        df_pts.loc[missing, "_lon"] = df_pts.loc[missing, "insee_str"].map(dict_x)
+                        df_pts.loc[missing, "_lat"] = df_pts.loc[missing, "insee_str"].map(dict_y)
+                    except Exception as e_geom:
+                        gpkg_logger.warning(f"Impossible de centrer les points de contrôle orphelins : {e_geom}")
                 mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna() & (df_pts["_lon"] != 0) & (df_pts["_lat"] != 0)
                 if mask_geo.any():
                     gdf_pts = gpd.GeoDataFrame(
@@ -2990,6 +3003,16 @@ def _export_csv(
                     df_pts["_lat"] = pd.to_numeric(df_pts[lat_col], errors="coerce")
 
             if "_lon" in df_pts.columns and "_lat" in df_pts.columns:
+                missing = df_pts["_lon"].isna() | df_pts["_lat"].isna() | (df_pts["_lon"] == 0) | (df_pts["_lat"] == 0)
+                if missing.any():
+                    try:
+                        dict_x, dict_y = get_communes_centroids_dicts(root)
+                        insee_s = coalesced_insee_series(df_pts)
+                        df_pts["insee_str"] = insee_s.astype(str).str.zfill(5)
+                        df_pts.loc[missing, "_lon"] = df_pts.loc[missing, "insee_str"].map(dict_x)
+                        df_pts.loc[missing, "_lat"] = df_pts.loc[missing, "insee_str"].map(dict_y)
+                    except Exception as e_geom:
+                        logger.warning(f"Impossible de centrer les points de contrôle orphelins : {e_geom}")
                 mask_geo = df_pts["_lon"].notna() & df_pts["_lat"].notna() & (df_pts["_lon"] != 0) & (df_pts["_lat"] != 0)
                 
                 if mask_geo.any():
@@ -5604,9 +5627,10 @@ def _run_engine_thematic_pipeline(
     out_subdir = str(profile.get("out_subdir", f"bilan_{profil_id}")).strip()
     if not out_subdir:
         out_subdir = "bilan_global"
-    code_norm = str(code).strip()
-    if code_norm:
-        out_subdir = f"{out_subdir}_{code_norm}"
+    code_suffix = resolve_code_subdir_suffix(profile, code)
+    if code_suffix:
+        out_subdir = f"{out_subdir}_{code_suffix}"
+
         
     out_dir = cfg.get_out(out_subdir)
 

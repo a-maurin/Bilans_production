@@ -410,9 +410,17 @@ def main() -> int:
 
     _check_deps()
 
-    codes_list = [c.strip() for c in code.replace(",", " ").split() if c.strip()]
-    if not codes_list:
-        codes_list = ["PNF" if is_fixed_geo else "21"]
+    if is_fixed_geo:
+        raw_tokens = [c.strip() for c in code.replace(",", " ").split() if c.strip()]
+        if not raw_tokens or raw_tokens == ["PNF"]:
+            codes_list = ["21_52"]
+        else:
+            codes_list = ["_".join(raw_tokens)]
+    else:
+        codes_list = [c.strip() for c in code.replace(",", " ").split() if c.strip()]
+        if not codes_list:
+            codes_list = ["21"]
+
 
     if date_fin and len(date_fin.strip()) == 10:
         date_fin = f"{date_fin.strip()} 23:59:59"

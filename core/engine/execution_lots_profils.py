@@ -38,6 +38,7 @@ from time import time
 
 from core.chemins_projet import PROJECT_ROOT, get_out_dir
 from core.common.reveal_in_file_manager import reveal_path_in_file_manager
+from core.common.utilitaires_metier import resolve_code_subdir_suffix
 
 logger = logging.getLogger("ofbilan.engine")
 
@@ -49,19 +50,19 @@ def resolve_profile_output_dir(profil_id: str, code: str = "", *, root: Path | N
     from core.engine.orchestrateur_profils import load_profile_config
 
     base = root or PROJECT_ROOT
+    profile = load_profile_config(base, profil_id)
     
     if profil_id == "global":
-        code_suffix = f"_{code}" if code else ""
+        code_suffix = resolve_code_subdir_suffix(profile, code)
         candidates = []
         out_root = base / "data" / "out"
         if out_root.exists():
             for d in out_root.iterdir():
-                if d.is_dir() and d.name.startswith("bilan_") and d.name.endswith(code_suffix):
+                if d.is_dir() and d.name.startswith("bilan_") and d.name.endswith(f"_{code_suffix}"):
                     candidates.append(d)
         if candidates:
             return max(candidates, key=lambda d: d.stat().st_mtime)
 
-    profile = load_profile_config(base, profil_id)
     pipeline = str(profile.get("pipeline", "thematic")).strip().lower()
     if pipeline == "global":
         out_subdir = str(profile.get("out_subdir", f"bilan_{profile.get('id', 'global')}")).strip()
@@ -75,9 +76,9 @@ def resolve_profile_output_dir(profil_id: str, code: str = "", *, root: Path | N
             pid = str(profile.get("id", profil_id)).strip() or profil_id
             out_subdir = f"bilan_{pid}"
             
-    code_norm = str(code).strip()
-    if code_norm:
-        out_subdir = f"{out_subdir}_{code_norm}"
+    code_suffix = resolve_code_subdir_suffix(profile, code)
+    if code_suffix:
+        out_subdir = f"{out_subdir}_{code_suffix}"
         
     return get_out_dir(out_subdir)
 
@@ -93,15 +94,17 @@ def _list_generated_pdf_files(profil_id: str, started_at_epoch: float, code: str
             filter_label = ", ".join(cli_opts["domaines"])
 
     if filter_label:
-        from core.engine.orchestrateur_profils import _safe_type_usager_for_filename
+        from core.engine.orchestrateur_profils import _safe_type_usager_for_filename, load_profile_config
         safe_filter = _safe_type_usager_for_filename(filter_label) or "filtre"
         out_subdir = f"bilan_{safe_filter}"
-        code_norm = str(code).strip()
-        if code_norm:
-            out_subdir = f"{out_subdir}_{code_norm}"
+        profile = load_profile_config(PROJECT_ROOT, profil_id)
+        code_suffix = resolve_code_subdir_suffix(profile, code)
+        if code_suffix:
+            out_subdir = f"{out_subdir}_{code_suffix}"
         out_dir = get_out_dir(out_subdir)
     else:
         out_dir = resolve_profile_output_dir(profil_id, code=code)
+
 
     if not out_dir.exists():
         return []

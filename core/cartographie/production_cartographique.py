@@ -667,35 +667,70 @@ def _clone_pochoir_renderer_from_template():
     return template.renderer().clone()
 
 
+def apply_coeur_parc_symbology(layer) -> None:
+    """Applique la symbologie officielle du Cœur de Parc National (Vert Sapin #228B22 semi-transparent 50%)."""
+    if not HAS_QGIS or not layer:
+        return
+    try:
+        from PyQt5.QtGui import QColor
+        from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsSimpleFillSymbolLayer
+        sl = QgsSimpleFillSymbolLayer()
+        sl.setFillColor(QColor(34, 139, 34, 128))  # Vert-sapin 50% transparence (alpha 128)
+        sl.setStrokeColor(QColor(20, 90, 20, 255))  # Bordure vert-sapin sombre
+        sl.setStrokeWidth(0.8)
+        sym = QgsFillSymbol()
+        sym.changeSymbolLayer(0, sl)
+        layer.setRenderer(QgsSingleSymbolRenderer(sym))
+        layer.triggerRepaint()
+    except Exception as e:
+        logger.error("Erreur lors de l'application de la symbologie coeur_parc : %s", e)
+
+
+def apply_aoa_symbology(layer) -> None:
+    """Applique la symbologie de l'AOA (Contour vert-sapin net 0.6mm sans remplissage)."""
+    if not HAS_QGIS or not layer:
+        return
+    try:
+        from PyQt5.QtGui import QColor
+        from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsSimpleFillSymbolLayer
+        sl = QgsSimpleFillSymbolLayer()
+        sl.setFillColor(QColor(0, 0, 0, 0))  # 100% transparent fill
+        sl.setStrokeColor(QColor(34, 139, 34, 255))  # Vert-sapin #228B22
+        sl.setStrokeWidth(0.6)
+        sym = QgsFillSymbol()
+        sym.changeSymbolLayer(0, sl)
+        layer.setRenderer(QgsSingleSymbolRenderer(sym))
+        layer.triggerRepaint()
+    except Exception as e:
+        logger.error("Erreur lors de l'application de la symbologie aoa : %s", e)
+
+
 def apply_pochoir_inverted_symbology(layer) -> None:
     """Symbologie masque blanc hors département (polygone inversé)."""
-    renderer = _clone_pochoir_renderer_from_template()
-    if renderer is not None:
-        # Forcer l'opacité à 100% sur le renderer cloné (évite les damiers/transparence du PNG)
-        try:
-            from qgis.core import QgsInvertedPolygonRenderer, QgsSingleSymbolRenderer
-            if isinstance(renderer, QgsInvertedPolygonRenderer):
-                inner = renderer.embeddedRenderer()
-                if isinstance(inner, QgsSingleSymbolRenderer):
-                    sym = inner.symbol()
-                    if sym:
-                        color = sym.color()
-                        color.setAlpha(255)
-                        sym.setColor(color)
-        except Exception:
-            pass
-            
-        layer.setRenderer(renderer)
-        layer.triggerRepaint()
+    if not HAS_QGIS or not layer:
         return
 
-    from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsInvertedPolygonRenderer
-    fill_sym = QgsFillSymbol.createSimple(
-        {"color": "255,255,255,255", "outline_color": "35,35,35", "outline_width": "0.26"}
-    )
-    inner = QgsSingleSymbolRenderer(fill_sym)
-    layer.setRenderer(QgsInvertedPolygonRenderer(inner))
-    layer.triggerRepaint()
+    is_aoa = "aoa" in layer.name().lower()
+    outline_color = "34,139,34,255" if is_aoa else "35,35,35,255"
+    outline_width = "0.6" if is_aoa else "0.26"
+
+    try:
+        from qgis.core import QgsFillSymbol, QgsSingleSymbolRenderer, QgsInvertedPolygonRenderer
+        fill_sym = QgsFillSymbol.createSimple(
+            {
+                "color": "255,255,255,255", 
+                "outline_color": outline_color, 
+                "outline_width": outline_width,
+                "outline_style": "solid"
+            }
+        )
+        inner = QgsSingleSymbolRenderer(fill_sym)
+        inv = QgsInvertedPolygonRenderer()
+        inv.setEmbeddedRenderer(inner)
+        layer.setRenderer(inv)
+        layer.triggerRepaint()
+    except Exception as e:
+        logger.error("Erreur lors de l'application du pochoir inversé : %s", e)
 
 
 def ensure_pochoir_layer_in_project(dept_code: str, pochoir_id: str = "departement") -> tuple[Optional[Any], str]:
@@ -716,6 +751,8 @@ def ensure_pochoir_layer_in_project(dept_code: str, pochoir_id: str = "departeme
         layer_name = pochoir_layer_name(dept_code)
     else:
         norm_id = pochoir_id.replace("pochoir_", "", 1) if pochoir_id.startswith("pochoir_") else pochoir_id
+        if "_sd" in norm_id:
+            norm_id = norm_id.split("_sd")[0]
         layer_name = f"pochoir_{norm_id}_sd{normalize_dept_code(dept_code)}"
         
     existing = get_layer_by_name(layer_name)
@@ -1203,9 +1240,11 @@ def _depart_attr_condition(field_name: str, depart: str) -> str:
     elif depart.upper().startswith("BMI-") or echelle == "bmi":
         deps = get_departements_pour_perimetre("bmi", depart)
     else:
-        deps = [depart]
+        deps = get_departements_pour_perimetre("departement", depart)
+        if not deps:
+            deps = [depart]
         
-    if len(deps) > 1 or (deps and (depart.upper().startswith("R") or depart.upper().startswith("BMI-"))):
+    if len(deps) > 1 or (deps and (depart.upper().startswith("R") or depart.upper().startswith("BMI-") or "_" in depart or "," in depart)):
         in_values = []
         for p in deps:
             p_str = str(p).strip()
@@ -1261,7 +1300,7 @@ def _build_pve_expression(fields, date_deb: str, date_fin: str, config, profile=
     else:
         natinf_values = getattr(config, "natinf_pve", [27742])
 
-    depart = getattr(config, "departement_code", "21")
+    depart = str(getattr(config, "departement_code", "21")).strip()
     import os
     echelle = os.environ.get("BILANS_CARTO_ECHELLE", "departement").lower()
     from core.common.utilitaires_metier import get_departements_pour_perimetre
@@ -1271,9 +1310,11 @@ def _build_pve_expression(fields, date_deb: str, date_fin: str, config, profile=
     elif depart.upper().startswith("BMI-") or echelle == "bmi":
         deps = get_departements_pour_perimetre("bmi", depart)
     else:
-        deps = [depart]
+        deps = get_departements_pour_perimetre("departement", depart)
+        if not deps:
+            deps = [depart]
 
-    if len(deps) > 1 or (deps and (depart.upper().startswith("R") or depart.upper().startswith("BMI-"))):
+    if len(deps) > 1 or (deps and (depart.upper().startswith("R") or depart.upper().startswith("BMI-") or "_" in depart or "," in depart)):
         in_values = []
         for p in deps:
             in_values.append(repr(p))
@@ -1322,19 +1363,23 @@ def _build_pj_expression(fields, date_deb: str, date_fin: str, config, profile=N
     entite_list = []
     import os
     echelle = os.environ.get("BILANS_CARTO_ECHELLE", "departement").lower()
+    from core.common.utilitaires_metier import get_departements_pour_perimetre
     if depart.upper().startswith("R") or echelle == "region":
-        from core.common.utilitaires_metier import get_departements_pour_perimetre
         dept_codes = get_departements_pour_perimetre("region", depart.lower())
         entite_list = [f"sd{d.lower()}" for d in dept_codes]
     elif depart.upper().startswith("BMI-") or echelle == "bmi":
-        from core.common.utilitaires_metier import get_departements_pour_perimetre, get_bmi_filters
+        from core.common.utilitaires_metier import get_bmi_filters
         dept_codes = get_departements_pour_perimetre("bmi", depart)
         if dept_codes and "FR" not in dept_codes:
             entite_list = [f"sd{d.lower()}" for d in dept_codes]
         bmi_filters = get_bmi_filters(depart)
         entite_list.append(str(bmi_filters.get("entite_pej", depart)).lower())
     else:
-        entite_list.append(f"sd{depart.lower()}")
+        dept_codes = get_departements_pour_perimetre("departement", depart)
+        if dept_codes:
+            entite_list = [f"sd{d.lower()}" for d in dept_codes]
+        else:
+            entite_list.append(f"sd{depart.lower()}")
 
     entite_cond = "lower(\"entite\") IN ('" + "', '".join(entite_list) + "')"
 
@@ -2185,8 +2230,13 @@ def export_layout(
 
     if dept_code:
         try:
-            emprise_id = getattr(prof, "emprise", "departement") or "departement"
-            margin = 0.01 if is_brochure_mode_active else 0.05
+            is_pnf_prof = (
+                getattr(prof, "restrict_geo", None) == "pnf"
+                or str(getattr(prof, "id", "")).startswith("pnf")
+                or getattr(prof, "emprise", None) == "aoa"
+            )
+            emprise_id = "aoa" if is_pnf_prof else (getattr(prof, "emprise", "departement") or "departement")
+            margin = 0.08 if is_pnf_prof else (0.01 if is_brochure_mode_active else 0.05)
             apply_map_extent(layout, dept_code, pochoir_id=emprise_id, margin_ratio=margin)
         except Exception as e:
             logger.exception("Erreur ajustement emprise carte (export continué): %s", e)
@@ -2651,11 +2701,22 @@ def run_export(
                 prof.output_filename = f"carte_{prof.id}.png"
                 
             # Intégration dynamique du pochoir (Lot 2)
+            is_pnf_prof = (
+                getattr(prof, "restrict_geo", None) == "pnf"
+                or str(getattr(prof, "id", "")).startswith("pnf")
+                or str(config_id).startswith("pnf")
+            )
+            if is_pnf_prof:
+                prof.pochoir = getattr(prof, "pochoir", None) or "aoa"
+                prof.emprise = getattr(prof, "emprise", None) or "aoa"
+
             if hasattr(prof, 'pochoir') and prof.pochoir and prof.pochoir != "aucun":
                 from config_cartes_model import LayerSymbologyConfig
                 pochoir_name = prof.pochoir if prof.pochoir.startswith("pochoir_") else f"pochoir_{prof.pochoir}"
-                if pochoir_name == "pochoir_departement":
+                if pochoir_name in ("pochoir_departement", "pochoir_dep"):
                     pochoir_name = f"pochoir_sd{effective_dept}"
+                elif pochoir_name in ("pochoir_aoa", "pochoir_pnf"):
+                    pochoir_name = f"pochoir_aoa_sd{effective_dept}"
                 prof.layers["pochoir"] = LayerSymbologyConfig(
                     layer_name=pochoir_name,
                     layer_role="pochoir"
@@ -2788,7 +2849,9 @@ def run_export(
                     layers_to_render.append(layer)
 
                     is_pnf = resolved_name in ("Coeur_data_gouv_PNForets", "AOA_2021_PNForet_21", "coeur_parc")
-                    if is_pnf and str(effective_dept) not in ("21", "52"):
+                    from core.common.utilitaires_metier import get_departements_pour_perimetre
+                    target_depts = get_departements_pour_perimetre("departement", str(effective_dept))
+                    if is_pnf and not any(d in ("21", "52") for d in target_depts) and str(effective_dept).lower() != "pnf":
                         layers_to_render.remove(layer)
                         continue
 
@@ -2818,8 +2881,15 @@ def run_export(
                         legend_labels_map[resolved_name] = lcfg.legend_label
 
                     is_pochoir = "pochoir" in lcfg.layer_name.lower() or "pochoir" in resolved_name.lower()
+                    is_coeur = resolved_name in ("Coeur_data_gouv_PNForets", "coeur_parc") or lcfg.layer_name in ("Coeur_data_gouv_PNForets", "coeur_parc")
+                    is_aoa = (resolved_name in ("AOA_2021_PNForet_21", "AOA_2021_PNForets", "aoa") or lcfg.layer_name in ("AOA_2021_PNForet_21", "aoa")) and not is_pochoir
+
                     if is_pochoir:
                         apply_pochoir_inverted_symbology(layer)
+                    elif is_coeur:
+                        apply_coeur_parc_symbology(layer)
+                    elif is_aoa:
+                        apply_aoa_symbology(layer)
                     elif should_apply_yaml_symbology(
                         getattr(lcfg, "symbology_source", None),
                         prof_sym_src,
@@ -3307,11 +3377,39 @@ def _draw_legend_on_image(image_path, legend_data):
         line_step_text = 35
         line_step_item = 35
 
-    try:
-        font_title = ImageFont.truetype("arialbd.ttf", font_title_sz)
-        font_text = ImageFont.truetype("arial.ttf", font_text_sz)
-    except IOError:
+    font_title = None
+    font_text = None
+    bold_candidates = [
+        "arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "DejaVuSans-Bold.ttf",
+    ]
+    regular_candidates = [
+        "arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "DejaVuSans.ttf",
+    ]
+
+    for cand in bold_candidates:
+        try:
+            font_title = ImageFont.truetype(cand, font_title_sz)
+            break
+        except Exception:
+            pass
+    if font_title is None:
         font_title = ImageFont.load_default()
+
+    for cand in regular_candidates:
+        try:
+            font_text = ImageFont.truetype(cand, font_text_sz)
+            break
+        except Exception:
+            pass
+    if font_text is None:
         font_text = ImageFont.load_default()
 
     import textwrap
@@ -3349,14 +3447,15 @@ def _draw_legend_on_image(image_path, legend_data):
 
     img_w, img_h = img.size
 
-    # Positionnement de la légende dans le coin supérieur droit
+    # Positionnement de la légende dans le coin supérieur droit en évitant le cartouche/logo OFB
     right_margin = 15
     start_x = img_w - total_w - right_margin
     margin_top = 15 if is_brochure else int(img_h * (10 / 210))
+    max_bottom = img_h - int(img_h * (45 / 210)) if not is_brochure else img_h - 15
     start_y = margin_top
 
-    if not is_brochure and start_y + total_h > img_h - int(img_h * (15 / 210)):
-        start_y = max(margin_top, img_h - total_h - int(img_h * (15 / 210)))
+    if start_y + total_h > max_bottom:
+        total_h = min(total_h, max_bottom - start_y)
 
     overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
     overlay_draw = ImageDraw.Draw(overlay)

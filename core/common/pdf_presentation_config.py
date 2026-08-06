@@ -992,19 +992,36 @@ def get_dept_coord(dept_name: str) -> str:
 
 def format_perimetre_title_label(echelle: str, perimetre_name_typo: str) -> str:
     """Formate l'intitulé du périmètre pour les titres PDF selon l'échelle et la grammaire française."""
+    from core.common.utilitaires_metier import DEPT_NAMES, get_dept_name, get_region_name
+
     e_norm = str(echelle).strip().lower()
     p_name = str(perimetre_name_typo).strip()
     if not p_name:
         return ""
+
+    if p_name.lower().startswith("région"):
+        return p_name
+    reg_val = get_region_name(p_name)
+    if (reg_val != f"Région {p_name}" and reg_val != p_name) or e_norm == "region":
+        return f"Région {p_name}"
+
+    # Détection multi-départements (ex: "21_52", "21, 52", "Côte-d'Or et Haute-Marne")
+    clean_p = p_name.replace(" et ", ",").replace("_", ",")
+    raw_tokens = [t.strip() for t in clean_p.split(",") if t.strip()]
+    all_depts = [t for t in raw_tokens if t in DEPT_NAMES or t.isdigit() or t in DEPT_NAMES.values()]
+
+    if len(all_depts) > 1:
+        formatted_depts = [get_dept_name(d) for d in all_depts]
+        if len(formatted_depts) == 2:
+            return f"Départements {formatted_depts[0]} et {formatted_depts[1]}"
+        else:
+            return f"Départements {', '.join(formatted_depts[:-1])} et {formatted_depts[-1]}"
+
     if e_norm == "departement":
         if p_name.lower().startswith("département"):
             return p_name
         coord = get_dept_coord(p_name)
         return f"Département {coord} {p_name}"
-    elif e_norm == "region":
-        if p_name.lower().startswith("région"):
-            return p_name
-        return f"Région {p_name}"
     else:
         return p_name
 

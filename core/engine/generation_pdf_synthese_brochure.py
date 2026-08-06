@@ -35,6 +35,7 @@ from __future__ import annotations
 
 # --- IMPORTS STANDARDS PYTHON ---
 import logging  # Pour journaliser les messages d'information ou d'erreur
+import re  # Pour les expressions régulières (nettoyage des balises HTML, etc.)
 from pathlib import Path  # Pour manipuler facilement les chemins de fichiers
 
 # --- MANIPULATION DE DONNEES ET GENERATION DE PDF (LIBRARIES TIERCES) ---
@@ -1267,29 +1268,51 @@ def _append_spacer(builder: PDFReportBuilder, mm_h: float = 1.5) -> None:
     builder.story.append(Spacer(1, mm_h * mm))
 
 
-def _append_bandeau(builder: PDFReportBuilder, dept: str, period: str) -> None:
-    """Génère le bandeau bleu officiel OFB à coins arrondis en haut de la Page 1 de la brochure."""
+def _append_bandeau(builder: PDFReportBuilder, header_text: str) -> None:
+    """Génère l'en-tête officiel OFB sur fond blanc (logo RF/OFB + titre dynamique) en haut de la Page 1 de la brochure."""
+    logo_path = _ROOT / "ref" / "programme" / "modele_ofb" / "bloc-marque-RF-OFB_horizontal.jpg"
+    logo_img = _image_fit(builder, logo_path, max_width=45.0 * mm, max_height=20.0 * mm) if logo_path.exists() else ""
+
+    # Nettoyage des balises HTML pour évaluer la longueur réelle du texte
+    plain_text = re.sub(r"<[^>]+>", "", header_text)
+    t_len = len(plain_text)
+    if t_len > 105:
+        font_sz, leading_val = 11.5, 14.5
+    elif t_len > 90:
+        font_sz, leading_val = 12.5, 15.5
+    elif t_len > 75:
+        font_sz, leading_val = 13.5, 17.0
+    elif t_len > 60:
+        font_sz, leading_val = 14.5, 18.0
+    else:
+        font_sz, leading_val = 16.0, 20.0
+
     title_style = ParagraphStyle(
-        "BrochureBandeauTitle",
+        "BrochureHeaderTitle",
         parent=builder.styles["BodyText"],
         fontName=f"{builder.styles['BodyText'].fontName}-Bold",
-        fontSize=16,
-        leading=20,
-        textColor=rl_colors.white,
+        fontSize=font_sz,
+        leading=leading_val,
+        textColor=COLOR_PRIMARY,
     )
-    bandeau = BrochureBandeau(
-        builder.avail_w,
-        [
-            Paragraph(
-                f"<b>Synthèse PA/PJ</b> — {dept} — <font color='#C5D9ED'>{period}</font>",
-                title_style,
-            ),
-        ],
-        pad_pt=2.5 * mm,
-        logo_path=LOGO_OFB_INTRANET_BLANC,
-        logo_height_pt=_BANDEAU_LOGO_H,
-    )
-    builder.story.append(bandeau)
+
+    if logo_img:
+        hdr_tbl = Table([[logo_img, Paragraph(header_text, title_style)]], colWidths=[48 * mm, builder.avail_w - 48 * mm])
+        hdr_tbl.hAlign = "LEFT"
+        hdr_tbl.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
+            ])
+        )
+        builder.story.append(hdr_tbl)
+    else:
+        builder.story.append(Paragraph(header_text, title_style))
+
+    builder.story.append(Spacer(1, 2.0 * mm))
 
 
 def _append_kpi_strip(
@@ -1483,9 +1506,15 @@ def _brochure_methodology_html(
     date_fin: pd.Timestamp,
     ventilation_mode: str,
     diffusion: str,
+    realisation_label: str | None = None,
 ) -> str:
     """Formate les mentions de méthodologie au format HTML (dates, sources de données, niveau de diffusion)."""
     diff = "externe" if str(diffusion).strip().lower() in ("externe", "external", "ext") else "interne"
+    real_str = (
+        str(realisation_label).strip()
+        if realisation_label
+        else "service départemental de la Côte d'Or"
+    )
     return (
         "<i><b>Méthodologie.</b> Sources OSCEAN (points de contrôle, PEJ, PA) et PVe OFB — "
         f"période du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y} — "
@@ -1493,7 +1522,7 @@ def _brochure_methodology_html(
         "effectifs d'usagers contrôlés (chaque usager sur une fiche) ; "
         "contrôles = localisations OSCEAN ; "
         "PEJ = suite à contrôle et saisines hors fiche contrôle. — "
-        "<b>Réalisation :</b> service départemental de la Côte d'Or.</i>"
+        f"<b>Réalisation :</b> {real_str}.</i>"
     )
 
 
@@ -1586,14 +1615,40 @@ def _generate_synthese_brochure_pdf(
         code=code,
         root=_ROOT,
     )
-    dept_name_typo = (
-        normalize_dept_typography(cfg.perimetre_name)
-        if cfg.echelle == "departement"
-        else cfg.perimetre_name
+    is_pnf = (
+        str(profile.get("restrict_geo") or "").strip().lower() == "pnf"
+        or profil_id in ("pnf", "pnf_v2")
     )
-    perimetre_display = format_perimetre_title_label(cfg.echelle, dept_name_typo)
+    if is_pnf:
+        if cfg.echelle == "departement" and cfg.perimetre_name and cfg.perimetre_name != "pnf":
+            dept_name_typo = normalize_dept_typography(cfg.perimetre_name)
+            perimetre_display = format_perimetre_title_label(cfg.echelle, dept_name_typo)
+        else:
+            dept_name_typo = profile.get("title_label") or profile.get("label") or "Parc national de forêts"
+            perimetre_display = dept_name_typo
+    else:
+        dept_name_typo = (
+            normalize_dept_typography(cfg.perimetre_name)
+            if cfg.echelle == "departement"
+            else cfg.perimetre_name
+        )
+        perimetre_display = format_perimetre_title_label(cfg.echelle, dept_name_typo)
     report_header = f"Bilan Police — {perimetre_display} — Année {date_fin.year}"
     period_str = f"du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}"
+
+    # Construction du titre dynamique d'en-tête (Page 1)
+    is_global = profil_id in ("global", "synthese_activite_PA_PJ")
+    profile_title = "" if is_global else str(profile.get("title_label") or profile.get("label") or "").strip()
+
+    title_parts = ["<b>Bilan Police</b>"]
+    if profile_title and profile_title.lower() != perimetre_display.lower():
+        title_parts.append(profile_title)
+    if perimetre_display:
+        title_parts.append(perimetre_display)
+    title_parts.append(period_str)
+
+    brochure_header_text = " — ".join(title_parts)
+
 
     act_theme = _sort_desc(_load_csv_fallback(out_dir, ["synthese_activite_par_theme.csv", f"controles_{profil_id}_par_theme.csv", "controles_global_par_theme.csv"]), ["nb_total", "nb"])
     if act_theme is not None and not act_theme.empty and "nb_total" not in act_theme.columns and "nb" in act_theme.columns:
@@ -1785,7 +1840,7 @@ def _generate_synthese_brochure_pdf(
         return
 
     # ── CONSTRUCTION DE LA PAGE 1 (BROCHURE STANDARD) ──
-    _append_bandeau(builder, dept_name_typo, period_str)
+    _append_bandeau(builder, brochure_header_text)
     _append_spacer(builder, _BROCHURE_SECTION_GAP_MM)
 
     # Insère le bloc de chiffres clés (KPI Héros)
@@ -2106,6 +2161,7 @@ def _generate_synthese_brochure_pdf(
             date_fin=date_fin,
             ventilation_mode=ventilation_mode,
             diffusion=diffusion,
+            realisation_label=f_line1 or "Office français de la biodiversité",
         ),
     )
 

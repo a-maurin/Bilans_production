@@ -249,6 +249,23 @@ def collect_bilan_carto_override(profile: dict | None) -> dict[str, Any]:
         columns = filt.get("columns")
     if isinstance(columns, list) and columns:
         override["keyword_columns"] = [str(c).strip() for c in columns if str(c).strip()]
+
+    if isinstance(carto, dict):
+        if carto.get("pochoir"):
+            override["pochoir"] = carto["pochoir"]
+        if carto.get("emprise"):
+            override["emprise"] = carto["emprise"]
+
+    is_pnf = (
+        profile.get("restrict_geo") == "pnf"
+        or str(profile.get("id", "")).startswith("pnf")
+        or str(profile.get("profil_id", "")).startswith("pnf")
+    )
+    if is_pnf:
+        override["pochoir"] = override.get("pochoir") or "aoa"
+        override["emprise"] = override.get("emprise") or "aoa"
+        override["restrict_geo"] = "pnf"
+
     return override
 
 

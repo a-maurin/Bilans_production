@@ -1154,7 +1154,7 @@ def chart_interdept_stacked_bar(
     for i, tot in enumerate(left_acc):
         ax.text(tot, i, f" {int(tot)}", va="center", ha="left", fontsize=8.5, fontweight="bold")
         
-    _legend_below_axis(ax, ncol=min(4, max(1, len(categories))), anchor_y=-0.16)
+    _legend_below_axis(ax, ncol=min(4, max(1, len(categories))), anchor_y=-0.28)
     
     max_tot = max(left_acc) if len(left_acc) > 0 and max(left_acc) > 0 else 10
     ax.set_xlim(0, max_tot * 1.2 + 1)

@@ -30,6 +30,7 @@ Rôles :
 ========================================================================================
 """
 import logging
+import re
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -653,8 +654,9 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
 
             tbl_dept = [["Domaine Métier", "Opérations", "Localisations", "PEJ / PA / PVe"]]
             for _, r in top5_df.iterrows():
+                dom_label = re.sub(r"^\[\d+\]\s*", "", str(r["domaine"])).strip()
                 tbl_dept.append([
-                    str(r["domaine"]),
+                    dom_label,
                     str(int(r["nb_operations"])),
                     str(int(r["nb_localisations"])),
                     f"{int(r.get('nb_pej', 0))} / {int(r.get('nb_pa', 0))} / {int(r.get('nb_pve', 0))}"
@@ -669,7 +671,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
 
             ctx.builder.add_table(
                 tbl_dept,
-                caption=f"Synthèse par domaine (Top 5) - {dept_name}",
+                caption=f"Synthèse par domaine principal - {dept_name}",
                 col_widths=[ctx.avail_w * 0.40, ctx.avail_w * 0.20, ctx.avail_w * 0.20, ctx.avail_w * 0.20],
                 col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
                 keep_together=True

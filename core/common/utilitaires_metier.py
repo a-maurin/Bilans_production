@@ -77,8 +77,10 @@ def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
     """Retourne la liste des départements rattachés au périmètre choisi (Département, Région, BMI, National)."""
     echelle_norm = str(echelle).strip().lower()
     code_norm = str(code).strip()
+    if code_norm.upper() == "PNF" or echelle_norm == "pnf":
+        return ["21", "52"]
     if echelle_norm == "departement":
-        return [c.strip() for c in code_norm.replace(",", " ").split() if c.strip()]
+        return [c.strip() for c in code_norm.replace(",", " ").replace("_", " ").split() if c.strip()]
     if echelle_norm == "region":
         cfg = _load_regions_config()
         region_deps = cfg.get("REGION_DEPARTEMENTS", {})
@@ -90,9 +92,8 @@ def get_departements_pour_perimetre(echelle: str, code: str) -> list[str]:
         return list(filters.get("departements", []))
     if echelle_norm == "national":
         return ["FR"]
-    if echelle_norm == "pnf":
-        return ["21", "52"]
     return []
+
 
 
 def get_pnf_departements(profile: dict) -> list[str]:
@@ -105,6 +106,29 @@ def get_pnf_departements(profile: dict) -> list[str]:
     if depts and isinstance(depts, list):
         return [str(d).strip() for d in depts if str(d).strip()]
     return ["21", "52"]
+
+
+def resolve_code_subdir_suffix(profile: dict | None, code: str) -> str:
+    """
+    Assainit la chaîne du code géographique pour la génération des sous-dossiers de sortie.
+    Remplace les virgules et espaces par des tirets bas (_).
+    Pour les profils PNF (restrict_geo=pnf), si le code est 'PNF' ou non renseigné,
+    utilise les départements du profil (ex: '21_52').
+    """
+    code_norm = str(code or "").strip()
+    tokens = [c.strip() for c in code_norm.replace(",", " ").split() if c.strip()]
+
+    is_pnf = False
+    if profile and isinstance(profile, dict):
+        is_pnf = str(profile.get("restrict_geo") or "").strip().lower() == "pnf"
+
+    if is_pnf:
+        if not tokens or tokens == ["PNF"]:
+            pnf_depts = get_pnf_departements(profile)
+            return "_".join(pnf_depts)
+
+    return "_".join(tokens)
+
 
 
 def get_region_name(code: str) -> str:
@@ -1797,6 +1821,12 @@ def get_dept_name(code: str) -> str:
     c = str(code).strip()
     if c in DEPT_NAMES:
         return DEPT_NAMES[c]
+    tokens = [t.strip() for t in c.replace("_", ",").split(",") if t.strip()]
+    if len(tokens) > 1 and all(t in DEPT_NAMES or t.isdigit() for t in tokens):
+        names = [DEPT_NAMES.get(t, t) for t in tokens]
+        if len(names) == 2:
+            return f"{names[0]} et {names[1]}"
+        return f"{', '.join(names[:-1])} et {names[-1]}"
     reg_name = get_region_name(c)
     if reg_name != f"Région {c}":
         return reg_name

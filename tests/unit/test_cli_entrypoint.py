@@ -418,3 +418,46 @@ def test_bilans_cli_debug_option(monkeypatch) -> None:
     assert cli.main() == 0
     assert captured_level == [logging.DEBUG]
 
+
+def test_bilans_cli_pnf_v2_code_unification(monkeypatch) -> None:
+    import core.point_entree_cli as cli
+    from core.common.utilitaires_metier import resolve_code_subdir_suffix
+
+    captured_runs = []
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "bilans",
+            "--profil",
+            "pnf_v2",
+            "--date-deb",
+            "2025-01-01",
+            "--date-fin",
+            "2025-12-31",
+            "--echelle",
+            "departement",
+            "--code",
+            "21, 52",
+        ],
+    )
+    monkeypatch.setattr(cli, "_check_deps", lambda: None)
+    monkeypatch.setattr("core.engine.catalogue_profils.resolve_profile_ids", lambda ids: ids)
+
+    def _fake_run_batch(profils, date_deb, date_fin, echelle, code, combine=False, cli_options=None):
+        captured_runs.append(code)
+        return 0
+
+    monkeypatch.setattr("core.engine.execution_lots_profils.run_profiles_batch", _fake_run_batch)
+
+    assert cli.main() == 0
+    assert captured_runs == ["21_52"]
+
+    profile = {"restrict_geo": "pnf", "departements": ["21", "52"]}
+    assert resolve_code_subdir_suffix(profile, "21, 52") == "21_52"
+    assert resolve_code_subdir_suffix(profile, "PNF") == "21_52"
+    assert resolve_code_subdir_suffix(profile, "") == "21_52"
+    assert resolve_code_subdir_suffix(profile, "21") == "21"
+
+

@@ -2397,7 +2397,7 @@ def merge_pej_faits_locations(
     if pej is None or pej.empty or "DC_ID" not in pej.columns:
         return pej
 
-    if "x_faits" in pej.columns and "y_faits" in pej.columns:
+    if "x_faits" in pej.columns and "y_faits" in pej.columns and pej["x_faits"].notna().all() and pej["y_faits"].notna().all():
         return pej.copy()
 
     if gdf_faits is not None and not gdf_faits.empty:

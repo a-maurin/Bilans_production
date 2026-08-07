@@ -410,3 +410,53 @@ def test_safe_to_datetime_with_nan() -> None:
     assert res.iloc[6] == pd.Timestamp("2025-05-15")
 
 
+def test_merge_pej_faits_locations_fallbacks(monkeypatch, tmp_path: Path) -> None:
+    """Vérifie l'attribution correcte de precision_loc lors de la cascade de fallbacks PEJ."""
+    import core.common.chargeurs_donnees as loaders
+
+    # Dataframe PEJ de test avec 4 cas
+    df_pej = pd.DataFrame([
+        {"DC_ID": "101", "NOM_COM": "Dijon", "code_dept": "21"}, # Fait exact
+        {"DC_ID": "102", "NOM_COM": "Beaune", "code_dept": "21"}, # Via contrôle OSCEAN
+        {"DC_ID": "103", "insee_comm": "21231", "code_dept": "21"}, # Via centroïde communal
+        {"DC_ID": "104", "code_dept": "21"} # Via centroïde départemental
+    ])
+
+    # Mock du GPKG FAITS qui ne fournit les GPS que pour DC_ID 101
+    df_faits = pd.DataFrame([
+        {"dossier": "101", "x_infrac": 5.04, "y_infrac": 47.32, "entite": "SD21"}
+    ])
+    monkeypatch.setattr(loaders, "get_points_infrac_pj_path", lambda root: tmp_path / "fake.gpkg")
+    monkeypatch.setattr(loaders, "read_vector_attributes", lambda path: df_faits)
+
+    # Mock OSCEAN qui fournit les GPS pour DC_ID 102
+    def fake_load_point_ctrl(*args, **kwargs):
+        return pd.DataFrame([
+            {"dc_id": "102", "x": 4.83, "y": 47.02, "nom_commun": "Beaune"}
+        ])
+    monkeypatch.setattr(loaders, "load_point_ctrl", fake_load_point_ctrl)
+
+    # Mock centroïdes communaux pour 21231 (DC_ID 103)
+    def fake_load_communes_centroides(*args, **kwargs):
+        return pd.DataFrame([
+            {"code_insee": "21231", "lat": 47.10, "lon": 5.01}
+        ])
+    monkeypatch.setattr(loaders, "load_communes_centroides", fake_load_communes_centroides)
+
+    res = loaders.merge_pej_faits_locations(df_pej, tmp_path, echelle="departement", code="21")
+
+    assert len(res) == 4
+    assert res.loc[0, "precision_loc"] == "GPS Fait (Exacte)"
+    assert res.loc[0, "x_faits"] == 5.04
+
+    assert res.loc[1, "precision_loc"] == "Point de contrôle rattaché"
+    assert res.loc[1, "x_faits"] == 4.83
+
+    assert res.loc[2, "precision_loc"] == "Centroïde communal (Approximatif)"
+    assert res.loc[2, "x_faits"] == 5.01
+
+    assert res.loc[3, "precision_loc"] == "Centroïde départemental (Approximatif)"
+    assert res.loc[3, "x_faits"] == 5.01
+
+
+

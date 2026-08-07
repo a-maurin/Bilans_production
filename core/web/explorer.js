@@ -2447,12 +2447,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 weight: 1.5,
                                 interactive: true
                             });
+                            const precColor = p.precision_loc && p.precision_loc.includes('Approximatif') ? '#D97706' : '#2563EB';
                             const popup = `
                             <strong>${p.type}</strong><br>
                             N° Oscean : ${p.dc_id || 'N/A'}<br>
                             Date: ${p.date_ctrl || 'N/A'}<br>
                             Type d'action de la ${p.type} : ${p.type_action || 'Non renseigné'}<br>
-                            Usager visé : ${p.type_usager || 'Non renseigné'}
+                            Usager visé : ${p.type_usager || 'Non renseigné'}<br>
+                            Précision localisation : <span style="font-weight:bold;color:${precColor}">${p.precision_loc || 'GPS Fait (Exacte)'}</span>
                         `;
                             marker.bindPopup(popup);
 

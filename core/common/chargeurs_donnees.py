@@ -50,6 +50,7 @@ except ImportError:
     gpd = None
 
 import pandas as pd
+import numpy as np
 import re
 
 from core.chemins_projet import ref_programme
@@ -2403,86 +2404,73 @@ def merge_pej_faits_locations(
         gdf = gdf_faits.copy()
     else:
         path = get_points_infrac_pj_path(root)
-        if not path.exists():
-            lg.info("Couche FAITS PJ absente (%s) — PEJ sans coordonnées SIG.", path)
-            return pej.copy()
-
-        try:
-            import geopandas as _gpd
-            gdf_raw = _gpd.read_file(path)
-            # Extraire x/y depuis la géométrie si les colonnes attributaires sont absentes
-            if "x_infrac" not in gdf_raw.columns and "geometry" in gdf_raw.columns:
-                gdf_raw["x_infrac"] = gdf_raw.geometry.x
-                gdf_raw["y_infrac"] = gdf_raw.geometry.y
-            gdf = pd.DataFrame(gdf_raw.drop(columns=["geometry"], errors="ignore"))
-        except ImportError:
-            gdf = read_vector_attributes(path)
-        except Exception as e:
-            lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
-            return pej.copy()
-
-    if gdf.empty:
-        return pej.copy()
-
-    # Filtre entité SD
-    ent_col = next((c for c in ("entite", "ENTITE", "Entite") if c in gdf.columns), None)
-    if ent_col is None:
-        lg.warning("Couche FAITS : pas de colonne entite — jointure PEJ ignorée.")
-        return pej.copy()
-    from core.common.utilitaires_metier import get_departements_pour_perimetre
-    dept_codes = get_departements_pour_perimetre(echelle, code)
-    if dept_codes and "FR" not in dept_codes:
-        sd_list = [f"SD{d}" for d in dept_codes]
-        if str(echelle).strip().lower() == "bmi":
-            from core.common.utilitaires_metier import get_bmi_filters
-            bmi_filters = get_bmi_filters(code)
-            sd_list.append(str(bmi_filters.get("entite_pej", code)).upper())
-        gdf = gdf[gdf[ent_col].astype(str).str.strip().isin(sd_list)].copy()
-        if gdf.empty:
-            lg.info("Couche FAITS : aucune entité pour ce périmètre — pas de localisations jointes.")
-            return pej.copy()
-
-    # Filtre NATINF optionnel
-    if natinf_list:
-        natinf_col = next((c for c in ("natinf", "NATINF") if c in gdf.columns), None)
-        if natinf_col:
-            natinf_vals = {str(n) for n in natinf_list}
-            gdf = gdf[gdf[natinf_col].astype(str).isin(natinf_vals)].copy()
-
-    doss_col = next((c for c in ("dossier", "DOSSIER") if c in gdf.columns), None)
-    if doss_col is None:
-        lg.warning("Couche FAITS : colonne dossier introuvable.")
-        return pej.copy()
-
-    # Priorité aux colonnes attributaires natives du GPKG
-    xcol = "x_infrac" if "x_infrac" in gdf.columns else ("x" if "x" in gdf.columns else None)
-    ycol = "y_infrac" if "y_infrac" in gdf.columns else ("y" if "y" in gdf.columns else None)
-    if xcol is None or ycol is None:
-        lg.warning("Couche FAITS : colonnes de coordonnées introuvables.")
-        return pej.copy()
-
-    commune_col = next(
-        (c for c in ("commune_fait", "commune_fa", "NOM_COM", "commune", "COMMUNE") if c in gdf.columns),
-        None,
-    )
-    keep_cols = [doss_col, xcol, ycol] + ([commune_col] if commune_col else [])
-    loc = gdf[keep_cols].copy()
-    loc["_doss"] = loc[doss_col].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
-    loc = loc.drop_duplicates(subset="_doss", keep="first")
-    rename_map = {xcol: "x_faits", ycol: "y_faits"}
-    if commune_col is not None:
-        rename_map[commune_col] = "NOM_COM_FAITS"
-    loc = loc.rename(columns=rename_map).drop(columns=[doss_col], errors="ignore")
+        gdf = pd.DataFrame()
+        if path and path.exists():
+            try:
+                gdf = read_vector_attributes(path)
+            except Exception as e:
+                lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
+        elif path:
+            # Fallback en cas de mock dans les tests ou fichier virtuel
+            try:
+                gdf = read_vector_attributes(path)
+            except Exception:
+                gdf = pd.DataFrame()
 
     out = pej.copy()
-    out["_dc"] = out["DC_ID"].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
-    out = out.merge(loc, left_on="_dc", right_on="_doss", how="left")
-    out = out.drop(columns=["_dc", "_doss"], errors="ignore")
-    # Expose un nom de commune exploitable pour les tableaux PDF quand l'ODS ne le fournit pas.
-    if "NOM_COM_FAITS" in out.columns:
-        if "NOM_COM" in out.columns:
-            out["NOM_COM"] = out["NOM_COM"].fillna(out["NOM_COM_FAITS"])
-            out["NOM_COM"] = out["NOM_COM"].astype(str).str.strip().replace({"": pd.NA})
+    if "x_faits" not in out.columns:
+        out["x_faits"] = np.nan
+    if "y_faits" not in out.columns:
+        out["y_faits"] = np.nan
+
+    if not gdf.empty:
+        # Filtre entité SD
+        ent_col = next((c for c in ("entite", "ENTITE", "Entite") if c in gdf.columns), None)
+        if ent_col is not None:
+            from core.common.utilitaires_metier import get_departements_pour_perimetre
+            dept_codes = get_departements_pour_perimetre(echelle, code)
+            if dept_codes and "FR" not in dept_codes:
+                sd_list = [f"SD{d}" for d in dept_codes]
+                if str(echelle).strip().lower() == "bmi":
+                    from core.common.utilitaires_metier import get_bmi_filters
+                    bmi_filters = get_bmi_filters(code)
+                    sd_list.append(str(bmi_filters.get("entite_pej", code)).upper())
+                gdf = gdf[gdf[ent_col].astype(str).str.strip().isin(sd_list)].copy()
+
+        # Filtre NATINF optionnel
+        if not gdf.empty and natinf_list:
+            natinf_col = next((c for c in ("natinf", "NATINF") if c in gdf.columns), None)
+            if natinf_col:
+                natinf_vals = {str(n) for n in natinf_list}
+                gdf = gdf[gdf[natinf_col].astype(str).isin(natinf_vals)].copy()
+
+        doss_col = next((c for c in ("dossier", "DOSSIER") if c in gdf.columns), None)
+        xcol = "x_infrac" if "x_infrac" in gdf.columns else ("x" if "x" in gdf.columns else None)
+        ycol = "y_infrac" if "y_infrac" in gdf.columns else ("y" if "y" in gdf.columns else None)
+
+        if doss_col and xcol and ycol:
+            commune_col = next(
+                (c for c in ("commune_fait", "commune_fa", "NOM_COM", "commune", "COMMUNE") if c in gdf.columns),
+                None,
+            )
+            keep_cols = [doss_col, xcol, ycol] + ([commune_col] if commune_col else [])
+            loc = gdf[keep_cols].copy()
+            loc["_doss"] = loc[doss_col].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
+            loc = loc.drop_duplicates(subset="_doss", keep="first")
+            rename_map = {xcol: "x_faits", ycol: "y_faits"}
+            if commune_col is not None:
+                rename_map[commune_col] = "NOM_COM_FAITS"
+            loc = loc.rename(columns=rename_map).drop(columns=[doss_col], errors="ignore")
+
+            out["_dc"] = out["DC_ID"].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
+            out = out.drop(columns=["x_faits", "y_faits"], errors="ignore").merge(loc, left_on="_dc", right_on="_doss", how="left")
+            out = out.drop(columns=["_dc", "_doss"], errors="ignore")
+
+            # Expose un nom de commune exploitable pour les tableaux PDF quand l'ODS ne le fournit pas.
+            if "NOM_COM_FAITS" in out.columns:
+                if "NOM_COM" in out.columns:
+                    out["NOM_COM"] = out["NOM_COM"].fillna(out["NOM_COM_FAITS"])
+                    out["NOM_COM"] = out["NOM_COM"].astype(str).str.strip().replace({"": pd.NA})
         else:
             out["NOM_COM"] = out["NOM_COM_FAITS"].astype(str).str.strip().replace({"": pd.NA})
             
@@ -2537,9 +2525,110 @@ def merge_pej_faits_locations(
     if "DATE_REF" in out.columns:
         out["DATE_REF"] = pd.to_datetime(out["DATE_REF"], errors="coerce")
 
+    # Initialisation de la colonne de précision de géolocalisation
+    if "precision_loc" not in out.columns:
+        out["precision_loc"] = pd.Series(pd.NA, index=out.index, dtype="string")
+
+    # Niveau 1 : Marquer les localisations exactes issues du GPKG FAITS
+    has_faits_xy = out["x_faits"].notna() & out["y_faits"].notna()
+    out.loc[has_faits_xy, "precision_loc"] = "GPS Fait (Exacte)"
+
+    # === CASCADE DE FALLBACKS DE GÉOLOCALISATION ===
+    missing_xy = out["x_faits"].isna() | out["y_faits"].isna()
+    if missing_xy.any():
+        # Fallback Niveau 2 : Point de contrôle rattaché (OSCEAN)
+        try:
+            oscean_gdf = load_point_ctrl(root, echelle=echelle, code=code)
+            if not oscean_gdf.empty and "dc_id" in oscean_gdf.columns and "x" in oscean_gdf.columns and "y" in oscean_gdf.columns:
+                osc_valid = oscean_gdf.dropna(subset=["x", "y"]).copy()
+                osc_valid["dc_clean"] = osc_valid["dc_id"].astype(str).apply(lambda v: re.sub(r"\.0$", "", str(v)) if pd.notna(v) else "")
+                osc_valid = osc_valid.drop_duplicates(subset=["dc_clean"])
+                
+                dict_osc_x = osc_valid.set_index("dc_clean")["x"].to_dict()
+                dict_osc_y = osc_valid.set_index("dc_clean")["y"].to_dict()
+                
+                dc_series = out.loc[missing_xy, "DC_ID"].astype(str).apply(lambda v: re.sub(r"\.0$", "", str(v)) if pd.notna(v) else "")
+                mapped_x = dc_series.map(dict_osc_x)
+                mapped_y = dc_series.map(dict_osc_y)
+                
+                found_osc = mapped_x.notna() & mapped_y.notna()
+                if found_osc.any():
+                    idx_found = dc_series[found_osc].index
+                    out.loc[idx_found, "x_faits"] = mapped_x[found_osc]
+                    out.loc[idx_found, "y_faits"] = mapped_y[found_osc]
+                    out.loc[idx_found, "precision_loc"] = "Point de contrôle rattaché"
+        except Exception as e:
+            lg.warning("PEJ : échec du fallback contrôle d'origine : %s", e)
+
+        # Fallback Niveau 3 : Centroïde de la commune (code INSEE ou NOM_COM)
+        missing_xy = out["x_faits"].isna() | out["y_faits"].isna()
+        if missing_xy.any():
+            try:
+                cen_com = load_communes_centroides(root)
+                if not cen_com.empty:
+                    com_names = load_communes_noms(root)
+                    inv_com_names = {str(v).lower().strip(): str(k).zfill(5) for k, v in com_names.items() if v}
+                    
+                    dict_lat = pd.to_numeric(cen_com.set_index("code_insee")["lat"], errors="coerce").to_dict()
+                    dict_lon = pd.to_numeric(cen_com.set_index("code_insee")["lon"], errors="coerce").to_dict()
+                    
+                    for idx in out[missing_xy].index:
+                        row = out.loc[idx]
+                        insee_val = None
+                        for c in ("insee_comm", "code_insee", "INSEE_COM", "insee"):
+                            if c in row and pd.notna(row[c]):
+                                candidate = str(row[c]).strip().zfill(5)
+                                if len(candidate) == 5 and candidate != "00000":
+                                    insee_val = candidate
+                                    break
+                                    
+                        if not insee_val and "NOM_COM" in row and pd.notna(row["NOM_COM"]):
+                            nom_clean = str(row["NOM_COM"]).lower().strip()
+                            insee_val = inv_com_names.get(nom_clean)
+                            
+                        if insee_val and insee_val in dict_lat and insee_val in dict_lon:
+                            out.loc[idx, "x_faits"] = dict_lon[insee_val]
+                            out.loc[idx, "y_faits"] = dict_lat[insee_val]
+                            out.loc[idx, "precision_loc"] = "Centroïde communal (Approximatif)"
+            except Exception as e:
+                lg.warning("PEJ : échec du fallback centroïde communal : %s", e)
+
+        # Fallback Niveau 4 : Centroïde du département
+        missing_xy = out["x_faits"].isna() | out["y_faits"].isna()
+        if missing_xy.any():
+            try:
+                cen_com = load_communes_centroides(root)
+                if not cen_com.empty:
+                    cen_com["dept"] = cen_com["code_insee"].astype(str).str.zfill(5).str[:2]
+                    dept_lon = cen_com.groupby("dept")["lon"].mean().to_dict()
+                    dept_lat = cen_com.groupby("dept")["lat"].mean().to_dict()
+                    
+                    for idx in out[missing_xy].index:
+                        row = out.loc[idx]
+                        dept_val = None
+                        for c in ("num_depart", "code_dept", "DEPT", "departement", "DEP"):
+                            if c in row and pd.notna(row[c]):
+                                d_str = str(row[c]).strip().split(".")[0].zfill(2)[:2]
+                                if d_str in dept_lon:
+                                    dept_val = d_str
+                                    break
+                        if not dept_val and "ENTITE_ORIGINE_PROCEDURE" in row and pd.notna(row["ENTITE_ORIGINE_PROCEDURE"]):
+                            m = re.search(r"(\d+)", str(row["ENTITE_ORIGINE_PROCEDURE"]))
+                            if m:
+                                d_str = m.group(1).zfill(2)[:2]
+                                if d_str in dept_lon:
+                                    dept_val = d_str
+                                    
+                        if dept_val and dept_val in dept_lon and dept_val in dept_lat:
+                            out.loc[idx, "x_faits"] = dept_lon[dept_val]
+                            out.loc[idx, "y_faits"] = dept_lat[dept_val]
+                            out.loc[idx, "precision_loc"] = "Centroïde départemental (Approximatif)"
+            except Exception as e:
+                lg.warning("PEJ : échec du fallback centroïde départemental : %s", e)
+
     n = int(out["x_faits"].notna().sum())
     if n:
-        lg.info("PEJ : %s ligne(s) avec localisation FAITS (jointure dossier).", n)
+        lg.info("PEJ : %s / %s ligne(s) géolocalisée(s) après cascade (exactes + fallbacks).", n, len(out))
     return out
 
 

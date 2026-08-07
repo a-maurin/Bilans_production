@@ -1103,6 +1103,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "type_action": str(r.get(col_ta, "Non renseigné")).strip() if col_ta and pd.notna(r.get(col_ta)) else "Non renseigné",
                             "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
                             "code_dept": code_dept_proc,
+                            "precision_loc": "Point de contrôle rattaché",
                             "x": float(r["x"]),
                             "y": float(r["y"])
                         })
@@ -1130,8 +1131,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             missing_mask = df_pej_loc["x_faits"].isna() | df_pej_loc["y_faits"].isna()
                             if missing_mask.any():
                                 dc_clean = df_pej_loc.loc[missing_mask, "DC_ID"].astype(str).apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
-                                df_pej_loc.loc[missing_mask, "x_faits"] = dc_clean.map(dict_x).fillna(df_pej_loc.loc[missing_mask, "x_faits"])
-                                df_pej_loc.loc[missing_mask, "y_faits"] = dc_clean.map(dict_y).fillna(df_pej_loc.loc[missing_mask, "y_faits"])
+                                mapped_x = dc_clean.map(dict_x)
+                                mapped_y = dc_clean.map(dict_y)
+                                found_pts = mapped_x.notna() & mapped_y.notna()
+                                if found_pts.any():
+                                    idx_found = dc_clean[found_pts].index
+                                    df_pej_loc.loc[idx_found, "x_faits"] = mapped_x[found_pts]
+                                    df_pej_loc.loc[idx_found, "y_faits"] = mapped_y[found_pts]
+                                    if "precision_loc" in df_pej_loc.columns:
+                                        df_pej_loc.loc[idx_found, "precision_loc"] = "Point de contrôle rattaché"
 
                         if not df_pej_loc.empty and "x_faits" in df_pej_loc.columns and "y_faits" in df_pej_loc.columns:
                             df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"]).copy()
@@ -1139,6 +1147,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             for _, r in df_pej_valid.iterrows():
                                 dept_calc = str(r.get("_code_dept_calc", "")).strip()
                                 code_dept_pej = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
+                                prec_val = str(r.get("precision_loc", "GPS Fait (Exacte)")).strip()
+                                if not prec_val or prec_val in ("N/A", "nan", "None", "<NA>"):
+                                    prec_val = "GPS Fait (Exacte)"
                                 procedures.append({
                                     "type": "PEJ",
                                     "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
@@ -1146,6 +1157,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     "type_action": str(r.get("TYPE_ACTION", "Non renseigné")).strip() if pd.notna(r.get("TYPE_ACTION")) else "Non renseigné",
                                     "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
                                     "code_dept": code_dept_pej,
+                                    "precision_loc": prec_val,
                                     "x": float(r["x_faits"]),
                                     "y": float(r["y_faits"])
                                 })
@@ -1162,6 +1174,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         df_pve["x"] = pd.NA
                     if "y" not in df_pve.columns:
                         df_pve["y"] = pd.NA
+                    if "precision_loc" not in df_pve.columns:
+                        df_pve["precision_loc"] = pd.Series("GPS Fait (Exacte)", index=df_pve.index)
                         
                     if "inf_gps_long" in df_pve.columns:
                         df_pve["x"] = df_pve["x"].fillna(
@@ -1188,8 +1202,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     dict_lon = pd.to_numeric(cen_com.set_index(insee_col)[lon_col], errors="coerce").to_dict()
                                     
                                     pve_insee = df_pve.loc[missing_pve_mask, "INF-INSEE"].astype(str).str.extract(r"(\d{1,5})", expand=False).fillna("").str.zfill(5)
-                                    df_pve.loc[missing_pve_mask, "x"] = df_pve.loc[missing_pve_mask, "x"].fillna(pve_insee.map(dict_lon))
-                                    df_pve.loc[missing_pve_mask, "y"] = df_pve.loc[missing_pve_mask, "y"].fillna(pve_insee.map(dict_lat))
+                                    mapped_pve_x = pve_insee.map(dict_lon)
+                                    mapped_pve_y = pve_insee.map(dict_lat)
+                                    found_pve = mapped_pve_x.notna() & mapped_pve_y.notna()
+                                    if found_pve.any():
+                                        idx_pve = pve_insee[found_pve].index
+                                        df_pve.loc[idx_pve, "x"] = mapped_pve_x[found_pve]
+                                        df_pve.loc[idx_pve, "y"] = mapped_pve_y[found_pve]
+                                        df_pve.loc[idx_pve, "precision_loc"] = "Centroïde communal (Approximatif)"
                         except Exception as e:
                             print(f"Exception fallback communes PVe: {e}")
 
@@ -1211,6 +1231,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 "type_action": str(r.get(col_ta_pve, "Non renseigné")).strip() if col_ta_pve and pd.notna(r.get(col_ta_pve)) else "Non renseigné",
                                 "type_usager": str(r.get(col_usager_pve, "Non renseigné")).strip() if col_usager_pve and pd.notna(r.get(col_usager_pve)) else "Non renseigné",
                                 "code_dept": code_dept_pve,
+                                "precision_loc": str(r.get("precision_loc", "GPS Fait (Exacte)")),
                                 "x": float(r[x_col]),
                                 "y": float(r[y_col])
                             })

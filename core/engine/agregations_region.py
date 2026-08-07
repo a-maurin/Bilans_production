@@ -208,6 +208,12 @@ def analyse_region_par_departement(
         pv["departement"] = pv["departement"].astype(str).str.strip().str.zfill(2)
         pv = pv[pv["departement"].isin(dept_codes)]
 
+        dom_col = next((c for c in ("domaine", "DOMAINE", "domaine_snc", "DOMAINE_SNC") if c in pv.columns), None)
+        if dom_col:
+            pv["domaine"] = pv[dom_col].fillna("Hors domaine").astype(str)
+        else:
+            pv["domaine"] = "Hors domaine"
+
         if not pv.empty:
             pves = pv.groupby(["domaine", "theme", "departement"]).size().reset_index(name="nb_pve")
             for _, r in pves.iterrows():

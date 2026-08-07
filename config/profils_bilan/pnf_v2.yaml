@@ -8,9 +8,10 @@
 schema_version: 2
 id: pnf_v2
 label: "Parc national de forêts v2"
-title_label: "Parc national de forêts"
+title_label: "Parc National de Forêts"
 pipeline: global
 presentation_scope: global
+gabarit: pnf_v2
 out_subdir: bilan_pnf_v2
 output_filename: bilan_pnf_v2.pdf
 

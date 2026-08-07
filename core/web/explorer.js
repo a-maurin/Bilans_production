@@ -33,6 +33,44 @@
  *   5. Export des données filtrées vers Excel et génération de rapports cartographiques.
  * ========================================================================================
  */
+// Système de remontée automatique des journaux JS client vers le serveur web (/api/log)
+function sendClientLog(level, message, source = 'explorer.js', line = '', context = null) {
+    try {
+        const payload = JSON.stringify({
+            level: level || 'INFO',
+            message: message || '',
+            source: source,
+            line: line,
+            context: context
+        });
+        if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon('/api/log', blob);
+        } else {
+            fetch('/api/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+                keepalive: true
+            }).catch(() => {});
+        }
+    } catch (e) {}
+}
+
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+    const filename = url ? url.split('/').pop() : 'explorer.js';
+    sendClientLog('ERROR', String(msg), filename, lineNo ? `${lineNo}:${columnNo || 0}` : '', {
+        stack: error ? error.stack : null
+    });
+    return false;
+};
+
+window.addEventListener('unhandledrejection', function (event) {
+    const reason = event.reason;
+    sendClientLog('ERROR', `Promesse rejetée non gérée: ${reason ? (reason.message || reason) : 'Inconnue'}`, 'async', '', {
+        stack: reason ? reason.stack : null
+    });
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     let isUnloading = false;
@@ -1677,6 +1715,362 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let heatmapLayer = null;
+    let choroplethLayer = null;
+    let currentBoundaryGeojson = null;
+    window.isChoroplethLegendCollapsed = false;
+
+    window.toggleChoroplethLegend = function(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        window.isChoroplethLegendCollapsed = !window.isChoroplethLegendCollapsed;
+        const body = document.getElementById('choropleth-legend-body');
+        const btn = document.getElementById('choropleth-legend-toggle');
+        if (body) body.style.display = window.isChoroplethLegendCollapsed ? 'none' : 'block';
+        if (btn) {
+            btn.textContent = window.isChoroplethLegendCollapsed ? '▲' : '▼';
+            btn.title = window.isChoroplethLegendCollapsed ? 'Déplier la légende' : 'Réduire la légende';
+        }
+    };
+
+    function renderChoroplethLayer() {
+        const isChoroplethMode = document.querySelector('input[name="map-mode"]:checked')?.value === 'choropleth';
+        const choroplethOptions = document.getElementById('choropleth-options');
+        const legendContainer = document.getElementById('choropleth-legend');
+
+        if (typeof updateLegend === 'function') updateLegend();
+
+        if (choroplethOptions) {
+            choroplethOptions.classList.toggle('hidden', !isChoroplethMode);
+        }
+
+        if (!isChoroplethMode) {
+            if (choroplethLayer) {
+                map.removeLayer(choroplethLayer);
+                choroplethLayer = null;
+            }
+            if (legendContainer) legendContainer.classList.add('hidden');
+            return;
+        }
+
+        if (legendContainer) legendContainer.classList.remove('hidden');
+
+        const metric = document.getElementById('choropleth-metric')?.value || 'controles';
+        const isControles = (metric === 'controles');
+
+        if (choroplethLayer) {
+            map.removeLayer(choroplethLayer);
+            choroplethLayer = null;
+        }
+
+        if (!currentBoundaryGeojson || !currentBoundaryGeojson.features || currentBoundaryGeojson.features.length === 0) {
+            sendClientLog('WARN', 'Carte choroplèthe non affichée: Aucune entité GeoJSON reçue du serveur pour la zone actuelle', 'explorer.js', 'renderChoroplethLayer');
+            if (legendContainer) legendContainer.classList.add('hidden');
+            return;
+        }
+
+        sendClientLog('INFO', `Diagnostic Carte Choroplèthe: ${currentBoundaryGeojson.features.length} entité(s) GeoJSON chargées (Métrique: ${metric})`, 'explorer.js', 'renderChoroplethLayer');
+
+        function fixUtf8Encoding(str) {
+            if (!str || typeof str !== 'string') return str || '';
+            if (str.includes('Ã') || str.includes('Â')) {
+                try {
+                    return decodeURIComponent(escape(str));
+                } catch (e) {
+                    return str;
+                }
+            }
+            return str;
+        }
+
+        function normCode(str) {
+            if (str === null || str === undefined) return '';
+            let s = str.toString().trim().toUpperCase();
+            if (s.length === 1 && !isNaN(s)) s = '0' + s;
+            if (s.length === 4 && !isNaN(s)) s = '0' + s;
+            return s;
+        }
+
+        const entityCounts = new Map();
+        const entityDetails = new Map();
+        let unmappedProceduresCount = 0;
+
+        currentBoundaryGeojson.features.forEach((feature, idx) => {
+            const props = feature.properties || {};
+            const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
+            const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+            const rawNom = props.nom_comm || props.nom_dept || props.NOM_DEP || props.NOM_COM || props.nom || props.insee_dep || `Zone ${idx + 1}`;
+            const nom = fixUtf8Encoding(rawNom);
+
+            const featureKey = codeInsee || codeDept || `feat_${idx}`;
+            entityCounts.set(featureKey, 0);
+            entityDetails.set(featureKey, {
+                nom: nom,
+                codeDept: codeDept,
+                codeInsee: codeInsee,
+                total: 0,
+                pej: 0,
+                pve: 0,
+                controles: 0
+            });
+        });
+
+        function pointInPolyRing(pt, ring) {
+            const x = pt[0], y = pt[1];
+            let inside = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                const xi = ring[i][0], yi = ring[i][1];
+                const xj = ring[j][0], yj = ring[j][1];
+                const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        function pointInFeatureGeom(pt, feature) {
+            if (!feature || !feature.geometry) return false;
+            const geom = feature.geometry;
+            if (geom.type === 'Polygon') {
+                return pointInPolyRing(pt, geom.coordinates[0]);
+            } else if (geom.type === 'MultiPolygon') {
+                return geom.coordinates.some(poly => pointInPolyRing(pt, poly[0]));
+            }
+            return false;
+        }
+
+        if (isControles) {
+            (activePoints || []).forEach(pt => {
+                const rawDept = pt.code_dept || pt.insee_dep || (pt.code_insee ? pt.code_insee.toString().trim().substring(0, 2) : '');
+                const ptDept = normCode(rawDept);
+                const ptInsee = normCode(pt.code_insee || pt.insee_comm || pt.insee_com);
+
+                let matched = false;
+                for (const [key, details] of entityDetails.entries()) {
+                    const matchInsee = details.codeInsee && ptInsee && details.codeInsee === ptInsee;
+                    const matchDept = !details.codeInsee && details.codeDept && ptDept && details.codeDept === ptDept;
+                    if (matchInsee || matchDept) {
+                        details.controles++;
+                        details.total++;
+                        entityCounts.set(key, details.total);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    const px = parseFloat(pt.x), py = parseFloat(pt.y);
+                    if (!isNaN(px) && !isNaN(py) && px !== 0 && py !== 0) {
+                        for (let i = 0; i < currentBoundaryGeojson.features.length; i++) {
+                            const feat = currentBoundaryGeojson.features[i];
+                            if (pointInFeatureGeom([px, py], feat)) {
+                                const props = feat.properties || {};
+                                const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
+                                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                                const key = codeInsee || codeDept || `feat_${i}`;
+                                const details = entityDetails.get(key);
+                                if (details) {
+                                    details.controles++;
+                                    details.total++;
+                                    entityCounts.set(key, details.total);
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            (activeProcedures || []).forEach(p => {
+                const ptype = (p.type || '').toUpperCase();
+                if (!ptype.includes('PEJ') && !ptype.includes('PVE')) return;
+
+                const rawDept = p.code_dept || p.insee_dep || (p.code_insee ? p.code_insee.toString().trim().substring(0, 2) : '');
+                const pDept = normCode(rawDept);
+                const pInsee = normCode(p.code_insee || p.insee_comm || p.insee_com);
+
+                let matched = false;
+                for (const [key, details] of entityDetails.entries()) {
+                    const matchInsee = details.codeInsee && pInsee && details.codeInsee === pInsee;
+                    const matchDept = !details.codeInsee && details.codeDept && pDept && details.codeDept === pDept;
+                    if (matchInsee || matchDept) {
+                        details.total++;
+                        if (ptype.includes('PEJ')) details.pej++;
+                        if (ptype.includes('PVE')) details.pve++;
+                        entityCounts.set(key, details.total);
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched) {
+                    const px = parseFloat(p.x), py = parseFloat(p.y);
+                    if (!isNaN(px) && !isNaN(py) && px !== 0 && py !== 0) {
+                        for (let i = 0; i < currentBoundaryGeojson.features.length; i++) {
+                            const feat = currentBoundaryGeojson.features[i];
+                            if (pointInFeatureGeom([px, py], feat)) {
+                                const props = feat.properties || {};
+                                const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
+                                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                                const key = codeInsee || codeDept || `feat_${i}`;
+                                const details = entityDetails.get(key);
+                                if (details) {
+                                    details.total++;
+                                    if (ptype.includes('PEJ')) details.pej++;
+                                    if (ptype.includes('PVE')) details.pve++;
+                                    entityCounts.set(key, details.total);
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    unmappedProceduresCount++;
+                }
+            });
+        }
+
+        const counts = Array.from(entityCounts.values());
+        const nonZeroCounts = counts.filter(c => c > 0).sort((a, b) => a - b);
+        const maxVal = nonZeroCounts.length > 0 ? nonZeroCounts[nonZeroCounts.length - 1] : 0;
+
+        const q = (pct) => nonZeroCounts.length > 0 ? nonZeroCounts[Math.min(nonZeroCounts.length - 1, Math.floor(nonZeroCounts.length * pct))] : 0;
+        const t1 = q(0.20), t2 = q(0.40), t3 = q(0.60), t4 = q(0.80);
+
+        const paletteControles = ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'];
+        const paletteInfractions = ['#f3e8ff', '#d8b4fe', '#a855f7', '#7e22ce', '#581c87'];
+        const activePalette = isControles ? paletteControles : paletteInfractions;
+
+        function getColor(val) {
+            if (val === 0) return 'transparent';
+            if (val <= t1) return activePalette[0];
+            if (val <= t2) return activePalette[1];
+            if (val <= t3) return activePalette[2];
+            if (val <= t4) return activePalette[3];
+            return activePalette[4];
+        }
+
+        choroplethLayer = L.geoJSON(currentBoundaryGeojson, {
+            style: function(feature) {
+                const props = feature.properties || {};
+                const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
+                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                const featureKey = codeInsee || codeDept || `feat_${currentBoundaryGeojson.features.indexOf(feature)}`;
+
+                const count = entityCounts.get(featureKey) || 0;
+                const isZero = (count === 0);
+
+                return {
+                    fillColor: isZero ? '#e2e8f0' : getColor(count),
+                    fillOpacity: isZero ? 0.15 : 0.75,
+                    stroke: false,
+                    weight: 0
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties || {};
+                const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
+                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                const featureKey = codeInsee || codeDept || `feat_${currentBoundaryGeojson.features.indexOf(feature)}`;
+                const info = entityDetails.get(featureKey) || { nom: 'Zone', total: 0, pej: 0, pve: 0, controles: 0 };
+
+                let tooltipText = `<strong>${fixUtf8Encoding(info.nom)}</strong>`;
+                if (codeDept) tooltipText += ` (${codeDept})`;
+                tooltipText += `<br>`;
+
+                if (isControles) {
+                    tooltipText += `📊 Contrôles : <strong>${info.total}</strong>`;
+                } else {
+                    tooltipText += `⚖️ Infractions : <strong>${info.total}</strong><br>`;
+                    tooltipText += `<span style="font-size:10px; color:#475569;">• PEJ : ${info.pej} | PVe : ${info.pve}</span>`;
+                }
+
+                layer.bindTooltip(tooltipText, { sticky: true });
+
+                layer.on({
+                    mouseover: function(e) {
+                        const l = e.target;
+                        l.setStyle({ weight: 3, color: '#0f172a', fillOpacity: 0.85 });
+                        l.bringToFront();
+                    },
+                    mouseout: function(e) {
+                        if (choroplethLayer) choroplethLayer.resetStyle(e.target);
+                    },
+                    click: function(e) {
+                        if (codeInsee) {
+                            const inputCommune = document.getElementById('commune');
+                            if (inputCommune) {
+                                inputCommune.value = info.nom;
+                                triggerDataUpdate();
+                            }
+                        } else if (codeDept) {
+                            const inputDept = document.getElementById('echelle-code');
+                            if (inputDept) {
+                                inputDept.value = codeDept;
+                                triggerDataUpdate();
+                            }
+                        }
+                    }
+                });
+            }
+        }).addTo(map);
+
+        const legendTitle = document.getElementById('choropleth-legend-title');
+        const legendItems = document.getElementById('choropleth-legend-items');
+
+        if (legendTitle) {
+            legendTitle.textContent = 'Légende';
+        }
+
+        if (legendItems) {
+            legendItems.innerHTML = '';
+            legendItems.innerHTML += `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 14px; height: 14px; background: #e2e8f0; border: 1px solid #cbd5e1; opacity: 0.5; border-radius: 2px;"></span>
+                    <span>0 ${isControles ? 'contrôle' : 'infraction'}</span>
+                </div>
+            `;
+
+            if (maxVal > 0) {
+                const steps = [
+                    { label: `1 - ${t1 || 1}`, color: activePalette[0] },
+                    { label: `${(t1 || 1) + 1} - ${t2 || (t1 + 1)}`, color: activePalette[1] },
+                    { label: `${(t2 || 2) + 1} - ${t3 || (t2 + 1)}`, color: activePalette[2] },
+                    { label: `${(t3 || 3) + 1} - ${t4 || (t3 + 1)}`, color: activePalette[3] },
+                    { label: `> ${t4 || 4}`, color: activePalette[4] }
+                ];
+
+                const uniqueSteps = [];
+                const seenLabels = new Set();
+                steps.forEach(s => {
+                    if (!seenLabels.has(s.label)) {
+                        seenLabels.add(s.label);
+                        uniqueSteps.push(s);
+                    }
+                });
+
+                uniqueSteps.forEach(s => {
+                    legendItems.innerHTML += `
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="width: 14px; height: 14px; background: ${s.color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 2px;"></span>
+                            <span>${s.label}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            if (!isControles && unmappedProceduresCount > 0) {
+                legendItems.innerHTML += `
+                    <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b;">
+                        Infractions non localisées à la commune : <strong>${unmappedProceduresCount}</strong>
+                    </div>
+                `;
+            }
+        }
+    }
 
     // État des filtres de la légende (Activé par défaut)
     window.legendFilters = {
@@ -1869,6 +2263,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateLegend() {
         if (!mapLegendDiv) return;
+
+        const activeMapMode = document.querySelector('input[name="map-mode"]:checked')?.value || 'markers';
+        if (activeMapMode === 'choropleth' || activeMapMode === 'heatmap') {
+            mapLegendDiv.style.display = 'none';
+            return;
+        }
 
         if (currentMapMode === 'usagers') {
             mapLegendDiv.style.display = 'block';
@@ -2143,10 +2543,11 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         };
 
-        // Helper fetch unique avec mise en cache LRU
+        // Helper fetch unique avec journalisation systématique
         const fetchOne = (params) => {
             const cacheKey = JSON.stringify(params);
-            return getOrSetCache(cacheKey, () => fetch('/api/data', {
+            sendClientLog('INFO', `Demande de données /api/data (Échelle: ${params.echelle}, Code: ${params.code}, Période: ${params['date-deb']} -> ${params['date-fin']})`, 'explorer.js', 'fetchOne');
+            return fetch('/api/data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: cacheKey
@@ -2154,10 +2555,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) {
                     let errMsg = 'Erreur API';
                     try { const d = await response.json(); if (d.error) errMsg += ' : ' + d.error; } catch (e) { }
+                    sendClientLog('ERROR', `Échec HTTP ${response.status} sur /api/data : ${errMsg}`, 'explorer.js', 'fetchOne');
                     throw new Error(errMsg);
                 }
-                return response.json();
-            }));
+                const data = await response.json();
+                const ptsCount = (data.points || []).length;
+                const procCount = (data.procedures || []).length;
+                sendClientLog('INFO', `Réponse /api/data reçue pour code ${params.code}: ${ptsCount} point(s) de contrôle, ${procCount} procédure(s)`, 'explorer.js', 'fetchOne');
+                return data;
+            }).catch(err => {
+                sendClientLog('ERROR', `Erreur réseau /api/data : ${err.message}`, 'explorer.js', 'fetchOne');
+                throw err;
+            });
         };
 
         // Résolution des promises selon le mode actif
@@ -2338,6 +2747,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (boundaryLayer) {
                     if (boundaryLayer.maskLayer) map.removeLayer(boundaryLayer.maskLayer);
+                    if (boundaryLayer.outerLayer) map.removeLayer(boundaryLayer.outerLayer);
                     map.removeLayer(boundaryLayer);
                     boundaryLayer = null;
                 }
@@ -2509,7 +2919,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         map.removeLayer(heatmapLayer);
                         heatmapLayer = null;
                     }
-                    if (!map.hasLayer(clusterParent)) {
+                    const selectedMapMode = document.querySelector('input[name="map-mode"]:checked')?.value || 'markers';
+                    const isHeatmapOrChoropleth = (selectedMapMode === 'heatmap' || selectedMapMode === 'choropleth');
+                    if (isHeatmapOrChoropleth) {
+                        if (map.hasLayer(clusterParent)) map.removeLayer(clusterParent);
+                    } else if (!map.hasLayer(clusterParent)) {
                         clusterParent.addTo(map);
                     }
                 }
@@ -2635,59 +3049,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Plus de addLayers global — déjà injecté dans les sous-groupes cloisonnés ci-dessus
 
                 // Render boundary if available
-                let combinedGeojson = { type: "FeatureCollection", features: [] };
+                currentBoundaryGeojson = { type: "FeatureCollection", features: [] };
+                let currentPerimeterGeojson = { type: "FeatureCollection", features: [] };
                 let hasGeojson = false;
 
                 if (isSpatial && resGeoUnits) {
                     resGeoUnits.forEach(res => {
                         if (res && res.geojson) {
                             if (res.geojson.type === "FeatureCollection") {
-                                combinedGeojson.features.push(...res.geojson.features);
+                                currentBoundaryGeojson.features.push(...res.geojson.features);
                             } else {
-                                combinedGeojson.features.push(res.geojson);
+                                currentBoundaryGeojson.features.push(res.geojson);
                             }
                             hasGeojson = true;
                         }
+                        if (res && res.perimeter_geojson) {
+                            if (res.perimeter_geojson.type === "FeatureCollection") {
+                                currentPerimeterGeojson.features.push(...res.perimeter_geojson.features);
+                            } else {
+                                currentPerimeterGeojson.features.push(res.perimeter_geojson);
+                            }
+                        }
                     });
                 } else if (resN && resN.geojson) {
-                    combinedGeojson = resN.geojson;
+                    currentBoundaryGeojson = resN.geojson;
+                    currentPerimeterGeojson = resN.perimeter_geojson || resN.geojson;
                     hasGeojson = true;
                 }
 
+                if (!currentPerimeterGeojson.features || currentPerimeterGeojson.features.length === 0) {
+                    currentPerimeterGeojson = currentBoundaryGeojson;
+                }
+
                 if (hasGeojson) {
-                    boundaryLayer = L.geoJSON(combinedGeojson, {
+                    // 1. boundaryLayer : Affiche les limites administratives officielles prescrites par l'échelle (perimeter_geojson)
+                    // Discret, élégant et parfaitement intégré à la charte de l'explorateur (1.8px, #003A76, opacité 0.8)
+                    boundaryLayer = L.geoJSON(currentPerimeterGeojson, {
                         interactive: false,
                         style: function(feature) {
                             let color = '#003A76';
+                            let weight = 1.8;
+                            let opacity = 0.8;
                             let fillColor = 'transparent';
-                            let weight = 2.5;
                             let fillOpacity = 0;
                             let dashArray = null;
 
-                            if (feature.properties && feature.properties.zone_type) {
+                            if (feature && feature.properties && feature.properties.zone_type) {
                                 if (feature.properties.zone_type === 'risque') {
-                                    color = '#EAB308'; // Jaune
+                                    color = '#EAB308';
                                     fillColor = '#EAB308';
                                     weight = 2;
                                     fillOpacity = 0.2;
                                 } else if (feature.properties.zone_type === 'infectee') {
-                                    color = '#F97316'; // Orange
+                                    color = '#F97316';
                                     fillColor = '#F97316';
                                     weight = 2;
                                     fillOpacity = 0.3;
                                     dashArray = '5, 5';
                                 } else if (feature.properties.zone_type === 'interdiction') {
-                                    color = '#EF4444'; // Rouge
+                                    color = '#EF4444';
                                     fillColor = '#EF4444';
                                     weight = 2;
                                     fillOpacity = 0.4;
                                     dashArray = '10, 5';
                                 }
                             }
+
                             return {
                                 color: color,
                                 weight: weight,
-                                opacity: 0.85,
+                                opacity: opacity,
                                 fillColor: fillColor,
                                 fillOpacity: fillOpacity,
                                 dashArray: dashArray,
@@ -2696,7 +3127,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }).addTo(map);
 
-                    // Création du masque inversé (estompage du reste de la carte)
+                    // 2. Masque laiteux d'estompage du fond de carte autour du périmètre
                     const worldCoords = [
                         [85, -360], [85, 360], [-85, 360], [-85, -360]
                     ];
@@ -2707,13 +3138,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             let latlngs = layer.getLatLngs();
                             if (!latlngs || latlngs.length === 0) return;
 
-                            // Analyse de la profondeur du tableau pour déterminer Polygon vs MultiPolygon
                             if (Array.isArray(latlngs[0]) && latlngs[0].length > 0) {
                                 if (latlngs[0][0] instanceof L.LatLng) {
-                                    // C'est un Polygon simple : latlngs[0] est l'anneau extérieur
                                     maskRings.push(latlngs[0]);
                                 } else if (Array.isArray(latlngs[0][0])) {
-                                    // C'est un MultiPolygon : latlngs contient plusieurs polygones
                                     latlngs.forEach(poly => {
                                         if (poly.length > 0) {
                                             maskRings.push(poly[0]);
@@ -2727,7 +3155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     boundaryLayer.maskLayer = L.polygon(maskRings, {
                         color: 'transparent',
                         fillColor: '#ffffff',
-                        fillOpacity: 0.65, // Transparence laiteuse
+                        fillOpacity: 0.60,
                         interactive: false
                     }).addTo(map);
                 }
@@ -2750,6 +3178,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         map.setView([46.2276, 2.2137], 6);
                     }
                 }
+
+                renderChoroplethLayer();
 
                 // --- CHARTS GENERATION ---
                 const chartData = resN.charts || {};
@@ -3688,31 +4118,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Gestion du basculement du mode carte (Points / Chaleur)
+    // Gestion du basculement du mode carte (Points / Chaleur / Choroplèthe)
     document.querySelectorAll('input[name="map-mode"]').forEach(radio => {
         radio.addEventListener('change', () => {
-            const isHeatmapMode = radio.value === 'heatmap';
+            const selectedMode = radio.value;
+            const isHeatmapMode = (selectedMode === 'heatmap');
+            const isChoroplethMode = (selectedMode === 'choropleth');
+
             const allParents = [
                 clusterParent, pejParent, paParent, pveParent,
                 clusterParentN1, pejParentN1, paParentN1, pveParentN1
             ];
 
-            if (isHeatmapMode) {
+            if (isHeatmapMode || isChoroplethMode) {
                 allParents.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
                 try { if (typeof markersClusterGroup !== 'undefined' && map.hasLayer(markersClusterGroup)) map.removeLayer(markersClusterGroup); } catch (e) { }
+            } else {
+                allParents.forEach(p => { if (!map.hasLayer(p)) p.addTo(map); });
+                try { if (typeof markersClusterGroup !== 'undefined' && !map.hasLayer(markersClusterGroup)) markersClusterGroup.addTo(map); } catch (e) { }
+            }
 
+            if (isHeatmapMode) {
                 const heatData = getFilteredHeatmapData();
-
-                if (heatmapLayer) {
-                    map.removeLayer(heatmapLayer);
-                }
+                if (heatmapLayer) map.removeLayer(heatmapLayer);
 
                 const dynamicMax = getDynamicMaxForZoom(map, heatData, 25);
-
                 heatmapLayer = L.heatLayer(heatData, {
                     radius: 25,
                     blur: 18,
-                    maxZoom: map.getZoom(), // Dynamic zoom recalibration
+                    maxZoom: map.getZoom(),
                     max: dynamicMax,
                     gradient: HEATMAP_GRADIENT
                 }).addTo(map);
@@ -3721,11 +4155,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     map.removeLayer(heatmapLayer);
                     heatmapLayer = null;
                 }
-                allParents.forEach(p => { if (!map.hasLayer(p)) p.addTo(map); });
-                try { if (typeof markersClusterGroup !== 'undefined' && !map.hasLayer(markersClusterGroup)) markersClusterGroup.addTo(map); } catch (e) { }
             }
+
+            if (typeof boundaryLayer !== 'undefined' && boundaryLayer && typeof window.getBoundaryStyle === 'function') {
+                boundaryLayer.setStyle(window.getBoundaryStyle);
+            }
+
+            renderChoroplethLayer();
+            saveStateToLocalStorage();
+            updateURLWithState();
         });
     });
+
+    const choroplethMetricSelect = document.getElementById('choropleth-metric');
+    if (choroplethMetricSelect) {
+        choroplethMetricSelect.addEventListener('change', () => {
+            renderChoroplethLayer();
+            saveStateToLocalStorage();
+            updateURLWithState();
+        });
+    }
 
     // --- GESTION DU LOCAL STORAGE & DU PERMALIEN (LOT 3) ---
     function getFiltersState() {
@@ -3742,7 +4191,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'commune': inputCommune ? inputCommune.value.trim() : '',
             'compare-active': compareActiveCheck ? compareActiveCheck.checked : false,
             'compare-date-deb': compareDateDebEl ? compareDateDebEl.value : '',
-            'compare-date-fin': compareDateFinEl ? compareDateFinEl.value : ''
+            'compare-date-fin': compareDateFinEl ? compareDateFinEl.value : '',
+            'map-mode': document.querySelector('input[name="map-mode"]:checked')?.value || 'markers',
+            'choropleth-metric': document.getElementById('choropleth-metric')?.value || 'controles'
         };
     }
 
@@ -3774,6 +4225,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (state['compare-date-fin'] && compareDateFinEl) {
             compareDateFinEl.value = state['compare-date-fin'];
+        }
+
+        if (state['map-mode']) {
+            const radio = document.querySelector(`input[name="map-mode"][value="${state['map-mode']}"]`);
+            if (radio) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
+            }
+        }
+        if (state['choropleth-metric'] && document.getElementById('choropleth-metric')) {
+            document.getElementById('choropleth-metric').value = state['choropleth-metric'];
+            renderChoroplethLayer();
         }
     }
 
@@ -4252,25 +4715,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Délai pour garantir que le Canvas et les tuiles Leaflet ont fini de se redessiner
                     setTimeout(() => {
                         // FIX: Contourner le bug des navigateurs qui n'impriment pas les <canvas> fraîchement modifiés
-                        // On convertit le canvas contenant les limites administratives en une <img> statique garantie d'imprimer !
+                        // On forcer d'abord la mise à jour synchrone du renderer vectoriel Canvas de Leaflet
+                        if (typeof map !== 'undefined' && map) {
+                            if (map._renderer && typeof map._renderer._update === 'function') {
+                                try { map._renderer._update(); } catch (e) { }
+                            }
+                            map.eachLayer(l => {
+                                if (l && l._renderer && typeof l._renderer._update === 'function') {
+                                    try { l._renderer._update(); } catch (e) { }
+                                }
+                            });
+                        }
+
+                        // On convertit le canvas contenant le choroplèthe et les limites administratives en une <img> statique garantie d'imprimer !
                         const canvas = document.querySelector('.leaflet-overlay-pane canvas');
                         if (canvas) {
                             try {
-                                const img = document.createElement('img');
-                                img.src = canvas.toDataURL('image/png');
-                                img.style.position = 'absolute';
-                                img.style.top = canvas.style.top;
-                                img.style.left = canvas.style.left;
-                                // CRUCIAL : Cloner le transform pour éviter le décalage !
-                                img.style.transform = canvas.style.transform;
-                                img.style.transformOrigin = canvas.style.transformOrigin;
-                                img.style.width = canvas.style.width;
-                                img.style.height = canvas.style.height;
-                                img.style.zIndex = '9999';
-                                img.className = 'print-canvas-img';
-                                canvas.parentElement.appendChild(img);
-                                canvas.dataset.origOpacity = canvas.style.opacity;
-                                canvas.style.opacity = '0'; // Cacher l'original
+                                const dataUrl = canvas.toDataURL('image/png');
+                                if (dataUrl && dataUrl.length > 100) {
+                                    const img = document.createElement('img');
+                                    img.src = dataUrl;
+                                    img.style.position = 'absolute';
+                                    img.style.top = canvas.style.top || '0px';
+                                    img.style.left = canvas.style.left || '0px';
+                                    // CRUCIAL : Cloner le transform pour éviter le décalage !
+                                    img.style.transform = canvas.style.transform;
+                                    img.style.transformOrigin = canvas.style.transformOrigin;
+                                    img.style.width = canvas.style.width || (canvas.width + 'px');
+                                    img.style.height = canvas.style.height || (canvas.height + 'px');
+                                    img.style.zIndex = '9999';
+                                    img.className = 'print-canvas-img';
+                                    canvas.parentElement.appendChild(img);
+                                    canvas.dataset.origOpacity = canvas.style.opacity;
+                                    canvas.style.opacity = '0'; // Cacher l'original uniquement si l'image est valide
+                                }
                             } catch (e) {
                                 console.error('Erreur conversion canvas print:', e);
                             }
@@ -4284,3 +4762,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+

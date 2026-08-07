@@ -34,11 +34,10 @@ profils_compatibles:
   - pnf_v2
 
 title:
-  line1: "Bilan des activités de police de l'environnement\nParc national de forêts"
-  line2_mode: auto
-
-options:
-  tub: false
+  line1: "Bilan des activités de police\nde l'environnement de l'OFB"
+  line2_mode: fixed
+  line2_fixed: "Parc National de Forêts"
+  line3_mode: none
 
 sections:
   order:
@@ -58,6 +57,10 @@ sections:
     - sec33
     - sec5
     - sec6
+  perimetres:
+    aoa: "Synthèse globale Aire Optimale d'Adhésion (AOA)"
+    coeur: "Focus dédié Cœur de Parc National"
+    departements: "Fiches synthétiques territoriales (Côte-d'Or & Haute-Marne)"
 
 cartographie:
   items_masques_brochure:
@@ -78,10 +81,10 @@ layout_grid:
               widget:
                 type: stat_kpi_grid
         - columns:
-            - width: "50%"
+            - width: "55%"
               widget:
                 type: map
-            - width: "50%"
+            - width: "45%"
               widget:
                 type: section_group
                 sections: [sec1, sec2]
@@ -94,3 +97,20 @@ layout_grid:
             - width: "50%"
               widget:
                 type: evolution_chart
+
+fiches_departementales:
+  page_break_before: true
+  strict_a4_single_page: true
+
+sections_enrichies:
+  synthese_regionale:
+    afficher_donut_usagers: false
+    legend_fontsize_donut: 9.0
+    carte_choroplethe:
+      width_ratio: 0.95
+      max_h: 290.0
+      max_span_factor: 0.51
+      cbar_shrink: 0.35
+      cbar_title_fontsize: 7.0
+      cbar_labelsize: 6.0
+

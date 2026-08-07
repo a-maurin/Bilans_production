@@ -246,16 +246,30 @@ def _generate_region_choropleth(
     out_dir: Path | None = None,
     profile_id: str = "global",
     total_unique_ops: int | None = None,
+    cbar_shrink: float = 0.35,
+    cbar_title_fontsize: float = 7.0,
+    cbar_labelsize: float = 6.0,
+    max_span_factor: float = 0.51,
+    commune_counts: dict[str, int] | None = None,
+    carto_cfg: dict[str, Any] | None = None,
 ) -> Path:
-    """Génère la carte choroplèthe régionale (aplat par département selon le volume d'opérations)."""
+    """Génère la carte choroplèthe de la pression de contrôle (aplat par commune ou département)."""
     out_path = tmp_dir / img_name
     fig, ax = plt.subplots(figsize=(5.8 * figure_scale, 3.6 * figure_scale), dpi=150)
     fig.patch.set_facecolor('white')
     ax.set_facecolor('#ffffff')
     ax.set_aspect('equal')
     
+    cfg = carto_cfg or {}
+    titre_carte = cfg.get("titre", "Carte de la pression de contrôle par commune")
+    cbar_title_text = cfg.get("cbar_title", "Pression de contrôle (localisations/commune)")
+    zero_color = cfg.get("zero_color", "#f1f5f9")
+    commune_ec = cfg.get("commune_edgecolor", "#cbd5e1")
+    dept_ec = cfg.get("dept_edgecolor", "#003366")
+    show_labels = cfg.get("afficher_etiquettes_communes", False)
+
     try:
-        from core.cartographie.pochoir_helper import load_department_gdf
+        from core.cartographie.pochoir_helper import load_department_gdf, load_communes_gdf
         from core.common.chargeurs_donnees import load_pnf_aoa_gdf, load_pnf_coeur_gdf
         from core.chemins_projet import PROJECT_ROOT
         
@@ -319,9 +333,11 @@ def _generate_region_choropleth(
                     except Exception:
                         pass
 
-                    cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=0.70, aspect=18)
-                    cbar.ax.set_title('Pression de contrôle', fontsize=9.0, color='#003366', pad=4)
-                    cbar.ax.tick_params(labelsize=8.0)
+                    cbar = fig.colorbar(hb, ax=ax, orientation='horizontal', pad=0.02, shrink=cbar_shrink, aspect=20)
+                    cbar.ax.set_title(cbar_title_text, fontsize=cbar_title_fontsize, color='#003366', pad=2)
+                    import matplotlib.ticker as ticker
+                    cbar.ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{int(round(x))}"))
+                    cbar.ax.tick_params(labelsize=cbar_labelsize)
 
                 if gdf_coeur is not None and not gdf_coeur.empty:
                     gdf_coeur.plot(ax=ax, facecolor='none', edgecolor='#16a34a', linewidth=1.0, linestyle='--', label='Cœur de parc')
@@ -329,9 +345,12 @@ def _generate_region_choropleth(
                 minx, miny, maxx, maxy = gdf_region.total_bounds
                 cx = (minx + maxx) / 2.0
                 cy = (miny + maxy) / 2.0
-                max_span = max(maxx - minx, maxy - miny) * 0.55
+                max_span = max(maxx - minx, maxy - miny) * max_span_factor
                 ax.set_xlim(cx - max_span, cx + max_span)
                 ax.set_ylim(cy - max_span, cy + max_span)
+
+                if titre_carte:
+                    ax.set_title(titre_carte, fontsize=8.5, color='#003366', fontweight='bold', pad=4)
 
                 ax.set_axis_off()
                 fig.tight_layout(pad=0.05)
@@ -339,8 +358,70 @@ def _generate_region_choropleth(
                 plt.close(fig)
                 return out_path
         else:
-            gdf_coeur = None
+            gdf_communes = load_communes_gdf(dept_code, project_root=PROJECT_ROOT)
             gdf_region = load_department_gdf(dept_code, project_root=PROJECT_ROOT, dissolve=False)
+
+            if gdf_communes is not None and not gdf_communes.empty:
+                counts_dict = commune_counts or {}
+                gdf_communes["insee_clean"] = gdf_communes["insee_comm"].astype(str).str.strip().str.zfill(5)
+                gdf_communes["nb_ops"] = gdf_communes["insee_clean"].map(lambda c: counts_dict.get(c, 0)).fillna(0)
+
+                # Communes sans contrôles (0) en gris très clair
+                gdf_zero = gdf_communes[gdf_communes["nb_ops"] == 0]
+                gdf_active = gdf_communes[gdf_communes["nb_ops"] > 0]
+
+                if not gdf_zero.empty:
+                    gdf_zero.plot(ax=ax, facecolor=zero_color, edgecolor=commune_ec, linewidth=0.3)
+
+                if not gdf_active.empty:
+                    p_active = gdf_active.plot(
+                        column="nb_ops",
+                        ax=ax,
+                        cmap="YlGnBu",
+                        edgecolor=commune_ec,
+                        linewidth=0.3,
+                        legend=False
+                    )
+                    # Barre de légende continue pour la pression de contrôle
+                    import matplotlib.cm as cm
+                    import matplotlib.colors as mcolors
+                    min_val = max(1, gdf_active["nb_ops"].min())
+                    max_val = max(min_val + 1, gdf_active["nb_ops"].max())
+                    norm = mcolors.Normalize(vmin=min_val, vmax=max_val)
+                    sm = cm.ScalarMappable(cmap=cm.get_cmap("YlGnBu"), norm=norm)
+                    sm._A = []
+                    cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', pad=0.02, shrink=cbar_shrink, aspect=20)
+                    cbar.ax.set_title(cbar_title_text, fontsize=cbar_title_fontsize, color='#003366', pad=2)
+                    import matplotlib.ticker as ticker
+                    cbar.ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{int(round(x))}"))
+                    cbar.ax.tick_params(labelsize=cbar_labelsize)
+                else:
+                    gdf_communes.plot(ax=ax, facecolor=zero_color, edgecolor=commune_ec, linewidth=0.3)
+
+                # Surbrillance des contours départementaux
+                if gdf_region is not None and not gdf_region.empty:
+                    gdf_region.plot(ax=ax, facecolor="none", edgecolor=dept_ec, linewidth=1.2)
+
+                if titre_carte:
+                    ax.set_title(titre_carte, fontsize=8.5, color='#003366', fontweight='bold', pad=4)
+
+                # Traitement note des contrôles hors-communes si total_unique_ops > sum(mapped)
+                total_mapped = int(gdf_communes["nb_ops"].sum())
+                total_reg = int(total_unique_ops or sum(dept_counts.values()) or 0)
+                if cfg.get("afficher_note_hors_communes", True) and total_reg > total_mapped:
+                    diff_cnt = total_reg - total_mapped
+                    ax.text(
+                        0.5, -0.05,
+                        f"* {diff_cnt} localisation(s) non rattachée(s) à une commune du périmètre",
+                        transform=ax.transAxes, ha="center", va="top",
+                        fontsize=5.5, color="#64748b", fontstyle="italic"
+                    )
+
+                ax.set_axis_off()
+                fig.tight_layout(pad=0.05)
+                fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+                plt.close(fig)
+                return out_path
 
         if gdf_region is not None and not gdf_region.empty:
             col_dep = next((c for c in gdf_region.columns if c.lower() in ("insee_dep", "num_depart", "code_dept", "insee_com")), gdf_region.columns[0])
@@ -353,26 +434,14 @@ def _generate_region_choropleth(
                 column="nb_ops",
                 ax=ax,
                 cmap="YlGnBu",
-                edgecolor="#003366",
+                edgecolor=dept_ec,
                 linewidth=0.8,
                 legend=False
             )
 
-            for _, row in gdf_region.iterrows():
-                centroid = row.geometry.centroid
-                val = int(row["nb_ops"])
-                code_d = str(row["dep_code_clean"])
-                ax.annotate(
-                    f"{code_d}\n({val})",
-                    xy=(centroid.x, centroid.y),
-                    ha="center",
-                    va="center",
-                    fontsize=5.5,
-                    fontweight="bold",
-                    color="#002b49",
-                    bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.65)
-                )
-            
+            if titre_carte:
+                ax.set_title(titre_carte, fontsize=8.5, color='#003366', fontweight='bold', pad=4)
+
             ax.set_axis_off()
             fig.tight_layout(pad=0.05)
             fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
@@ -381,6 +450,7 @@ def _generate_region_choropleth(
     except Exception:
         pass
     return out_path
+
 
 
 def render_sec_region_dashboard(ctx: Any) -> None:
@@ -450,13 +520,52 @@ def render_sec_region_dashboard(ctx: Any) -> None:
             dept_counts = df.groupby("departement")["nb_operations"].sum().to_dict()
             domain_counts = df.groupby("domaine")["nb_operations"].sum().to_dict()
 
+    # Calcul des localisations de contrôle par commune (commune_counts)
+    commune_counts: dict[str, int] = {}
+    for df_src in (getattr(ctx, "point", None), getattr(ctx, "pej", None), getattr(ctx, "pve", None)):
+        if df_src is not None and not df_src.empty:
+            col = next((c for c in ("insee_comm", "insee_com", "code_insee", "INSEE_COM", "insee", "INF-INSEE") if c in df_src.columns), None)
+            if col:
+                s_counts = df_src[col].astype(str).str.strip().str.zfill(5).value_counts()
+                for code_insee, val in s_counts.items():
+                    if code_insee and len(code_insee) == 5 and code_insee.isdigit():
+                        commune_counts[code_insee] = commune_counts.get(code_insee, 0) + int(val)
+
     body_style = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
+
+    # Extraire les options visuelles configurées dans le gabarit YAML
+    sec_enr = (getattr(ctx, "presentation_cfg", {}) or {}).get("sections_enrichies", {}).get("synthese_regionale", {})
+    carto_cfg = sec_enr.get("carte_choroplethe", {})
+    cbar_shrink = float(carto_cfg.get("cbar_shrink", 0.35))
+    cbar_title_fs = float(carto_cfg.get("cbar_title_fontsize", 7.0))
+    cbar_lbl_fs = float(carto_cfg.get("cbar_labelsize", 6.0))
+    max_span_factor = float(carto_cfg.get("max_span_factor", 0.51))
+    w_ratio = float(carto_cfg.get("width_ratio", 0.95))
+    max_h_carto = float(carto_cfg.get("max_h", 290.0))
+    legend_fs_donut = float(sec_enr.get("legend_fontsize_donut", 9.0))
+    show_reg_usg = sec_enr.get("afficher_donut_usagers", False)
 
     # Visuel 1 : Carte choroplèthe régionale centrée en haut
     total_unique = int(ctx.nb_ops) if ctx.nb_ops else None
-    carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale, out_dir=ctx.out_dir, profile_id=prof_id, total_unique_ops=total_unique)
+    carto_path = _generate_region_choropleth(
+        dept_counts,
+        ctx.dept_code,
+        ctx.tmp_dir,
+        "region_choropleth.png",
+        figure_scale=ctx.figure_scale,
+        out_dir=ctx.out_dir,
+        profile_id=prof_id,
+        total_unique_ops=total_unique,
+        cbar_shrink=cbar_shrink,
+        cbar_title_fontsize=cbar_title_fs,
+        cbar_labelsize=cbar_lbl_fs,
+        max_span_factor=max_span_factor,
+        commune_counts=commune_counts,
+        carto_cfg=carto_cfg,
+    )
+
     if carto_path.exists():
-        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.864, "Carte régionale indisponible", ctx.builder.styles, max_h=260.0)
+        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * w_ratio, "Carte régionale indisponible", ctx.builder.styles, max_h=max_h_carto)
     else:
 
         img_carto = Paragraph("<para align='center'><i>Carte régionale non disponible</i></para>", body_style)
@@ -500,27 +609,26 @@ def render_sec_region_dashboard(ctx: Any) -> None:
         ctx.builder.story.append(Spacer(1, 2))
         ctx.builder.story.append(Paragraph(note_txt, style_note))
 
-    ctx.builder.add_spacer(4)
+    ctx.builder.add_spacer(2)
 
     # Visuel 2 : Diagrammes Donut par Domaine et/ou Type d'Usager
-    sec_enr = (getattr(ctx, "presentation_cfg", {}) or {}).get("sections_enrichies", {})
-    show_reg_usg = sec_enr.get("synthese_regionale", {}).get("afficher_donut_usagers", False)
-
     domain_counts_filtered = {k: int(v) for k, v in domain_counts.items() if int(v) > 0}
     if domain_counts_filtered and sum(domain_counts_filtered.values()) > 0:
-        legend_ncol_dom = 1 if show_reg_usg else 2
+        legend_ncol_dom = 1
+        ref_pie_fs = getattr(ctx, "ref_pie_fs", 1.22)
+        ref_pie_w = getattr(ctx, "ref_pie_w", 0.78)
         donut_path = chart_pie(
             domain_counts_filtered,
             "Répartition par Domaine de contrôle",
             ctx.tmp_dir,
             "region_domaines_donut.png",
-            figure_scale=ctx.figure_scale,
+            figure_scale=ref_pie_fs,
             donut=True,
             legend_ncol=legend_ncol_dom,
-            legend_fontsize=9.0 if show_reg_usg else 8.5
+            legend_fontsize=legend_fs_donut
         )
-        dom_w = ctx.avail_w * 0.46 if show_reg_usg else ctx.avail_w * 0.78
-        img_donut_dom = _create_proportional_rl_image(Path(donut_path), dom_w, "Graphique domaines indisponible", ctx.builder.styles, max_h=220.0 if show_reg_usg else 240.0)
+        dom_w = ctx.avail_w * 0.46 if show_reg_usg else ctx.avail_w * ref_pie_w
+        img_donut_dom = _create_proportional_rl_image(Path(donut_path), dom_w, "Graphique domaines indisponible", ctx.builder.styles, max_h=220.0 if show_reg_usg else 250.0)
     else:
         img_donut_dom = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
 
@@ -545,10 +653,10 @@ def render_sec_region_dashboard(ctx: Any) -> None:
                 "Répartition par Type d'usager",
                 ctx.tmp_dir,
                 "region_usagers_donut.png",
-                figure_scale=ctx.figure_scale,
+                figure_scale=getattr(ctx, "ref_pie_fs", 1.22),
                 donut=True,
                 legend_ncol=1,
-                legend_fontsize=9.0
+                legend_fontsize=legend_fs_donut
             )
 
             img_donut_usg = _create_proportional_rl_image(Path(donut_usg_path), ctx.avail_w * 0.46, "Graphique usagers indisponible", ctx.builder.styles, max_h=220.0)

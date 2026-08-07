@@ -65,6 +65,84 @@ _PRELOAD_LOGS = []
 _PRELOAD_STATUS = "loading"
 _preload_lock = threading.Lock()
 
+_SERVER_LOG_FILE = SRC_DIR / "logs" / "serveur_web.log"
+_server_log_lock = threading.Lock()
+_MAX_SERVER_RUNS = 3
+
+def init_server_logger(log_file: Path | str | None = None) -> Path:
+    """
+    Initialise le fichier de log de débogage du serveur web.
+    Conserve les 2 derniers runs précédents du serveur (afin que le nouveau run soit le 3e max)
+    et écrit la balise d'en-tête === START RUN ... ===.
+    """
+    target_log = Path(log_file) if log_file else _SERVER_LOG_FILE
+    target_log.parent.mkdir(parents=True, exist_ok=True)
+    
+    with _server_log_lock:
+        existing_runs = []
+        if target_log.exists():
+            try:
+                content = target_log.read_text(encoding="utf-8")
+                raw_chunks = content.split("=== START RUN ")
+                for chunk in raw_chunks:
+                    if chunk.strip():
+                        existing_runs.append("=== START RUN " + chunk)
+            except Exception:
+                existing_runs = []
+        
+        max_previous = max(0, _MAX_SERVER_RUNS - 1)
+        if len(existing_runs) > max_previous:
+            existing_runs = existing_runs[-max_previous:]
+        
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_header = f"=== START RUN [{now_str}] (PID: {os.getpid()}) ===\n"
+        
+        new_content = "".join(existing_runs)
+        if new_content and not new_content.endswith("\n\n"):
+            if not new_content.endswith("\n"):
+                new_content += "\n"
+            new_content += "\n"
+        new_content += new_header
+        
+        target_log.write_text(new_content, encoding="utf-8")
+    return target_log
+
+def log_server(msg: str, level: str = "INFO", log_file: Path | str | None = None) -> None:
+    """
+    Inscrit un message horodaté dans le fichier de log du serveur et sur stdout.
+    """
+    target_log = Path(log_file) if log_file else _SERVER_LOG_FILE
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_msg = f"[{now_str}] [{level}] {msg}\n"
+    
+    with _server_log_lock:
+        try:
+            target_log.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_log, "a", encoding="utf-8") as f:
+                f.write(formatted_msg)
+        except Exception:
+            pass
+
+def finalize_server_logger(reason: str = "Stopped", log_file: Path | str | None = None) -> None:
+    """
+    Inscrit la balise de fin de run === END RUN ... === dans le log du serveur.
+    """
+    target_log = Path(log_file) if log_file else _SERVER_LOG_FILE
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    footer = f"=== END RUN [{now_str}] (Status: {reason}) ===\n\n"
+    
+    with _server_log_lock:
+        try:
+            if target_log.exists():
+                with open(target_log, "a", encoding="utf-8") as f:
+                    f.write(footer)
+        except Exception:
+            pass
+
+
 def clean_nan(obj):
     import math
     if isinstance(obj, dict):
@@ -105,7 +183,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.send_header('Pragma', 'no-cache')
         self.send_header('Expires', '0')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         super().end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
 
     def handle(self):
         try:
@@ -446,7 +531,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         from pathlib import Path
         parsed_path = urllib.parse.urlparse(self.path).path
 
-        if parsed_path == "/api/settings":
+        if parsed_path == "/api/log":
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                log_data = json.loads(post_data.decode('utf-8'))
+                
+                level = str(log_data.get("level", "INFO")).upper()
+                msg = str(log_data.get("message", ""))
+                source = str(log_data.get("source", "JS"))
+                line = str(log_data.get("line", ""))
+                ctx = log_data.get("context")
+                
+                ctx_str = f" | Context: {json.dumps(ctx, ensure_ascii=False)}" if ctx else ""
+                loc_str = f" [{source}:{line}]" if line else f" [{source}]"
+                
+                log_server(f"[CLIENT_JS]{loc_str} {msg}{ctx_str}", level=level)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+                return
+            except Exception as e:
+                log_server(f"Erreur traitement /api/log : {e}", level="ERROR")
+                self.send_response(400)
+                self.end_headers()
+                return
+
+        elif parsed_path == "/api/settings":
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             nouveaux_parametres = json.loads(post_data.decode('utf-8'))
@@ -666,8 +779,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 from core.common.chargeurs_donnees import _SESSION_CACHE
                 _original_cache_active = _SESSION_CACHE["active"]
-                # Désactiver temporairement le cache pour pouvoir charger N-1 (évite le filtre de la session N)
-                _SESSION_CACHE["active"] = False
+                _SESSION_CACHE["active"] = True
 
                 # Bug B : initialisation préventive pour éviter UnboundLocalError
                 tu_lower = set()
@@ -1047,21 +1159,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 # 6. Extraction des points valides pour la cartographie
                 points = []
-                if not df_pts.empty:
+                if not df_pts.empty and "x" in df_pts.columns and "y" in df_pts.columns:
                     df_pts_valid = df_pts.dropna(subset=["x", "y"]).copy()
                     df_pts_valid["_code_dept_calc"] = get_dept_series(df_pts_valid)
-                    for _, row in df_pts_valid.iterrows():
+                    for row in df_pts_valid.to_dict("records"):
+                        dc_val = row.get("dc_id")
+                        date_val = row.get("date_ctrl")
                         res_val = row.get("resultat")
                         dom_val = row.get("domaine")
                         theme_val = row.get("theme")
+                        action_val = row.get("type_action")
                         usager_val = row.get("type_usager")
                         com_val = row.get("nom_commun")
-                        dc_val = row.get("dc_id")
-                        date_val = row.get("date_ctrl")
-                        action_val = row.get("type_action")
-
                         dept_calc = str(row.get("_code_dept_calc", "")).strip()
                         code_dept_val = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
+
+                        try:
+                            x_val = float(row["x"])
+                            y_val = float(row["y"])
+                        except (ValueError, TypeError):
+                            continue
 
                         points.append({
                             "dc_id": str(dc_val).strip() if pd.notna(dc_val) else "",
@@ -1073,8 +1190,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "type_usager": str(usager_val).strip() if pd.notna(usager_val) else "",
                             "nom_commun": str(com_val).strip() if pd.notna(com_val) else "",
                             "code_dept": code_dept_val,
-                            "x": float(row["x"]) if pd.notna(row.get("x")) else 0.0,
-                            "y": float(row["y"]) if pd.notna(row.get("y")) else 0.0
+                            "x": x_val,
+                            "y": y_val
                         })
 
                 # 7. Extraction des procédures (PEJ, PA, PVe) pour la cartographie
@@ -1093,9 +1210,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_valid = df.loc[mask].dropna(subset=["x", "y"]).copy()
                     df_valid["_code_dept_calc"] = get_dept_series(df_valid)
                     col_ta = "type_actio" if "type_actio" in df.columns else ("type_action" if "type_action" in df.columns else None)
-                    for _, r in df_valid.iterrows():
+                    col_insee = next((c for c in ("code_insee", "insee_comm", "insee_com", "insee", "code_com") if c in df_valid.columns), None)
+                    for r in df_valid.to_dict("records"):
                         dept_calc = str(r.get("_code_dept_calc", "")).strip()
                         code_dept_proc = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
+                        insee_proc = str(r.get(col_insee, "")).strip() if col_insee and pd.notna(r.get(col_insee)) else ""
+                        if insee_proc in ("N/A", "nan", "None", "<NA>"):
+                            insee_proc = ""
+                        try:
+                            x_val = float(r["x"])
+                            y_val = float(r["y"])
+                        except (ValueError, TypeError):
+                            continue
                         arr.append({
                             "type": label,
                             "dc_id": str(r.get("dc_id", "")).strip() if pd.notna(r.get("dc_id")) else "",
@@ -1103,9 +1229,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "type_action": str(r.get(col_ta, "Non renseigné")).strip() if col_ta and pd.notna(r.get(col_ta)) else "Non renseigné",
                             "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
                             "code_dept": code_dept_proc,
+                            "code_insee": insee_proc,
                             "precision_loc": "Point de contrôle rattaché",
-                            "x": float(r["x"]),
-                            "y": float(r["y"])
+                            "x": x_val,
+                            "y": y_val
                         })
                     return arr
 
@@ -1144,12 +1271,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if not df_pej_loc.empty and "x_faits" in df_pej_loc.columns and "y_faits" in df_pej_loc.columns:
                             df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"]).copy()
                             df_pej_valid["_code_dept_calc"] = get_dept_series(df_pej_valid)
-                            for _, r in df_pej_valid.iterrows():
+                            for r in df_pej_valid.to_dict("records"):
                                 dept_calc = str(r.get("_code_dept_calc", "")).strip()
                                 code_dept_pej = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
+                                insee_pej = str(r.get("code_insee", r.get("insee_comm", r.get("insee_com", r.get("insee", ""))))).strip()
+                                if insee_pej in ("N/A", "nan", "None", "<NA>"):
+                                    insee_pej = ""
                                 prec_val = str(r.get("precision_loc", "GPS Fait (Exacte)")).strip()
                                 if not prec_val or prec_val in ("N/A", "nan", "None", "<NA>"):
                                     prec_val = "GPS Fait (Exacte)"
+                                try:
+                                    x_val = float(r["x_faits"])
+                                    y_val = float(r["y_faits"])
+                                except (ValueError, TypeError):
+                                    continue
                                 procedures.append({
                                     "type": "PEJ",
                                     "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
@@ -1157,9 +1292,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     "type_action": str(r.get("TYPE_ACTION", "Non renseigné")).strip() if pd.notna(r.get("TYPE_ACTION")) else "Non renseigné",
                                     "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
                                     "code_dept": code_dept_pej,
+                                    "code_insee": insee_pej,
                                     "precision_loc": prec_val,
-                                    "x": float(r["x_faits"]),
-                                    "y": float(r["y_faits"])
+                                    "x": x_val,
+                                    "y": y_val
                                 })
                     except Exception as e:
                         print(f"Exception merging pej faits: {e}")
@@ -1221,9 +1357,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         date_col_pve = "INF-DATE-MIF" if "INF-DATE-MIF" in df_pve.columns else "INF-DATE-INTG"
                         col_ta_pve = "type_action" if "type_action" in df_pve.columns else ("THEME" if "THEME" in df_pve.columns else ("type_actio" if "type_actio" in df_pve.columns else None))
                         col_usager_pve = "type_usager" if "type_usager" in df_pve.columns else ("USAGER" if "USAGER" in df_pve.columns else None)
-                        for _, r in pve_valid.iterrows():
+                        for r in pve_valid.to_dict("records"):
                             dept_calc = str(r.get("_code_dept_calc", "")).strip()
                             code_dept_pve = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
+                            insee_pve = str(r.get("INF-INSEE", r.get("code_insee", r.get("insee_comm", r.get("insee", ""))))).strip()
+                            if insee_pve in ("N/A", "nan", "None", "<NA>"):
+                                insee_pve = ""
+                            try:
+                                x_val = float(r[x_col])
+                                y_val = float(r[y_col])
+                            except (ValueError, TypeError):
+                                continue
                             procedures.append({
                                 "type": "PVe",
                                 "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
@@ -1231,9 +1375,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 "type_action": str(r.get(col_ta_pve, "Non renseigné")).strip() if col_ta_pve and pd.notna(r.get(col_ta_pve)) else "Non renseigné",
                                 "type_usager": str(r.get(col_usager_pve, "Non renseigné")).strip() if col_usager_pve and pd.notna(r.get(col_usager_pve)) else "Non renseigné",
                                 "code_dept": code_dept_pve,
+                                "code_insee": insee_pve,
                                 "precision_loc": str(r.get("precision_loc", "GPS Fait (Exacte)")),
-                                "x": float(r[x_col]),
-                                "y": float(r[y_col])
+                                "x": x_val,
+                                "y": y_val
                             })
                 
                 geojson_data = None
@@ -1255,22 +1400,85 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if col != "geometry":
                                 gdf_boundary[col] = gdf_boundary[col].astype(str)
                     else:
-                        from core.cartographie.pochoir_helper import load_department_gdf
+                        from core.cartographie.pochoir_helper import load_department_gdf, load_communes_gdf
                         os.environ["BILANS_CARTO_ECHELLE"] = echelle
-                        gdf_boundary = load_department_gdf(code, project_root=project_root, dissolve=(echelle != "region"))
+                        if echelle == "departement":
+                            gdf_com = load_communes_gdf(code, project_root=project_root)
+                            if gdf_com is not None and not gdf_com.empty:
+                                gdf_boundary = gdf_com
+                            else:
+                                gdf_boundary = load_department_gdf(code, project_root=project_root, dissolve=False)
+                        else:
+                            is_multi_unit = (echelle in ("region", "bmi", "national", "france") or str(code).upper() in ("FR", "FRANCE", "NATIONAL"))
+                            gdf_boundary = load_department_gdf(code, project_root=project_root, dissolve=not is_multi_unit)
+
                     if not gdf_boundary.empty:
                         if gdf_boundary.crs is None:
                             gdf_boundary.set_crs(epsg=2154, inplace=True)
                         gdf_boundary_wgs84 = gdf_boundary.to_crs("EPSG:4326")
+                        
+                        # Normalisation des propriétés identifiantes pour le choroplèthe front-end (insensible à la casse)
+                        col_map = {c.lower(): c for c in gdf_boundary_wgs84.columns}
+                        if "insee_dep" in col_map:
+                            gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["insee_dep"]]
+                            gdf_boundary_wgs84["insee_dep"] = gdf_boundary_wgs84[col_map["insee_dep"]]
+                        elif "code_dept" in col_map:
+                            gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["code_dept"]]
+
+                        if "nom" in col_map:
+                            gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom"]]
+                            gdf_boundary_wgs84["nom"] = gdf_boundary_wgs84[col_map["nom"]]
+                        elif "nom_dep" in col_map:
+                            gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom_dep"]]
+
+                        if "insee_comm" in col_map:
+                            gdf_boundary_wgs84["code_insee"] = gdf_boundary_wgs84[col_map["insee_comm"]]
+                        elif "insee_com" in col_map:
+                            gdf_boundary_wgs84["code_insee"] = gdf_boundary_wgs84[col_map["insee_com"]]
+
+                        def _fix_str_encoding(val):
+                            if isinstance(val, str) and ("Ã" in val or "Â" in val):
+                                try:
+                                    return val.encode("iso-8859-1").decode("utf-8")
+                                except Exception:
+                                    return val
+                            return str(val) if val is not None else ""
+
                         for col in gdf_boundary_wgs84.columns:
                             if col != "geometry":
-                                gdf_boundary_wgs84[col] = gdf_boundary_wgs84[col].astype(str)
+                                gdf_boundary_wgs84[col] = gdf_boundary_wgs84[col].apply(_fix_str_encoding)
                         geojson_data = json.loads(gdf_boundary_wgs84.to_json())
-                        with open(Path(project_root) / "geojson_success.log", "w", encoding="utf-8") as f_ok:
-                            f_ok.write(f"Loaded successfully. Scale: {echelle}, Code: {code}, Params: {json.dumps(params)}\n")
-                            f_ok.write(json.dumps(geojson_data)[:1000] + "\n")
+                        nb_features = len(geojson_data.get("features", [])) if isinstance(geojson_data, dict) else 0
+                        log_server(f"[EXPLORER_GEOJSON] GeoJSON généré avec succès : {nb_features} entité(s) (Échelle: {echelle}, Code: {code})", level="INFO")
+
+                        # Construction du périmètre administratif officiel (perimeter_geojson)
+                        perimeter_geojson_data = None
+                        try:
+                            gdf_perim = None
+                            if profile_cfg.get("restrict_geo") == "tub" or echelle == "pnf":
+                                gdf_perim = gdf_boundary
+                            elif echelle == "departement":
+                                gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=True)
+                            elif echelle in ("national", "france") or str(code).upper() in ("FR", "FRANCE", "NATIONAL"):
+                                gdf_dep_all = load_department_gdf("FR", project_root=project_root, dissolve=False)
+                                if not gdf_dep_all.empty and "INSEE_REG" in gdf_dep_all.columns:
+                                    gdf_perim = gdf_dep_all.dissolve(by="INSEE_REG")
+                                else:
+                                    gdf_perim = gdf_dep_all
+                            else:
+                                gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=False)
+
+                            if gdf_perim is not None and not gdf_perim.empty:
+                                if gdf_perim.crs is None:
+                                    gdf_perim.set_crs(epsg=2154, inplace=True)
+                                gdf_perim_wgs84 = gdf_perim.to_crs("EPSG:4326")
+                                perimeter_geojson_data = json.loads(gdf_perim_wgs84.to_json())
+                        except Exception as e_perim:
+                            print(f"Error loading perimeter geojson: {e_perim}")
+
                 except Exception as e:
                     import traceback
+                    log_server(f"[EXPLORER_GEOJSON] Erreur génération contours GeoJSON (Échelle: {echelle}, Code: {code}) : {e}\n{traceback.format_exc()}", level="ERROR")
                     with open(Path(project_root) / "geojson_error.log", "w", encoding="utf-8") as f_err:
                         f_err.write(f"Error loading boundary geojson: {e}\n")
                         traceback.print_exc(file=f_err)
@@ -1303,7 +1511,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     },
                     "points": points,
                     "procedures": procedures,
-                    "geojson": geojson_data
+                    "geojson": geojson_data,
+                    "perimeter_geojson": perimeter_geojson_data or geojson_data
                 }
 
                 log_debug("Construction geojson terminée.")
@@ -1340,7 +1549,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
-        elif self.path in ("/api/open-pdf", "/api/open-folder"):
+        elif parsed_path in ("/api/open-pdf", "/api/open-folder"):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             params = json.loads(post_data.decode('utf-8'))
@@ -1358,7 +1567,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 from core.engine.execution_lots_profils import resolve_profile_output_dir
                 out_dir = resolve_profile_output_dir(profil, code)
                 
-                if self.path == "/api/open-folder":
+                if parsed_path == "/api/open-folder":
                     target = out_dir
                 else:
                     pdfs = list(out_dir.glob("*.pdf"))
@@ -1385,7 +1594,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
-        elif self.path in ("/api/gabarits/save", "/api/gabarit/save"):
+        elif parsed_path in ("/api/gabarits/save", "/api/gabarit/save"):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 post_data = self.rfile.read(content_length)
@@ -1405,7 +1614,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
             return
-        elif self.path in ("/api/gabarits/delete", "/api/gabarit/delete"):
+        elif parsed_path in ("/api/gabarits/delete", "/api/gabarit/delete"):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 post_data = self.rfile.read(content_length)
@@ -1424,7 +1633,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
             return
-        elif self.path in ("/api/gabarits/import", "/api/gabarit/import"):
+        elif parsed_path in ("/api/gabarits/import", "/api/gabarit/import"):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 post_data = self.rfile.read(content_length)
@@ -1452,6 +1661,7 @@ def preload_data_async():
     def target():
         def log_preload(msg):
             print(msg)
+            log_server(msg.strip(), level="INFO")
             with _preload_lock:
                 _PRELOAD_LOGS.append(msg)
                 if len(_PRELOAD_LOGS) > 20:
@@ -1460,23 +1670,11 @@ def preload_data_async():
         try:
             log_preload("  Démarrage du chargement des données en arrière-plan...")
             project_root = Path(__file__).resolve().parents[2]
-            from core.common.chargeurs_donnees import load_point_ctrl, load_pej, load_pa, load_pve
-
-            # 1. Charger les points de contrôle (toutes les années disponibles)
-            log_preload("  Chargement des points de contrôle...")
-            load_point_ctrl(project_root)
-
-            # 2. Charger les procédures pénales (PEJ)
-            log_preload("  Chargement des enquêtes judiciaires...")
-            load_pej(project_root)
-
-            # 3. Charger les procédures administratives (PA)
-            log_preload("  Chargement des procédures administratives...")
-            load_pa(project_root)
-
-            # 4. Charger les PVe
-            log_preload("  Chargement des PVe...")
-            load_pve(project_root)
+            from core.common.chargeurs_donnees import init_session_cache
+            
+            log_preload("  Chargement des données (points de contrôle, PEJ, PA, PVe)...")
+            init_session_cache(project_root)
+            log_preload("  Données d'activité chargées en mémoire cache.")
 
             # 5. Charger le shapefile des départements
             try:
@@ -1504,28 +1702,47 @@ def run_server():
     # S'assurer que l'on sert depuis le bon dossier
     os.chdir(str(WEB_DIR))
     
+    try:
+        from tests.unit.test_check_syntax import test_check_js_syntax
+        test_check_js_syntax()
+    except Exception as e:
+        log_server(f"SYNTAX CHECK RESULTS: {e}", level="ERROR")
+    init_server_logger()
+    log_server(f"Initialisation du serveur web (Port: {PORT}, PID: {os.getpid()})")
+    
+    import atexit
+    atexit.register(lambda: finalize_server_logger(reason="Terminated"))
+    
     # Lancement du pré-chargement des données en tâche de fond
     try:
         preload_data_async()
     except Exception as e:
+        log_server(f"Impossible d'initialiser le pré-chargement : {e}", level="ERROR")
         print(f"Impossible d'initialiser le pré-chargement : {e}")
     
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"\n=================================================================================")
-        print(f"  Serveur OFBilan actif sur http://localhost:{PORT}")
-        print(f"  L'explorateur s'ouvrira automatiquement à la fin du préchargement des données.")
-        print(f"  Appuyez sur Ctrl+C pour arrêter le serveur.")
-        print(f"=================================================================================\n")
-        
-        if os.environ.get("OFBILAN_RESTART") != "1":
-            import webbrowser
-            webbrowser.open(f"http://localhost:{PORT}/loading.html")
+    try:
+        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            print(f"\n=================================================================================")
+            print(f"  Serveur OFBilan actif sur http://localhost:{PORT}")
+            print(f"  L'explorateur s'ouvrira automatiquement à la fin du préchargement des données.")
+            print(f"  Appuyez sur Ctrl+C pour arrêter le serveur.")
+            print(f"=================================================================================\n")
+            log_server(f"Serveur web actif sur http://localhost:{PORT}")
             
-        try:
+            if os.environ.get("OFBILAN_RESTART") != "1":
+                import webbrowser
+                webbrowser.open(f"http://localhost:{PORT}/loading.html")
+                
             httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nServeur arrêté.")
+    except KeyboardInterrupt:
+        log_server("Interruption utilisateur (Ctrl+C). Extinction du serveur.", level="INFO")
+        finalize_server_logger(reason="Stopped by user (Ctrl+C)")
+        print("\nServeur arrêté.")
+    except Exception as e:
+        log_server(f"Erreur critique serveur : {e}", level="CRITICAL")
+        finalize_server_logger(reason=f"Crashed ({e})")
+        raise
 
 if __name__ == "__main__":
-    run_server()
+    run_server()

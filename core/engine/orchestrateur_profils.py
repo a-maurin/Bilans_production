@@ -3986,8 +3986,103 @@ def _generate_pdf(
 
         builder.add_key_figures(kf)
 
+        # Rendu du visuel cartographique communal et tableau thématique en Section 1 (Page 1)
+        sec_enr = (presentation_cfg or {}).get("sections_enrichies", {}).get("synthese_regionale", {})
+        carto_cfg = sec_enr.get("carte_choroplethe", {})
+
+        if carto_cfg or is_section_enabled(presentation_cfg, "sec1_carte", True):
+            try:
+                from core.engine.sections_region import _generate_region_choropleth, _create_proportional_rl_image
+                
+                dept_counts: dict[str, int] = {}
+                commune_counts: dict[str, int] = {}
+
+                for df_key in ("point", "pej", "pve"):
+                    df_src = curr_results.get(df_key)
+                    if isinstance(df_src, pd.DataFrame) and not df_src.empty:
+                        col_insee = next((c for c in ("insee_comm", "insee_com", "code_insee", "INSEE_COM", "insee", "INF-INSEE") if c in df_src.columns), None)
+                        if col_insee:
+                            s_counts = df_src[col_insee].astype(str).str.strip().str.zfill(5).value_counts()
+                            for c_code, val in s_counts.items():
+                                if c_code and len(c_code) == 5 and c_code.isdigit():
+                                    commune_counts[c_code] = commune_counts.get(c_code, 0) + int(val)
+                        col_dep = next((c for c in ("departement", "num_depart", "code_dept", "insee_dep") if c in df_src.columns), None)
+                        if col_dep:
+                            s_dep = df_src[col_dep].astype(str).str.strip().str.upper().str[:2].value_counts()
+                            for d_code, val in s_dep.items():
+                                dept_counts[d_code] = dept_counts.get(d_code, 0) + int(val)
+
+                code = cfg.code
+                tmp_dir = out_dir or (PROJECT_ROOT / "data" / "out" / f"bilan_{profil_id}_{code}")
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+
+                carto_path = _generate_region_choropleth(
+                    dept_counts=dept_counts,
+                    dept_code=str(code or "21"),
+                    tmp_dir=tmp_dir,
+                    img_name="choropleth_sec1.png",
+                    out_dir=out_dir,
+                    profile_id=profil_id,
+                    total_unique_ops=nb_operations_controle or nb_localisations,
+                    commune_counts=commune_counts,
+                    carto_cfg=carto_cfg,
+                )
+
+                if carto_path and carto_path.exists():
+                    max_h = float(carto_cfg.get("max_h", 260.0))
+                    col_w = builder.avail_w * 0.48
+                    img_carto = _create_proportional_rl_image(carto_path, col_w, "Carte de la pression de contrôle", builder.styles, max_h=max_h)
+                    
+                    # Tableau thématique pour la colonne de droite
+                    right_element = None
+                    df_theme = curr_results.get("tab_par_theme")
+                    if isinstance(df_theme, pd.DataFrame) and not df_theme.empty:
+                        from reportlab.platypus import Table, TableStyle, Paragraph
+                        from reportlab.lib import colors as rl_colors
+                        t_rows = []
+                        t_rows.append([
+                            Paragraph("<b>Thématique</b>", builder.styles.get("BodyText")),
+                            Paragraph("<b>Localisations</b>", builder.styles.get("BodyText")),
+                        ])
+                        top_theme = df_theme.head(7)
+                        for _, r in top_theme.iterrows():
+                            th_lbl = str(r.get("theme", r.get("thematique", "")))
+                            th_nb = str(r.get("nb", r.get("nb_localisations", r.get("nb_operations", ""))))
+                            t_rows.append([
+                                Paragraph(th_lbl[:35], builder.styles.get("BodyText")),
+                                Paragraph(f"<b>{th_nb}</b>", builder.styles.get("BodyText")),
+                            ])
+                        tbl_th = Table(t_rows, colWidths=[col_w * 0.70, col_w * 0.30])
+                        tbl_th.setStyle(TableStyle([
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                            ('TOPPADDING', (0, 0), (-1, -1), 2),
+                            ('LINEBELOW', (0, 0), (-1, 0), 0.8, rl_colors.HexColor('#003366')),
+                            ('LINEBELOW', (0, 1), (-1, -1), 0.3, rl_colors.HexColor('#e2e8f0')),
+                        ]))
+                        right_element = tbl_th
+                    else:
+                        body_st = builder.styles.get("BodyText", builder.styles.get("Normal"))
+                        right_element = Paragraph("<i>Données par thématique indisponibles</i>", body_st)
+
+                    from reportlab.platypus import Table, TableStyle, Spacer
+                    tbl_sec1 = Table([[img_carto, right_element]], colWidths=[col_w, col_w])
+                    tbl_sec1.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ]))
+                    builder.story.append(Spacer(1, 6))
+                    builder.story.append(tbl_sec1)
+                    builder.story.append(Spacer(1, 6))
+            except Exception as e_sec1:
+                logging.getLogger(__name__).warning(f"Erreur lors du rendu cartographique sec1 : {e_sec1}")
+
         # 2. Contrôles (chapitre)
         builder.add_section("sec2", section_title["sec2"] + title_suffix)
+
         if is_block_enabled(presentation_cfg, "sec2.show_intro_text", True):
             if profil_id == "ppp":
                 builder.add_paragraph(

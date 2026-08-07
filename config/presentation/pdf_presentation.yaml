@@ -365,6 +365,11 @@ profiles:
 
   pnf_v2:
     scope: global
+    title:
+      line1: "Bilan des activités de police\nde l'environnement de l'OFB"
+      line2_mode: fixed
+      line2_fixed: "Parc National de Forêts"
+      line3_mode: none
     blocks:
       sec5:
         show_map: true

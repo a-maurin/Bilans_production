@@ -132,8 +132,8 @@ _PVE_RAW_CACHE = {}
 
 def init_session_cache(
     root: Path,
-    echelle: str,
-    codes: list[str],
+    echelle: str = "national",
+    codes: Optional[list[str]] = None,
     date_deb: Optional[Union[str, pd.Timestamp]] = None,
     date_fin: Optional[Union[str, pd.Timestamp]] = None,
 ) -> None:
@@ -141,6 +141,8 @@ def init_session_cache(
     global _SESSION_CACHE
     _SESSION_CACHE["active"] = False  # Désactiver temporairement pour forcer la lecture réelle
     
+    if codes is None:
+        codes = ["FR"]
     codes_str = ",".join(codes)
     logger.info("Pré-chargement des données pour la session globale (codes: %s)...", codes_str)
     

@@ -73,6 +73,7 @@ def get_gabarits_dirs(root: Path | None = None) -> list[Path]:
 
 ALLOWED_WIDGET_TYPES: set[str] = {
     "map",
+    "carte_choroplethe",
     "section_group",
     "stat_kpi_grid",
     "pnf_grand_angle_kpi",

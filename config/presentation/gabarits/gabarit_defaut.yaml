@@ -29,25 +29,6 @@ cible: les_deux
 title:
   line2_mode: auto
 
-sections:
-  order:
-    - sec1
-    - sec2
-    - sec21
-    - sec22
-    - sec23
-    - sec4
-    - sec41
-    - sec42
-    - sec43
-    - sec44
-    - sec3
-    - sec31
-    - sec32
-    - sec33
-    - sec5
-    - sec6
-
 cartographie:
   items_masques_brochure:
     - titre_principal
@@ -69,17 +50,35 @@ layout_grid:
         - columns:
             - width: "50%"
               widget:
-                type: map
+                type: carte_choroplethe
             - width: "50%"
               widget:
-                type: section_group
-                sections: [sec1, sec2]
+                type: theme_breakdown_table
     - page_number: 2
       rows:
         - columns:
             - width: "50%"
               widget:
-                type: theme_breakdown_table
+                type: section_group
+                sections: [sec1, sec2]
             - width: "50%"
               widget:
                 type: evolution_chart
+
+sections_enrichies:
+  synthese_regionale:
+    carte_choroplethe:
+      titre: "Carte de la pression de contrôle par commune"
+      indicateur: "pression_controle_communes"
+      maille: "commune"
+      sources: ["PA", "PEJ", "PVe"]
+      colormap: "YlGnBu"
+      zero_color: "#f1f5f9"
+      commune_edgecolor: "#cbd5e1"
+      dept_edgecolor: "#003366"
+      afficher_etiquettes_communes: false
+      max_h: 260.0
+      width_ratio: 0.95
+      cbar_title: "Pression de contrôle (localisations/commune)"
+      afficher_note_hors_communes: true
+

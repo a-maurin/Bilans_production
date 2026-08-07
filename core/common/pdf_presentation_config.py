@@ -430,6 +430,13 @@ def resolve_pdf_presentation_config(
             overlay = {k: v for k, v in ext_cfg.items() if k != "scope"}
             effective = _deep_merge(effective, overlay)
 
+    if not gabarit_id:
+        from core.common.chargeur_gabarits import load_gabarit
+        if profile_id and load_gabarit(profile_id, root):
+            gabarit_id = profile_id
+        else:
+            gabarit_id = "brochure_defaut" if is_brochure else "gabarit_defaut"
+
     layout_mode = "standard"
     if gabarit_id:
         from core.common.chargeur_gabarits import load_gabarit, is_gabarit_compatible
@@ -1058,7 +1065,9 @@ def build_title_lines_from_cfg(
         line2 = str(profile_label).strip()
 
     line3_mode = str(title_cfg.get("line3_mode", "department")).strip().lower()
-    if line3_mode == "fixed":
+    if line3_mode == "none":
+        line3 = ""
+    elif line3_mode == "fixed":
         line3 = str(title_cfg.get("line3_fixed", "")).strip()
     else:
         line3 = format_perimetre_title_label(echelle, perimetre_name_typo)

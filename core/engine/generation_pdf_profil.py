@@ -270,7 +270,7 @@ def _generate_pdf_content(
     chart_ratios = compute_pdf_ratios(load_chart_display_config(_ROOT, preset=chart_preset))
     scope = str((profile or {}).get("presentation_scope", "global")).strip() or "global"
     profile_id = str((profile or {}).get("id", "")).strip() or None
-    gabarit_id = (cli_options or {}).get("gabarit")
+    gabarit_id = (cli_options or {}).get("gabarit") or (profile or {}).get("gabarit")
     resolved_presentation_cfg = resolve_pdf_presentation_config(
         _ROOT, scope=scope, profile_id=profile_id, diffusion=diffusion, gabarit_id=gabarit_id
     )
@@ -500,6 +500,7 @@ def _generate_pdf_content(
         period_str=f"Période : du {date_deb.date():%d/%m/%Y} au {date_fin.date():%d/%m/%Y}",
         sections_toc=sections,
         nb_pve=nb_pve,
+        profile_id=profile_id,
     )
 
     add_standard_notice_methodology(

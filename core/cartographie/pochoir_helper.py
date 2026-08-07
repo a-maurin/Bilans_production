@@ -116,18 +116,24 @@ def load_department_gdf(
     code_upper = dept_code.upper()
     echelle = os.environ.get("BILANS_CARTO_ECHELLE", "departement").lower()
     
-    if code_upper.startswith("R") or echelle == "region":
+    if code_upper in ("FR", "FRANCE", "NATIONAL", "ALL") or echelle in ("national", "france"):
+        target_depts = [str(c).upper() for c in gdf[_INSEE_DEP_COL].unique() if pd.notna(c)]
+        subset = gdf.copy()
+    elif code_upper.startswith("R") or echelle == "region":
         # region prefix/detection
         target_depts = get_departements_pour_perimetre("region", dept_code.lower())
+        mask = gdf[_INSEE_DEP_COL].astype(str).str.strip().str.upper().isin(target_depts)
+        subset = gdf.loc[mask].copy()
     elif code_upper.startswith("BMI-") or echelle == "bmi":
         target_depts = get_departements_pour_perimetre("bmi", dept_code)
+        mask = gdf[_INSEE_DEP_COL].astype(str).str.strip().str.upper().isin(target_depts)
+        subset = gdf.loc[mask].copy()
     else:
         raw_tokens = [normalize_dept_code(c) for c in dept_code.replace("_", " ").replace(",", " ").split() if c.strip()]
         target_depts = raw_tokens if raw_tokens else [normalize_dept_code(dept_code)]
+        mask = gdf[_INSEE_DEP_COL].astype(str).str.strip().str.upper().isin(target_depts)
+        subset = gdf.loc[mask].copy()
 
-    
-    mask = gdf[_INSEE_DEP_COL].astype(str).str.strip().str.upper().isin(target_depts)
-    subset = gdf.loc[mask].copy()
     if subset.empty:
         raise ValueError(
             f"Département(s) {target_depts} introuvable(s) dans {shp.name}"
@@ -161,6 +167,41 @@ def load_department_gdf(
             crs=subset.crs,
         )
     return out
+
+
+def load_communes_gdf(
+    dept_code: str,
+    *,
+    project_root: Optional[Path] = None,
+) -> Optional[gpd.GeoDataFrame]:
+    """Charge la couche des communes pour le ou les département(s) cible(s)."""
+    if gpd is None:
+        return None
+    root = project_root or PROJECT_ROOT
+    from core.common.chargeurs_donnees import _load_communes_21_gdf
+    try:
+        gdf_com = _load_communes_21_gdf(root)
+    except Exception:
+        return None
+
+    code_upper = str(dept_code or "").upper()
+    from core.common.utilitaires_metier import get_departements_pour_perimetre
+    import os
+    echelle = os.environ.get("BILANS_CARTO_ECHELLE", "departement").lower()
+
+    if code_upper.startswith("R") or echelle == "region":
+        target_depts = get_departements_pour_perimetre("region", dept_code.lower())
+    elif code_upper.startswith("BMI-") or echelle == "bmi":
+        target_depts = get_departements_pour_perimetre("bmi", dept_code)
+    else:
+        raw_tokens = [normalize_dept_code(c) for c in dept_code.replace("_", " ").replace(",", " ").split() if c.strip()]
+        target_depts = raw_tokens if raw_tokens else [normalize_dept_code(dept_code)]
+
+    mask = gdf_com["insee_comm"].astype(str).str.strip().str[:2].isin(target_depts)
+    subset = gdf_com.loc[mask].copy()
+    if subset.empty:
+        return gdf_com.copy()
+    return subset
 
 
 def department_bounds(

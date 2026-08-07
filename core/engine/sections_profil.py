@@ -558,6 +558,59 @@ def render_sec3(ctx: PdfContext) -> None:
         f"Sur la période : {ctx.nb_pej} procédure(s) d'enquête judiciaire (PEJ), "
         f"{ctx.nb_pa} procédure(s) administrative(s) (PA), {ctx.nb_pve} procès-verbal(aux) électronique(s) (PVe).",
     )
+    pve_dom = _load_csv_opt(ctx.out_dir, "pve_global_par_domaine.csv")
+    pej_dom = _load_csv_opt(ctx.out_dir, "pej_global_par_domaine.csv")
+    pa_dom = _load_csv_opt(ctx.out_dir, "pa_global_par_domaine.csv")
+
+    domain_map: dict[str, dict[str, int]] = {}
+
+    def _add_counts(df: pd.DataFrame | None, count_col: str, proc_key: str) -> None:
+        if df is None or df.empty:
+            return
+        d_col = next((c for c in df.columns if "dom" in c.lower()), df.columns[0])
+        c_col = next((c for c in df.columns if c.lower() in (count_col.lower(), "nb", "total")), df.columns[-1])
+        for _, r in df.iterrows():
+            d_name = str(r[d_col]).strip()
+            if not d_name or d_name.lower() in ("nan", "none", ""):
+                continue
+            if d_name not in domain_map:
+                domain_map[d_name] = {"pve": 0, "pej": 0, "pa": 0}
+            try:
+                domain_map[d_name][proc_key] += int(r[c_col])
+            except (ValueError, TypeError):
+                pass
+
+    _add_counts(pve_dom, "nb_pve", "pve")
+    _add_counts(pej_dom, "nb_pej", "pej")
+    _add_counts(pa_dom, "nb_pa", "pa")
+
+    if domain_map:
+        hdr = ["Domaine d'activité", "PVe", "PEJ", "PA", "Total"]
+        tbl_rows = [hdr]
+        sorted_domains = sorted(
+            domain_map.items(),
+            key=lambda item: item[1]["pve"] + item[1]["pej"] + item[1]["pa"],
+            reverse=True,
+        )
+        tot_pve, tot_pej, tot_pa = 0, 0, 0
+        for d_name, counts in sorted_domains:
+            pv, pj, pa = counts["pve"], counts["pej"], counts["pa"]
+            tot = pv + pj + pa
+            if tot > 0:
+                tot_pve += pv
+                tot_pej += pj
+                tot_pa += pa
+                tbl_rows.append([d_name[:45], str(pv), str(pj), str(pa), str(tot)])
+
+        tot_global = tot_pve + tot_pej + tot_pa
+        if tot_global > 0:
+            tbl_rows.append(["Total global", str(tot_pve), str(tot_pej), str(tot_pa), str(tot_global)])
+            ctx.builder.add_table(
+                tbl_rows,
+                caption="Synthèse des procédures par domaine d'activité",
+                col_widths=[ctx.avail_w * 0.44, ctx.avail_w * 0.14, ctx.avail_w * 0.14, ctx.avail_w * 0.14, ctx.avail_w * 0.14],
+                col_aligns=["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"],
+            )
 
 # 3.1 PVe
 def render_sec31(ctx: PdfContext) -> None:
@@ -853,7 +906,7 @@ def render_sec4(ctx: PdfContext) -> None:
             pie_data = {str(r["type_usager"])[:40]: int(r["nb"]) for _, r in ctx.agg_usager.iterrows()}
             if pie_data:
                 pie_path = chart_pie(pie_data, "Usagers contrôlés par type", ctx.tmp_dir, "pie_usagers.png", **_chart_pie_compact_legend_kw(len(pie_data), legend_fontsize=ctx.ref_pie_legend_fs, legend_ncol_max=ctx.legend_ncol_max), figure_scale=ctx.ref_pie_fs)
-                ctx.builder.add_image(Path(pie_path), width_ratio=ctx.ref_pie_w, spacer_after_mm=sec4_img_sp)
+                ctx.builder.add_image(Path(pie_path), width_ratio=min(0.48, ctx.ref_pie_w), spacer_after_mm=sec4_img_sp)
 
         if is_block_enabled(ctx.presentation_cfg, "sec4.show_table_usagers_x_domaine", True) and ctx.cross_usager_dom is not None and not ctx.cross_usager_dom.empty:
             temp_cross = ctx.cross_usager_dom.copy()

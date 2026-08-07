@@ -790,13 +790,14 @@ def apply_map_extent(layout, dept_code: str, pochoir_id: str = "departement", *,
 
     try:
         gdf = load_pochoir_gdf(pochoir_id, dept_code, project_root=PROJECT_ROOT)
+        eff_margin = 0.015 if str(pochoir_id).lower() in ("aoa", "pnf") else margin_ratio
         xmin, ymin, xmax, ymax = gdf.total_bounds
         dx = xmax - xmin
         dy = ymax - ymin
-        xmin -= dx * margin_ratio
-        xmax += dx * margin_ratio
-        ymin -= dy * margin_ratio
-        ymax += dy * margin_ratio
+        xmin -= dx * eff_margin
+        xmax += dx * eff_margin
+        ymin -= dy * eff_margin
+        ymax += dy * eff_margin
     except (FileNotFoundError, ValueError) as exc:
         logger.warning("Emprise carte non ajustée (pochoir %s, département %s) : %s", pochoir_id, dept_code, exc)
         return False

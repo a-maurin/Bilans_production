@@ -1278,11 +1278,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 total_usagers_controles = sum(usagers_counts.values()) if usagers_counts else 0
 
+                pej_mapped_count = len([p for p in procedures if str(p.get("type", "")).upper() == "PEJ"])
+                unmapped_pej = max(0, int(total_pej) - pej_mapped_count)
+
                 response_data = {
                     "stats": {
                         "total_controles": int(total_controles),
                         "total_usagers_controles": int(total_usagers_controles),
                         "total_pej": int(total_pej),
+                        "mapped_pej": int(pej_mapped_count),
+                        "unmapped_pej": int(unmapped_pej),
                         "total_pa": int(total_pa),
                         "total_pve": int(total_pve)
                     },

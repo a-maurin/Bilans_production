@@ -2560,7 +2560,7 @@ def merge_pej_faits_locations(
         except Exception as e:
             lg.warning("PEJ : échec du fallback contrôle d'origine : %s", e)
 
-        # Fallback Niveau 3 : Centroïde de la commune (code INSEE ou NOM_COM)
+        # Fallback Niveau 3 : Centroïde de la commune (code INSEE ou NOM_COM / COMMUNE)
         missing_xy = out["x_faits"].isna() | out["y_faits"].isna()
         if missing_xy.any():
             try:
@@ -2572,19 +2572,26 @@ def merge_pej_faits_locations(
                     dict_lat = pd.to_numeric(cen_com.set_index("code_insee")["lat"], errors="coerce").to_dict()
                     dict_lon = pd.to_numeric(cen_com.set_index("code_insee")["lon"], errors="coerce").to_dict()
                     
+                    insee_cols = ("INSEE_COMM", "INSEE_COMMUNE", "CODE_INSEE", "INSEE_COM", "INSEE", "INF-INSEE", "insee_comm", "code_insee", "insee_com", "insee")
+                    nom_cols = ("NOM_COM", "NOM_COMMUNE", "COMMUNE", "COMMUNE_FAIT", "COMMUNE_FAITS", "NOM_COM_FAITS", "nom_com", "nom_commune", "commune")
+
                     for idx in out[missing_xy].index:
                         row = out.loc[idx]
                         insee_val = None
-                        for c in ("insee_comm", "code_insee", "INSEE_COM", "insee"):
+                        for c in insee_cols:
                             if c in row and pd.notna(row[c]):
                                 candidate = str(row[c]).strip().zfill(5)
                                 if len(candidate) == 5 and candidate != "00000":
                                     insee_val = candidate
                                     break
                                     
-                        if not insee_val and "NOM_COM" in row and pd.notna(row["NOM_COM"]):
-                            nom_clean = str(row["NOM_COM"]).lower().strip()
-                            insee_val = inv_com_names.get(nom_clean)
+                        if not insee_val:
+                            for c in nom_cols:
+                                if c in row and pd.notna(row[c]):
+                                    nom_clean = str(row[c]).lower().strip()
+                                    if nom_clean in inv_com_names:
+                                        insee_val = inv_com_names[nom_clean]
+                                        break
                             
                         if insee_val and insee_val in dict_lat and insee_val in dict_lon:
                             out.loc[idx, "x_faits"] = dict_lon[insee_val]
@@ -2603,21 +2610,19 @@ def merge_pej_faits_locations(
                     dept_lon = cen_com.groupby("dept")["lon"].mean().to_dict()
                     dept_lat = cen_com.groupby("dept")["lat"].mean().to_dict()
                     
+                    dept_cols = ("NUM_DEPART", "CODE_DEPT", "DEPT", "DEPARTEMENT", "DEP", "DPT", "CODE_DEP", "num_depart", "code_dept", "dept", "departement", "dep", "ENTITE_ORIGINE_PROCEDURE", "entite_origine_procedure")
+
                     for idx in out[missing_xy].index:
                         row = out.loc[idx]
                         dept_val = None
-                        for c in ("num_depart", "code_dept", "DEPT", "departement", "DEP"):
+                        for c in dept_cols:
                             if c in row and pd.notna(row[c]):
-                                d_str = str(row[c]).strip().split(".")[0].zfill(2)[:2]
-                                if d_str in dept_lon:
-                                    dept_val = d_str
-                                    break
-                        if not dept_val and "ENTITE_ORIGINE_PROCEDURE" in row and pd.notna(row["ENTITE_ORIGINE_PROCEDURE"]):
-                            m = re.search(r"(\d+)", str(row["ENTITE_ORIGINE_PROCEDURE"]))
-                            if m:
-                                d_str = m.group(1).zfill(2)[:2]
-                                if d_str in dept_lon:
-                                    dept_val = d_str
+                                m = re.search(r"(\d+)", str(row[c]))
+                                if m:
+                                    d_str = m.group(1).zfill(2)[:2]
+                                    if d_str in dept_lon:
+                                        dept_val = d_str
+                                        break
                                     
                         if dept_val and dept_val in dept_lon and dept_val in dept_lat:
                             out.loc[idx, "x_faits"] = dept_lon[dept_val]

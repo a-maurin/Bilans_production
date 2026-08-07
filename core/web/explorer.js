@@ -2469,6 +2469,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false, 'cluster-pve')).addLayers(markers));
                 }
 
+                // --- Gestion du bandeau discret des PEJ non localisées ---
+                const bannerEl = document.getElementById('map-pej-unmapped-banner');
+                const unmappedCountEl = document.getElementById('pej-unmapped-count');
+                const totalCountEl = document.getElementById('pej-total-count');
+                if (bannerEl && unmappedCountEl && totalCountEl) {
+                    const stats = resN.stats || {};
+                    const totalPej = stats.total_pej || 0;
+                    const mappedPej = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase() === 'PEJ').length : 0;
+                    const unmappedPej = (stats.unmapped_pej !== undefined) ? stats.unmapped_pej : Math.max(0, totalPej - mappedPej);
+                    
+                    if (totalPej > 0 && unmappedPej > 0) {
+                        unmappedCountEl.textContent = unmappedPej;
+                        totalCountEl.textContent = totalPej;
+                        bannerEl.classList.remove('hidden');
+                    } else {
+                        bannerEl.classList.add('hidden');
+                    }
+                }
+
                 applyLegendFilters();
                 updateLegend();
 

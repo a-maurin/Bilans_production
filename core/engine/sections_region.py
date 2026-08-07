@@ -355,9 +355,9 @@ def _generate_region_choropleth(
                 cmap="YlGnBu",
                 edgecolor="#003366",
                 linewidth=0.8,
-                legend=True,
-                legend_kwds={'label': "Opérations de contrôle", 'orientation': "horizontal", 'shrink': 0.5}
+                legend=False
             )
+
             for _, row in gdf_region.iterrows():
                 centroid = row.geometry.centroid
                 val = int(row["nb_ops"])
@@ -456,8 +456,9 @@ def render_sec_region_dashboard(ctx: Any) -> None:
     total_unique = int(ctx.nb_ops) if ctx.nb_ops else None
     carto_path = _generate_region_choropleth(dept_counts, ctx.dept_code, ctx.tmp_dir, "region_choropleth.png", figure_scale=ctx.figure_scale, out_dir=ctx.out_dir, profile_id=prof_id, total_unique_ops=total_unique)
     if carto_path.exists():
-        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.72, "Carte régionale indisponible", ctx.builder.styles, max_h=230.0)
+        img_carto = _create_proportional_rl_image(carto_path, ctx.avail_w * 0.864, "Carte régionale indisponible", ctx.builder.styles, max_h=260.0)
     else:
+
         img_carto = Paragraph("<para align='center'><i>Carte régionale non disponible</i></para>", body_style)
 
     tbl_carto = Table([[img_carto]], colWidths=[ctx.avail_w])
@@ -501,9 +502,13 @@ def render_sec_region_dashboard(ctx: Any) -> None:
 
     ctx.builder.add_spacer(4)
 
-    # Visuel 2 : Diagramme Donut par Domaine sous la carte (légende sous l'anneau sur 2 colonnes)
+    # Visuel 2 : Diagrammes Donut par Domaine et/ou Type d'Usager
+    sec_enr = (getattr(ctx, "presentation_cfg", {}) or {}).get("sections_enrichies", {})
+    show_reg_usg = sec_enr.get("synthese_regionale", {}).get("afficher_donut_usagers", False)
+
     domain_counts_filtered = {k: int(v) for k, v in domain_counts.items() if int(v) > 0}
     if domain_counts_filtered and sum(domain_counts_filtered.values()) > 0:
+        legend_ncol_dom = 1 if show_reg_usg else 2
         donut_path = chart_pie(
             domain_counts_filtered,
             "Répartition par Domaine de contrôle",
@@ -511,14 +516,49 @@ def render_sec_region_dashboard(ctx: Any) -> None:
             "region_domaines_donut.png",
             figure_scale=ctx.figure_scale,
             donut=True,
-            legend_ncol=2,
-            legend_fontsize=8.5
+            legend_ncol=legend_ncol_dom,
+            legend_fontsize=9.0 if show_reg_usg else 8.5
         )
-        img_donut = _create_proportional_rl_image(Path(donut_path), ctx.avail_w * 0.78, "Graphique domaines indisponible", ctx.builder.styles, max_h=240.0)
+        dom_w = ctx.avail_w * 0.46 if show_reg_usg else ctx.avail_w * 0.78
+        img_donut_dom = _create_proportional_rl_image(Path(donut_path), dom_w, "Graphique domaines indisponible", ctx.builder.styles, max_h=220.0 if show_reg_usg else 240.0)
     else:
-        img_donut = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
+        img_donut_dom = Paragraph("<para align='center'><i>Répartition par domaine non disponible</i></para>", body_style)
 
-    tbl_donut = Table([[img_donut]], colWidths=[ctx.avail_w])
+    if show_reg_usg:
+        # Donut récapitulatif usagers régional
+        csv_usg = ctx.out_dir / "usagers_par_dept.csv"
+        usg_counts = {}
+        if csv_usg.exists():
+            try:
+                df_usg = pd.read_csv(csv_usg, sep=";", encoding="utf-8")
+                if not df_usg.empty and "type_usager" in df_usg.columns and "nb_operations" in df_usg.columns:
+                    import re
+                    df_usg["type_usager_clean"] = df_usg["type_usager"].apply(lambda u: re.sub(r'[\s_]+\d+$', '', str(u)).strip() if pd.notna(u) else "Non renseigné")
+                    usg_grp = df_usg.groupby("type_usager_clean")["nb_operations"].sum().reset_index()
+                    usg_counts = {str(r["type_usager_clean"]): int(r["nb_operations"]) for _, r in usg_grp.iterrows() if int(r["nb_operations"]) > 0}
+            except Exception:
+                usg_counts = {}
+
+        if usg_counts:
+            donut_usg_path = chart_pie(
+                usg_counts,
+                "Répartition par Type d'usager",
+                ctx.tmp_dir,
+                "region_usagers_donut.png",
+                figure_scale=ctx.figure_scale,
+                donut=True,
+                legend_ncol=1,
+                legend_fontsize=9.0
+            )
+
+            img_donut_usg = _create_proportional_rl_image(Path(donut_usg_path), ctx.avail_w * 0.46, "Graphique usagers indisponible", ctx.builder.styles, max_h=220.0)
+        else:
+            img_donut_usg = Paragraph("<para align='center'><i>Répartition par type d'usager non disponible</i></para>", body_style)
+
+        tbl_donut = Table([[img_donut_dom, img_donut_usg]], colWidths=[ctx.avail_w * 0.48, ctx.avail_w * 0.48])
+    else:
+        tbl_donut = Table([[img_donut_dom]], colWidths=[ctx.avail_w])
+
     tbl_donut.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -528,6 +568,7 @@ def render_sec_region_dashboard(ctx: Any) -> None:
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
     ctx.builder.story.append(tbl_donut)
+
 
     # --- SAUT DE PAGE VERS LA PAGE 2 DE LA SYNTHÈSE RÉGIONALE / PNF ---
     ctx.builder.story.append(PageBreak())
@@ -747,6 +788,75 @@ def render_sec_region_dashboard(ctx: Any) -> None:
             ctx.builder.add_spacer(5)
         except Exception as e:
             ctx.builder.add_paragraph(f"<i>Impossible d'afficher le graphique comparatif : {e}</i>")
+
+        # 3. Saisonnalité de l'activité (Courbes mensuelles)
+        sec_enr = (getattr(ctx, "presentation_cfg", {}) or {}).get("sections_enrichies", {})
+        sais_cfg = sec_enr.get("saisonnalite", {})
+        sais_enabled = sais_cfg.get("enabled", False)
+
+        csv_sais = ctx.out_dir / "saisonnalite_mensuelle.csv"
+        if sais_enabled and csv_sais.exists():
+            try:
+                df_sais = pd.read_csv(csv_sais, sep=";", encoding="utf-8")
+                if not df_sais.empty:
+                    from core.common.rendus_graphiques import chart_line_evolution
+                    x_labs = df_sais["mois_lib"].tolist()
+                    s_series = {
+                        "Opérations de contrôle": df_sais["nb_operations"].tolist(),
+                        "Infractions relevées (PEJ/PVe/PA)": df_sais["nb_infractions"].tolist()
+                    }
+                    sais_title = sais_cfg.get("title", "1.3 Saisonnalité mensuelle de l'activité")
+                    path_sais = chart_line_evolution(
+                        x_labs,
+                        s_series,
+                        "Saisonnalité mensuelle de l'activité et des infractions",
+                        "Nombre",
+                        ctx.tmp_dir,
+                        "saisonnalite_courbes.png",
+                        figure_scale=ctx.figure_scale
+                    )
+                    img_sais = _create_proportional_rl_image(Path(path_sais), ctx.avail_w * 0.85, "Graphique saisonnalité indisponible", ctx.builder.styles)
+                    ctx.builder.story.append(PageBreak())
+                    ctx.builder.add_paragraph(f"<b>{sais_title}</b>", style="Heading2")
+                    ctx.builder.add_spacer(4)
+                    ctx.builder.story.append(img_sais)
+                    ctx.builder.add_spacer(6)
+            except Exception as e_sais:
+                logger.warning(f"Rendu saisonnalité : {e_sais}")
+
+        # 4. Top Infractions fusionné (Top PEJ + Top PVe)
+        top_cfg = sec_enr.get("top_infractions", {})
+        top_enabled = top_cfg.get("enabled", False)
+
+
+        csv_top = ctx.out_dir / "top_infractions_pej_pve.csv"
+        if top_enabled and csv_top.exists():
+            try:
+                df_top = pd.read_csv(csv_top, sep=";", encoding="utf-8")
+                if not df_top.empty:
+                    top_data = [["Procédure", "Thème SNC", "N° NATINF", "Libellé de l'infraction", "Nature juridique", "Total"]]
+                    for _, r in df_top.iterrows():
+                        top_data.append([
+                            str(r.get("procedure", "")),
+                            str(r.get("theme_snc", "")),
+                            str(r.get("numero_natinf", "")),
+                            str(r.get("libelle_infraction", "")),
+                            str(r.get("nature_juridique", "")),
+                            f"{int(r.get('nb_infractions', 0)):,}".replace(",", "\u202f")
+                        ])
+
+                    t_widths = [0.12 * ctx.avail_w, 0.22 * ctx.avail_w, 0.12 * ctx.avail_w, 0.34 * ctx.avail_w, 0.12 * ctx.avail_w, 0.08 * ctx.avail_w]
+
+                    t_aligns = ["C", "L", "C", "L", "C", "R"]
+                    tbl_top_natinf = ofb_table(top_data, col_widths=t_widths, col_aligns=t_aligns)
+                    top_title = top_cfg.get("title", "1.4 Principales infractions relevées (Top 5 PEJ & Top 5 PVe)")
+                    ctx.builder.add_paragraph(f"<b>{top_title}</b>", style="Heading2")
+                    ctx.builder.add_spacer(4)
+                    ctx.builder.story.append(tbl_top_natinf)
+                    ctx.builder.add_spacer(6)
+            except Exception as e_top:
+                logger.warning(f"Rendu top infractions : {e_top}")
+
     else:
         ctx.builder.add_paragraph("<i>Aucune donnée régionale détaillée disponible pour la synthèse interdépartementale.</i>")
 
@@ -766,6 +876,37 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
     df["departement"] = df["departement"].astype(str)
     depts = sorted(df["departement"].unique().tolist())
 
+    # Chargement des indicateurs complémentaires départementaux
+    df_nc = pd.DataFrame()
+    csv_nc = ctx.out_dir / "non_conformite_global_et_dept.csv"
+    if csv_nc.exists():
+        try:
+            df_nc = pd.read_csv(csv_nc, sep=";", encoding="utf-8")
+            if not df_nc.empty and "departement" in df_nc.columns:
+                df_nc["departement"] = df_nc["departement"].astype(str)
+        except Exception:
+            pass
+
+    df_mail = pd.DataFrame()
+    csv_mail = ctx.out_dir / "maillage_communes_dept.csv"
+    if csv_mail.exists():
+        try:
+            df_mail = pd.read_csv(csv_mail, sep=";", encoding="utf-8")
+            if not df_mail.empty and "departement" in df_mail.columns:
+                df_mail["departement"] = df_mail["departement"].astype(str)
+        except Exception:
+            pass
+
+    df_usg_dept = pd.DataFrame()
+    csv_usg_dept = ctx.out_dir / "usagers_par_dept.csv"
+    if csv_usg_dept.exists():
+        try:
+            df_usg_dept = pd.read_csv(csv_usg_dept, sep=";", encoding="utf-8")
+            if not df_usg_dept.empty and "departement" in df_usg_dept.columns:
+                df_usg_dept["departement"] = df_usg_dept["departement"].astype(str)
+        except Exception:
+            pass
+
     dept_dir = ctx.out_dir / "departements"
     if dept_dir.exists():
         for old_f in dept_dir.glob("Fiche_Dept_*.pdf"):
@@ -782,7 +923,7 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
         dept_name = get_dept_name(dept_str)
         df_dept = df[df["departement"] == dept_str]
 
-        # Élimination du titre orphelin en bas de page 4 : le titre du chapitre 2 est posé en haut de la Page 5
+        # Élimination du titre orphelin : le titre du chapitre 2 est posé en haut de la page 1 de chaque fiche
         ctx.builder.add_page_break()
         if idx == 0:
             ctx.builder.add_section("sec_region_fiches", title_sec2, level=1)
@@ -812,6 +953,30 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
             except Exception:
                 pass
 
+        # Récupération Taux de non-conformité et Maillage communal
+        pct_nc_str = "0 %"
+        if not df_nc.empty:
+            sub_nc = df_nc[df_nc["departement"] == dept_str]
+            if not sub_nc.empty:
+                pct_nc_str = f"{float(sub_nc['pct_non_conformite'].iloc[0])} %"
+
+        maillage_str = "0 %"
+        if not df_mail.empty:
+            sub_m = df_mail[df_mail["departement"] == dept_str]
+            if not sub_m.empty:
+                c_ctrl = int(sub_m["communes_controlees"].iloc[0])
+                c_tot = int(sub_m["total_communes"].iloc[0])
+                p_m = float(sub_m["pct_maillage"].iloc[0])
+                maillage_str = f"{p_m} % ({c_ctrl}/{c_tot} com)"
+
+        sec_enr = (getattr(ctx, "presentation_cfg", {}) or {}).get("sections_enrichies", {})
+        fiches_cfg = sec_enr.get("fiches_departementales", {})
+        show_nc = fiches_cfg.get("afficher_taux_non_conformite", False)
+        show_mail = fiches_cfg.get("afficher_maillage_communes", False)
+        visuel_droite = fiches_cfg.get("visuel_droite", "domaines")
+        tab_synth = fiches_cfg.get("tableau_synthese", "domaine")
+        limit_themes = int(fiches_cfg.get("limit_themes_snc", 10))
+
         if is_pnf and ops_coeur_dept > 0:
             dept_kfis = [
                 (str(total_ops), "Opérations AOA"),
@@ -825,6 +990,11 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 (f"{total_pej} / {total_pa} / {total_pve}", "PEJ / PA / PVe")
             ]
 
+        if show_nc:
+            dept_kfis.append((pct_nc_str, "Non-conformité"))
+        if show_mail:
+            dept_kfis.append((maillage_str, "Maillage territorial"))
+
         # 1. Traitement pour le Rapport Consolidé Régional (1 Page A4 portrait)
         if df_dept.empty or (total_ops == 0 and total_locs == 0 and total_pej == 0):
             ctx.builder.add_callout_box(
@@ -832,35 +1002,44 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 title="Département sans activité ciblée"
             )
         else:
+            spacer_h = 3 if (show_nc or show_mail or visuel_droite == "usagers" or tab_synth == "theme_snc") else 4
             ctx.builder.add_key_figures(dept_kfis)
-            ctx.builder.add_spacer(4)
+            ctx.builder.add_spacer(spacer_h)
 
-            cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
-            df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
-            for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
-                if c not in df_dom.columns:
-                    df_dom[c] = 0
-
-            pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
-            
             prof_id = str((ctx.profile or {}).get("id", "")) if hasattr(ctx, "profile") else "global"
             vignette_path = _generate_dept_vignette(dept_str, ctx.out_dir, ctx.tmp_dir, f"vignette_dept_{dept_str}.png", figure_scale=ctx.figure_scale, profile_id=prof_id)
-            img_vignette = _create_proportional_rl_image(vignette_path, ctx.avail_w * 0.46, "Vignette cartographique", ctx.builder.styles)
+            vignette_w = ctx.avail_w * 0.44 if (show_nc or show_mail or visuel_droite == "usagers") else ctx.avail_w * 0.46
+            img_vignette = _create_proportional_rl_image(vignette_path, vignette_w, "Vignette cartographique", ctx.builder.styles, max_h=200.0)
+
+            # Visuel de droite : Donut Usagers ou Donut Domaines selon la config
+            pie_dict = {}
+            pie_title = ""
+            if visuel_droite == "usagers" and not df_usg_dept.empty:
+                sub_usg = df_usg_dept[df_usg_dept["departement"] == dept_str]
+                if not sub_usg.empty:
+                    pie_dict = {str(r["type_usager"]): int(r["nb_operations"]) for _, r in sub_usg.iterrows() if int(r["nb_operations"]) > 0}
+                    pie_title = f"Types d'usagers ({dept_name})"
+            else:
+                cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
+                df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
+                pie_dict = {str(r["domaine"]): int(r["nb_localisations"]) for _, r in df_dom.iterrows() if r["nb_localisations"] > 0}
+                pie_title = f"Domaines ({dept_name})"
 
             if pie_dict:
                 img_name = f"pie_dept_{dept_str}.png"
                 pie_path = chart_pie_legend_right(
                     pie_dict,
-                    f"Répartition par domaine ({dept_name})",
+                    pie_title,
                     ctx.tmp_dir,
                     img_name,
                     figure_scale=ctx.figure_scale,
-                    legend_fontsize=7.5
+                    legend_fontsize=6.5 if visuel_droite == "usagers" else 7.0
                 )
-                img_pie = _create_proportional_rl_image(Path(pie_path), ctx.avail_w * 0.48, "Graphique indisponible", ctx.builder.styles)
+                pie_w = ctx.avail_w * 0.46 if (show_nc or show_mail or visuel_droite == "usagers") else ctx.avail_w * 0.48
+                img_pie = _create_proportional_rl_image(Path(pie_path), pie_w, "Graphique indisponible", ctx.builder.styles, max_h=200.0)
             else:
                 body_s = ctx.builder.styles.get("BodyText", ctx.builder.styles.get("Normal"))
-                img_pie = Paragraph("<i>Aucune donnée thématique</i>", body_s)
+                img_pie = Paragraph("<i>Aucune donnée visuelle</i>", body_s)
 
             double_visuel_tbl = Table(
                 [[img_vignette, img_pie]],
@@ -876,37 +1055,92 @@ def render_sec_region_fiches(ctx: PdfContext) -> None:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]))
             ctx.builder.story.append(double_visuel_tbl)
-            ctx.builder.add_spacer(4)
+            ctx.builder.add_spacer(spacer_h)
 
-            # Micro-tableau condensé (Top 5)
-            df_dom_sorted = df_dom.sort_values(by="nb_localisations", ascending=False)
-            top5_df = df_dom_sorted.head(5)
-            other_df = df_dom_sorted.iloc[5:]
+            # Tableau de Synthèse : Thème SNC ou Domaine selon la config
+            if tab_synth == "theme_snc":
+                csv_td = ctx.out_dir / "theme_snc_par_dept.csv"
+                df_ts = pd.DataFrame()
+                if csv_td.exists():
+                    try:
+                        df_ts = pd.read_csv(csv_td, sep=";", encoding="utf-8")
+                        if not df_ts.empty and "departement" in df_ts.columns:
+                            df_ts["departement"] = df_ts["departement"].astype(str)
+                            df_ts = df_ts[df_ts["departement"] == dept_str]
+                    except Exception:
+                        df_ts = pd.DataFrame()
 
-            tbl_dept = [["Domaine Métier", "Opérations", "Localisations", "PEJ / PA / PVe"]]
-            for _, r in top5_df.iterrows():
-                dom_label = re.sub(r"^\[\d+\]\s*", "", str(r["domaine"])).strip()
-                tbl_dept.append([
-                    dom_label,
-                    str(int(r["nb_operations"])),
-                    str(int(r["nb_localisations"])),
-                    f"{int(r.get('nb_pej', 0))} / {int(r.get('nb_pa', 0))} / {int(r.get('nb_pve', 0))}"
-                ])
-            if not other_df.empty:
-                tbl_dept.append([
-                    f"Autres domaines ({len(other_df)})",
-                    str(int(other_df["nb_operations"].sum())),
-                    str(int(other_df["nb_localisations"].sum())),
-                    f"{int(other_df['nb_pej'].sum())} / {int(other_df['nb_pa'].sum())} / {int(other_df['nb_pve'].sum())}"
-                ])
+                if df_ts.empty or "nb_pej" not in df_ts.columns or df_ts["nb_pej"].sum() == 0:
+                    # Regroupement direct sur df_dept (contient les effectifs réels nb_pej, nb_pa, nb_pve)
+                    df_ts = df_dept.copy()
+                    df_ts["theme_snc"] = df_ts["theme"].fillna(df_ts["domaine"]).astype(str) if "theme" in df_ts.columns else df_ts["domaine"].astype(str)
+
+                cols_sum = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_ts.columns]
+                for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]:
+                    if c not in cols_sum:
+                        df_ts[c] = 0
+
+                df_ts_sorted = df_ts.groupby("theme_snc")[["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"]].sum().reset_index()
+                df_ts_sorted = df_ts_sorted.sort_values(by="nb_localisations", ascending=False)
+                top_df = df_ts_sorted.head(limit_themes)
+                other_df = df_ts_sorted.iloc[limit_themes:]
+
+
+                tbl_dept = [["Thème SNC", "Opérations", "Localisations", "PEJ / PA / PVe"]]
+                for _, r in top_df.iterrows():
+                    th_label = re.sub(r"^\[\d+\]\s*", "", str(r["theme_snc"])).strip()
+                    tbl_dept.append([
+                        th_label,
+                        str(int(r["nb_operations"])),
+                        str(int(r["nb_localisations"])),
+                        f"{int(r.get('nb_pej', 0))} / {int(r.get('nb_pa', 0))} / {int(r.get('nb_pve', 0))}"
+                    ])
+                if not other_df.empty:
+                    tbl_dept.append([
+                        f"Autres thèmes ({len(other_df)})",
+                        str(int(other_df["nb_operations"].sum())),
+                        str(int(other_df["nb_localisations"].sum())),
+                        f"{int(other_df['nb_pej'].sum())} / {int(other_df['nb_pa'].sum())} / {int(other_df['nb_pve'].sum())}"
+                    ])
+
+                caption_txt = f"Synthèse par Thème SNC - {dept_name}"
+            else:
+                cols_dom = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_dept.columns]
+                df_dom = df_dept.groupby("domaine")[cols_dom].sum().reset_index()
+                df_dom_sorted = df_dom.sort_values(by="nb_localisations", ascending=False)
+                top5_df = df_dom_sorted.head(5)
+                other_df = df_dom_sorted.iloc[5:]
+
+                tbl_dept = [["Domaine Métier", "Opérations", "Localisations", "PEJ / PA / PVe"]]
+                for _, r in top5_df.iterrows():
+                    dom_label = re.sub(r"^\[\d+\]\s*", "", str(r["domaine"])).strip()
+                    tbl_dept.append([
+                        dom_label,
+                        str(int(r["nb_operations"])),
+                        str(int(r["nb_localisations"])),
+                        f"{int(r.get('nb_pej', 0))} / {int(r.get('nb_pa', 0))} / {int(r.get('nb_pve', 0))}"
+                    ])
+                if not other_df.empty:
+                    tbl_dept.append([
+                        f"Autres domaines ({len(other_df)})",
+                        str(int(other_df["nb_operations"].sum())),
+                        str(int(other_df["nb_localisations"].sum())),
+                        f"{int(other_df['nb_pej'].sum())} / {int(other_df['nb_pa'].sum())} / {int(other_df['nb_pve'].sum())}"
+                    ])
+                caption_txt = f"Synthèse par domaine principal - {dept_name}"
 
             ctx.builder.add_table(
                 tbl_dept,
-                caption=f"Synthèse par domaine principal - {dept_name}",
+                caption=caption_txt,
                 col_widths=[ctx.avail_w * 0.40, ctx.avail_w * 0.20, ctx.avail_w * 0.20, ctx.avail_w * 0.20],
                 col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
                 keep_together=True
             )
+
+            ctx.builder.add_spacer(3)
+
+
+
 
         # 2. Export du PDF autonome individuel 2-PAGES (departements/Fiche_Dept_<Code>.pdf)
         try:

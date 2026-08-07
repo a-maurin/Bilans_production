@@ -416,6 +416,12 @@ def list_sections_for_profile(
 
 
 def load_yaml_mapping(path: Path) -> dict[str, Any]:
+    def _yaml_include_dummy(loader, node):
+        return []
+    try:
+        yaml.add_constructor("!include", _yaml_include_dummy, Loader=yaml.SafeLoader)
+    except Exception:
+        pass
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
@@ -512,3 +518,19 @@ def field_display_value(spec: FieldSpec, data: dict[str, Any], profile_id: str) 
     if spec.widget == "choice" and val is None and "" in spec.choices:
         return ""
     return "" if val is None else val
+
+
+def validate_profile_data(data: dict[str, Any]) -> list[str]:
+    """Valide les types et contraintes d'un dictionnaire de profil YAML et retourne la liste des erreurs."""
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ["Le profil doit être un objet dictionnaire YAML valide."]
+
+    if "label" in data and not isinstance(data["label"], str):
+        errors.append("Champ 'label' doit être une chaîne de caractères.")
+
+    for list_key in ("natinf_pve", "natinf_pej", "natinf_exclus", "natinfs"):
+        if list_key in data and not isinstance(data[list_key], list):
+            errors.append(f"Champ '{list_key}' doit être une liste (format YAML - item).")
+
+    return errors

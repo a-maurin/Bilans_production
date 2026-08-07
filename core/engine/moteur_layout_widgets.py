@@ -143,3 +143,74 @@ def compile_page_layout(
         )
 
     return story
+
+
+# ========================================================================================
+# HANDLERS INTEGRÉS DE RENDU DE WIDGETS
+# ========================================================================================
+
+def render_theme_breakdown_table(
+    widget_config: dict[str, Any],
+    ctx: WidgetContext,
+    target_width: float,
+) -> Flowable:
+    """Widget de tableau de ventilation par thématique / usager avec troncature Top N et auto-scaling A4."""
+    limit_n = int(widget_config.get("limit", 5))
+    font_size = float(widget_config.get("font_size", 7.5))
+    
+    # Données transmises via le contexte ou le profil
+    data_rows = widget_config.get("data", [])
+    if not data_rows and "theme_table" in ctx.options:
+        data_rows = ctx.options["theme_table"]
+        
+    if not data_rows:
+        return Paragraph(f"<b>[Tableau de ventilation thématique]</b>", TableStyle([]))
+
+    # Auto-scaling si grand nombre de lignes
+    total_rows = len(data_rows)
+    if total_rows > limit_n:
+        top_rows = data_rows[:limit_n]
+        remaining_rows = data_rows[limit_n:]
+        
+        # Somme des colonnes numériques du reste
+        other_label = f"+ {len(remaining_rows)} autres thématiques"
+        other_vals = [0] * max(0, len(data_rows[0]) - 1) if data_rows else []
+        for r in remaining_rows:
+            for idx, val in enumerate(r[1:]):
+                try:
+                    other_vals[idx] += int(val)
+                except (ValueError, TypeError):
+                    pass
+        top_rows.append([other_label] + [str(v) for v in other_vals])
+        display_rows = top_rows
+        font_size = max(6.5, font_size - 0.5)
+    else:
+        display_rows = data_rows
+
+    tbl_data = []
+    for r in display_rows:
+        row_cells = []
+        for c in r:
+            row_cells.append(Paragraph(str(c)))
+        tbl_data.append(row_cells)
+
+    col_w = target_width / max(1, len(display_rows[0]))
+    tbl = Table(tbl_data, colWidths=[col_w] * len(display_rows[0]))
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 0), (-1, -1), font_size),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.lightgrey),
+    ]))
+    return tbl
+
+
+def get_default_widget_handlers() -> dict[str, Callable[[dict[str, Any], WidgetContext, float], Flowable | list[Flowable]]]:
+    """Retourne les handlers par défaut enregistrés pour les widgets standard."""
+    return {
+        "theme_breakdown_table": render_theme_breakdown_table,
+    }
+

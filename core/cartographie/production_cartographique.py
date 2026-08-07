@@ -38,6 +38,7 @@ import argparse
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -2292,9 +2293,9 @@ def export_layout(
     else:
         path_str = str(output_path.with_suffix(".png"))
 
-    # Export vers un fichier temporaire : ne pas supprimer le PNG existant avant succès
+    # Export vers un fichier temporaire unique (UUID) : évite GDAL ERROR 6 et verrous concurrents
     final_path = Path(path_str)
-    export_path = final_path.with_name(f"{final_path.stem}._export_tmp{final_path.suffix}")
+    export_path = final_path.with_name(f"{final_path.stem}_tmp_{uuid.uuid4().hex[:8]}{final_path.suffix}")
     if export_path.exists():
         try:
             export_path.unlink()

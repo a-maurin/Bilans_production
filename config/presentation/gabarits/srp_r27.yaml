@@ -85,3 +85,25 @@ layout_grid:
               widget:
                 type: section_group
                 sections: [sec3, sec6]
+
+sections_enrichies:
+  synthese_regionale:
+    afficher_donut_usagers: true
+  saisonnalite:
+    enabled: true
+    title: "1.3 Saisonnalité mensuelle de l'activité"
+
+  top_infractions:
+    enabled: true
+    title: "1.4 Principales infractions relevées (Top 5 PEJ & Top 5 PVe)"
+    limit_pej: 5
+    limit_pve: 5
+  fiches_departementales:
+    page_unique_stricte: true
+    afficher_taux_non_conformite: true
+    afficher_maillage_communes: false
+    visuel_droite: usagers
+    tableau_synthese: theme_snc
+    limit_themes_snc: 10
+
+

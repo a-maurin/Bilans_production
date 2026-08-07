@@ -2227,13 +2227,15 @@ def load_pve(
             if not df_conc.empty:
                 nat_col = next((c for c in df.columns if any(k in c.upper() for k in ["NATINF", "INF-NATINF", "NUMERO_NATINF", "CODE_NATINF"])), None)
                 if nat_col:
-                    df["numero_natinf_clean"] = df[nat_col].astype(str).str.strip().str.lstrip("0")
+                    df["numero_natinf_clean"] = df[nat_col].astype(str).str.extract(r'(\d+)', expand=False).fillna("").str.lstrip("0")
                     df = df.merge(df_conc, left_on="numero_natinf_clean", right_on="numero_natinf", how="left")
                     
-                    fallback_val = "Non Classé / Hors SNC"
-                    df["DOMAINE"] = df["domaine_snc"].fillna(fallback_val).replace("", fallback_val)
-                    df["THEME"] = df["theme_snc"].fillna(fallback_val).replace("", fallback_val)
-                    df["ACTION"] = df["action_snc"].fillna(fallback_val).replace("", fallback_val)
+                    orig_dom = df["DOMAINE"].fillna("Hors domaine") if "DOMAINE" in df.columns else "Hors domaine"
+                    orig_thm = df["THEME"].fillna(orig_dom) if "THEME" in df.columns else orig_dom
+
+                    df["DOMAINE"] = df["domaine_snc"].fillna(orig_dom).replace("", orig_dom)
+                    df["THEME"] = df["theme_snc"].fillna(orig_thm).replace("", orig_thm)
+                    df["ACTION"] = df["action_snc"].fillna("Non renseigné").replace("", "Non renseigné")
                     df["DOMAINE_SNC"] = df["DOMAINE"]
                     df["THEME_SNC"] = df["THEME"]
                     df["ACTION_SNC"] = df["ACTION"]
@@ -2241,6 +2243,7 @@ def load_pve(
                     df["theme"] = df["THEME"]
         except Exception as exc:
             logger.warning("Échec de la jointure concordance NATINF / SNC sur PVe : %s", exc)
+
 
         _PVE_RAW_CACHE[path] = df.copy()
 

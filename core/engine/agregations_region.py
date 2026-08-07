@@ -175,23 +175,27 @@ def analyse_region_par_departement(
     # 4. PVe
     if not pve.empty:
         pv = pve.copy()
-        pv["domaine"] = pv["DOMAINE"].fillna("Hors domaine").astype(str) if "DOMAINE" in pv.columns else "Hors domaine"
-        
-        natinf_map = _load_natinf_to_theme_map()
-        def _get_theme_from_natinf(val):
-            if pd.isna(val):
-                return "Hors thème"
-            tokens = [t.strip() for t in str(val).replace("_", " ").replace("-", " ").split() if t.strip()]
-            for tok in tokens:
-                if tok in natinf_map:
-                    return natinf_map[tok]
-            return "Hors thème"
-            
-        natinf_col = "INF-NATINF" if "INF-NATINF" in pv.columns else ("NATINF" if "NATINF" in pv.columns else None)
-        if natinf_col:
-            pv["theme"] = pv[natinf_col].apply(_get_theme_from_natinf)
+        # Priorité au thème SNC issu de la concordance NATINF/SNC (load_pve)
+        th_col = next((c for c in ["THEME_SNC", "theme_snc", "THEME", "theme"] if c in pv.columns and pv[c].notna().any()), None)
+        if th_col:
+            pv["theme"] = pv[th_col].fillna("Hors thème").astype(str)
         else:
-            pv["theme"] = "Hors thème"
+            natinf_map = _load_natinf_to_theme_map()
+            def _get_theme_from_natinf(val):
+                if pd.isna(val):
+                    return "Hors thème"
+                tokens = [t.strip() for t in str(val).replace("_", " ").replace("-", " ").split() if t.strip()]
+                for tok in tokens:
+                    if tok in natinf_map:
+                        return natinf_map[tok]
+                return "Hors thème"
+                
+            natinf_col = "INF-NATINF" if "INF-NATINF" in pv.columns else ("NATINF" if "NATINF" in pv.columns else None)
+            if natinf_col:
+                pv["theme"] = pv[natinf_col].apply(_get_theme_from_natinf)
+            else:
+                pv["theme"] = "Hors thème"
+
             
         pv["departement"] = "Inconnu"
         if "INF-INSEE" in pv.columns:
@@ -235,6 +239,252 @@ def analyse_region_par_departement(
 
     if pej_global is not None and not pej_global.empty:
         calculer_ratio_pej_departement(pej, pej_global, echelle, code, out_dir, profil_id)
+
+    calculer_enrichissements_regionaux(point, pa, pej, pve, dept_codes, out_dir)
+
+
+def calculer_enrichissements_regionaux(
+    point: pd.DataFrame,
+    pa: pd.DataFrame,
+    pej: pd.DataFrame,
+    pve: pd.DataFrame,
+    dept_codes: list[str],
+    out_dir: Path,
+) -> None:
+    """
+    Calcule et exporte les CSV d'enrichissement régional et départemental :
+    1. saisonnalite_mensuelle.csv (Opérations et infractions par mois)
+    2. non_conformite_global_et_dept.csv (Taux de non-conformité par dépt et global)
+    3. maillage_communes_dept.csv (Maillage communes contrôlées / total par dépt)
+    4. top_infractions_pej_pve.csv (10 lignes : Top 5 PEJ puis Top 5 PVe avec NATINF & Nature)
+    5. usagers_par_dept.csv (Typologie d'usagers par dépt et global)
+    """
+    try:
+        from core.chemins_projet import PROJECT_ROOT
+        from core.common.chargeurs_donnees import load_natinf_ref, load_concordance_natinf_snc, load_communes_noms
+
+        months_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"]
+
+        # 1. SAISONNALITÉ MENSUELLE
+        sais_ops = [0] * 12
+        sais_inf = [0] * 12
+
+        if not point.empty:
+            pt = point.copy()
+            date_col = next((c for c in ["date_ctrl", "date_fin", "date_deb", "date_debut", "DATE_REF", "date"] if c in pt.columns), None)
+            if date_col:
+                s_dates = pd.to_datetime(pt[date_col], errors="coerce")
+                for m in range(1, 13):
+                    sais_ops[m - 1] += int((s_dates.dt.month == m).sum())
+
+        # Somme des infractions (PEJ + PVe + PA) par mois
+        for df_proc, col_d in [(pej, "DATE_REF"), (pve, "INF-DATE"), (pa, "date_fin")]:
+            if df_proc is not None and not df_proc.empty:
+                c_date = col_d if col_d in df_proc.columns else next((c for c in df_proc.columns if "date" in c.lower()), None)
+                if c_date:
+                    s_d = pd.to_datetime(df_proc[c_date], errors="coerce")
+                    for m in range(1, 13):
+                        sais_inf[m - 1] += int((s_d.dt.month == m).sum())
+
+        df_sais = pd.DataFrame({
+            "mois_num": list(range(1, 13)),
+            "mois_lib": months_labels,
+            "nb_operations": sais_ops,
+            "nb_infractions": sais_inf,
+        })
+        df_sais.to_csv(out_dir / "saisonnalite_mensuelle.csv", sep=";", index=False)
+
+        # 2. MAILLAGE TERRITORIAL DES COMMUNES PAR DÉPARTEMENT
+        dict_communes_ref = load_communes_noms(PROJECT_ROOT)
+        tot_communes_ref_by_dept = {}
+        if dict_communes_ref:
+            for insee in dict_communes_ref.keys():
+                dept = str(insee)[:2]
+                tot_communes_ref_by_dept[dept] = tot_communes_ref_by_dept.get(dept, 0) + 1
+
+        rows_maillage = []
+        if not point.empty:
+            pt = point.copy()
+            if "num_depart" not in pt.columns:
+                pt["num_depart"] = "Inconnu"
+            pt["num_depart"] = pt["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
+
+            insee_col = next((c for c in ["insee_com", "code_insee", "commune_insee", "INSEE_COM", "num_insee"] if c in pt.columns), None)
+            
+            for d in dept_codes:
+                sub_d = pt[pt["num_depart"] == str(d)]
+                if insee_col and not sub_d.empty:
+                    nb_ctrl = sub_d[insee_col].dropna().astype(str).str.zfill(5).nunique()
+                else:
+                    nb_ctrl = len(sub_d)
+                
+                tot_ref = tot_communes_ref_by_dept.get(str(d), max(nb_ctrl, 1))
+                pct = round((nb_ctrl / tot_ref * 100.0), 1) if tot_ref > 0 else 0.0
+                rows_maillage.append({
+                    "departement": str(d),
+                    "communes_controlees": nb_ctrl,
+                    "total_communes": tot_ref,
+                    "pct_maillage": pct,
+                })
+        else:
+            for d in dept_codes:
+                tot_ref = tot_communes_ref_by_dept.get(str(d), 0)
+                rows_maillage.append({
+                    "departement": str(d),
+                    "communes_controlees": 0,
+                    "total_communes": tot_ref,
+                    "pct_maillage": 0.0,
+                })
+        pd.DataFrame(rows_maillage).to_csv(out_dir / "maillage_communes_dept.csv", sep=";", index=False)
+
+        # 3. TAUX DE NON-CONFORMITÉ GLOBAL ET DÉPARTEMENTAL
+        rows_nc = []
+        csv_detail = out_dir / "region_detail_par_dept.csv"
+        if csv_detail.exists():
+            df_det = pd.read_csv(csv_detail, sep=";", encoding="utf-8")
+            if not df_det.empty and "departement" in df_det.columns:
+                df_det["departement"] = df_det["departement"].astype(str)
+                for d in dept_codes:
+                    sub = df_det[df_det["departement"] == str(d)]
+                    ops = int(sub["nb_operations"].sum()) if "nb_operations" in sub.columns else 0
+                    pej_cnt = int(sub["nb_pej"].sum()) if "nb_pej" in sub.columns else 0
+                    pve_cnt = int(sub["nb_pve"].sum()) if "nb_pve" in sub.columns else 0
+                    pa_cnt = int(sub["nb_pa"].sum()) if "nb_pa" in sub.columns else 0
+                    procs = pej_cnt + pve_cnt + pa_cnt
+                    ops_nc = min(ops, procs) if ops > 0 else 0
+                    pct_nc = round((ops_nc / ops * 100.0), 1) if ops > 0 else 0.0
+                    rows_nc.append({
+                        "departement": str(d),
+                        "total_operations": ops,
+                        "operations_non_conformes": ops_nc,
+                        "pct_non_conformite": pct_nc,
+                    })
+                tot_ops = sum(r["total_operations"] for r in rows_nc)
+                tot_nc = sum(r["operations_non_conformes"] for r in rows_nc)
+                pct_tot = round((tot_nc / tot_ops * 100.0), 1) if tot_ops > 0 else 0.0
+                rows_nc.append({
+                    "departement": "Total",
+                    "total_operations": tot_ops,
+                    "operations_non_conformes": tot_nc,
+                    "pct_non_conformite": pct_tot,
+                })
+        pd.DataFrame(rows_nc).to_csv(out_dir / "non_conformite_global_et_dept.csv", sep=";", index=False)
+
+        # 4. TYPOLOGIE DES USAGERS PAR DÉPARTEMENT
+        import re
+        rows_usag = []
+        if not point.empty and "type_usager" in point.columns:
+            pt = point.copy()
+            if "num_depart" not in pt.columns:
+                pt["num_depart"] = "Inconnu"
+            pt["num_depart"] = pt["num_depart"].astype(str).str.strip().str.split('.').str[0].str.zfill(2)
+            pt["type_usager_clean"] = pt["type_usager"].apply(lambda u: re.sub(r'[\s_]+\d+$', '', str(u)).strip() if pd.notna(u) else "Non renseigné")
+
+            for (d, usg), sub in pt.groupby(["num_depart", "type_usager_clean"]):
+                if str(d) in dept_codes:
+                    nb_ops = sub["fc_id"].nunique() if "fc_id" in sub.columns else len(sub)
+                    rows_usag.append({
+                        "departement": str(d),
+                        "type_usager": str(usg),
+                        "nb_operations": nb_ops,
+                    })
+        df_usag = pd.DataFrame(rows_usag)
+        if not df_usag.empty:
+            df_usag = df_usag.groupby(["departement", "type_usager"])["nb_operations"].sum().reset_index()
+        df_usag.to_csv(out_dir / "usagers_par_dept.csv", sep=";", index=False)
+
+        # 5. SYNTHÈSE PAR THÈME SNC PAR DÉPARTEMENT (Pour le tableau de la Fiche Département)
+        csv_detail = out_dir / "region_detail_par_dept.csv"
+        if csv_detail.exists():
+            df_det = pd.read_csv(csv_detail, sep=";", encoding="utf-8")
+            if not df_det.empty and "theme" in df_det.columns and "departement" in df_det.columns:
+                df_det["departement"] = df_det["departement"].astype(str)
+                df_det["theme_snc"] = df_det["theme"].fillna("Hors thème").astype(str)
+                cols_sum = [c for c in ["nb_operations", "nb_localisations", "nb_pej", "nb_pa", "nb_pve"] if c in df_det.columns]
+                df_td_pivot = df_det.groupby(["departement", "theme_snc"])[cols_sum].sum().reset_index()
+                df_td_pivot.to_csv(out_dir / "theme_snc_par_dept.csv", sep=";", index=False)
+
+
+        # 6. TOP 10 INFRACTIONS FUSIONNÉ (Top 5 PEJ + Top 5 PVe)
+        df_natinf_ref = load_natinf_ref(PROJECT_ROOT)
+        df_snc_conc = load_concordance_natinf_snc(PROJECT_ROOT)
+
+        ref_map = {}
+        if not df_natinf_ref.empty and "numero_natinf" in df_natinf_ref.columns:
+            for _, r in df_natinf_ref.iterrows():
+                num = str(r["numero_natinf"]).strip().lstrip("0")
+                ref_map[num] = {
+                    "libelle": str(r.get("libelle_natinf", "") or r.get("qualification_infraction", "")),
+                    "nature": str(r.get("nature_infraction", "Délit")),
+                }
+
+        snc_map = {}
+        if not df_snc_conc.empty and "numero_natinf" in df_snc_conc.columns:
+            for _, r in df_snc_conc.iterrows():
+                num = str(r["numero_natinf"]).strip().lstrip("0")
+                snc_map[num] = str(r.get("theme_snc", "Non catégorisé"))
+
+        top_rows = []
+
+        # Top 5 PEJ
+        if pej is not None and not pej.empty:
+            nat_col = next((c for c in ["NATINF_PEJ", "NATINF", "NUMERO_NATINF", "natinf"] if c in pej.columns), None)
+            theme_fallback_col = next((c for c in ["THEME", "DOMAINE", "thematique"] if c in pej.columns), None)
+            if nat_col:
+                s_codes = pej[nat_col].dropna().astype(str).str.extract(r'(\d+)', expand=False).dropna()
+                counts = s_codes.value_counts().head(5)
+                for code_nat, count in counts.items():
+                    clean_code = str(code_nat).strip().lstrip("0")
+                    ref_info = ref_map.get(clean_code, {"libelle": f"Infraction NATINF {code_nat}", "nature": "Délit"})
+                    
+                    fallback_val = "Infractions pénales"
+                    if theme_fallback_col:
+                        sub_pj = pej[pej[nat_col].astype(str).str.contains(str(code_nat), na=False)]
+                        if not sub_pj.empty:
+                            fallback_val = str(sub_pj[theme_fallback_col].iloc[0])
+                    
+                    theme = snc_map.get(clean_code, fallback_val)
+                    top_rows.append({
+                        "procedure": "PEJ",
+                        "theme_snc": theme,
+                        "numero_natinf": str(code_nat),
+                        "libelle_infraction": ref_info["libelle"],
+                        "nature_juridique": ref_info["nature"],
+                        "nb_infractions": int(count),
+                    })
+
+        # Top 5 PVe
+        if pve is not None and not pve.empty:
+            nat_col = next((c for c in ["INF-NATINF", "NATINF", "numero_natinf", "natinf"] if c in pve.columns), None)
+            theme_fallback_col = next((c for c in ["DOMAINE", "THEME", "thematique"] if c in pve.columns), None)
+            if nat_col:
+                s_codes = pve[nat_col].dropna().astype(str).str.extract(r'(\d+)', expand=False).dropna()
+                counts = s_codes.value_counts().head(5)
+                for code_nat, count in counts.items():
+                    clean_code = str(code_nat).strip().lstrip("0")
+                    ref_info = ref_map.get(clean_code, {"libelle": f"Infraction NATINF {code_nat}", "nature": "Contravention C5"})
+                    
+                    fallback_val = "Infractions forfaitaires"
+                    if theme_fallback_col:
+                        sub_pv = pve[pve[nat_col].astype(str).str.contains(str(code_nat), na=False)]
+                        if not sub_pv.empty:
+                            fallback_val = str(sub_pv[theme_fallback_col].iloc[0])
+
+                    theme = snc_map.get(clean_code, fallback_val)
+                    top_rows.append({
+                        "procedure": "PVe",
+                        "theme_snc": theme,
+                        "numero_natinf": str(code_nat),
+                        "libelle_infraction": ref_info["libelle"],
+                        "nature_juridique": ref_info["nature"],
+                        "nb_infractions": int(count),
+                    })
+
+        pd.DataFrame(top_rows).to_csv(out_dir / "top_infractions_pej_pve.csv", sep=";", index=False)
+
+    except Exception as e_enr:
+        logger.warning(f"Calcul des enrichissements régionaux : {e_enr}")
+
 
 
 def _extract_gdf(df: pd.DataFrame, out_dir: Path, pattern: str = "controles_*.gpkg") -> Any:

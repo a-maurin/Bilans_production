@@ -268,7 +268,7 @@ def _parse_type_usager_tokens(valeur_source: str) -> list[tuple[str, int]]:
     parts = [p.strip() for p in s.split(",") if p.strip()]
     out: list[tuple[str, int]] = []
     for p in parts:
-        m = re.match(r"^(.*?)(?:\s+(\d+))?$", p)
+        m = re.match(r"^(.*?)(?:[\s_]+(\d+))?$", p)
         if not m:
             continue
         label = (m.group(1) or "").strip()
@@ -276,6 +276,7 @@ def _parse_type_usager_tokens(valeur_source: str) -> list[tuple[str, int]]:
         if label:
             out.append((label, n))
     return out
+
 
 
 # ========================================================================================

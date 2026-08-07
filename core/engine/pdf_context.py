@@ -122,3 +122,25 @@ class PdfContext:
     @property
     def scope(self) -> str:
         return str(self.profile.get("presentation_scope", "global")).strip() or "global"
+
+    def __post_init__(self) -> None:
+        """Contrôle de cohérence Fail-Fast au démarrage."""
+        if self.map_id and self.map_id != "global":
+            from core.chemins_projet import PROJECT_ROOT
+            import yaml
+            cartes_path = PROJECT_ROOT / "config" / "profils_cartes.yaml"
+            if cartes_path.exists():
+                try:
+                    cartes_cfg = yaml.safe_load(cartes_path.read_text(encoding="utf-8")) or {}
+                    if self.map_id not in cartes_cfg:
+                        import logging
+                        logging.warning("Fail-Fast Warning: map_id '%s' absent de profils_cartes.yaml", self.map_id)
+                except Exception:
+                    pass
+
+    def safe_df(self, name: str) -> pd.DataFrame:
+        """Retourne le DataFrame correspondant au nom d'attribut s'il existe et est non-Nul, sinon un DataFrame vide."""
+        val = getattr(self, name, None)
+        if isinstance(val, pd.DataFrame) and not val.empty:
+            return val
+        return pd.DataFrame()

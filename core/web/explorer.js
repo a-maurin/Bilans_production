@@ -171,7 +171,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cardUsa) cardUsa.classList.add('active-chart-button');
             const kpiUsa = document.getElementById('stat-card-usagers');
             if (kpiUsa) kpiUsa.classList.add('active-kpi-button');
+        } else if (filterName === 'chart-domains' || filterName.startsWith('domaine:')) {
+            const cardDom = document.getElementById('card-chart-domains');
+            if (cardDom) cardDom.classList.add('active-chart-button');
+        } else if (filterName === 'chart-themes' || filterName.startsWith('theme:')) {
+            const cardTh = document.getElementById('card-chart-themes');
+            if (cardTh) cardTh.classList.add('active-chart-button');
         }
+    }
+
+    function findUsagerValue(targetLabel) {
+        if (!targetLabel) return null;
+        const norm = normalizeStr(targetLabel);
+        const item = usagersList.find(u => u.value && (normalizeStr(u.value).includes(norm) || norm.includes(normalizeStr(u.value)) || normalizeStr(u.label).includes(norm)));
+        return item ? item.value : null;
     }
 
     window.handleKpiClick = function(filterName) {
@@ -185,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activeKpiFilter = filterName;
         setActiveKpiVisual(filterName);
+
+        let shouldLoadData = false;
 
         if (filterName === 'controles') {
             currentMapMode = 'results';
@@ -229,22 +244,42 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.keys(usagerLegendFilters).forEach(k => usagerLegendFilters[k] = true);
         } else if (filterName.startsWith('usager:')) {
             currentMapMode = 'usagers';
-            const targetLabel = normalizeStr(filterName.substring(7));
+            const targetLabel = filterName.substring(7);
+            const usagerVal = findUsagerValue(targetLabel);
+            if (usagerVal && typeof inputUsager !== 'undefined') {
+                const currentVals = inputUsager.getSelectedValues ? inputUsager.getSelectedValues() : [];
+                if (currentVals.includes(usagerVal)) {
+                    if (inputUsager.setSelectedValues) inputUsager.setSelectedValues([]);
+                    else inputUsager.value = '';
+                    activeKpiFilter = null;
+                    setActiveKpiVisual(null);
+                } else {
+                    if (inputUsager.setSelectedValues) inputUsager.setSelectedValues([usagerVal]);
+                    else inputUsager.value = usagerVal;
+                }
+                shouldLoadData = true;
+            }
+            const normTarget = normalizeStr(targetLabel);
             Object.keys(usagerLegendFilters).forEach(k => {
-                usagerLegendFilters[k] = normalizeStr(k).includes(targetLabel) || targetLabel.includes(normalizeStr(k));
+                usagerLegendFilters[k] = normalizeStr(k).includes(normTarget) || normTarget.includes(normalizeStr(k));
             });
         } else if (filterName.startsWith('resultat:')) {
             currentMapMode = 'results';
-            const label = filterName.substring(9).toLowerCase();
+            const rawLabel = filterName.substring(9);
+            const label = rawLabel.toLowerCase();
+            let resVal = 'Conforme';
             if (label.includes('conforme') && !label.includes('non')) {
+                resVal = 'Conforme';
                 legendFilters.ctrl_conforme = true;
                 legendFilters.ctrl_infraction = false;
                 legendFilters.ctrl_attente = false;
             } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                resVal = 'Non-conforme';
                 legendFilters.ctrl_conforme = false;
                 legendFilters.ctrl_infraction = true;
                 legendFilters.ctrl_attente = false;
             } else {
+                resVal = 'En attente';
                 legendFilters.ctrl_conforme = false;
                 legendFilters.ctrl_infraction = false;
                 legendFilters.ctrl_attente = true;
@@ -252,9 +287,26 @@ document.addEventListener('DOMContentLoaded', () => {
             legendFilters.pej = false;
             legendFilters.pa = false;
             legendFilters.pve = false;
+
+            if (typeof inputResultat !== 'undefined' && inputResultat) {
+                const currentVals = inputResultat.getSelectedValues ? inputResultat.getSelectedValues() : [];
+                if (currentVals.includes(resVal)) {
+                    if (inputResultat.setSelectedValues) inputResultat.setSelectedValues([]);
+                    else inputResultat.value = '';
+                    activeKpiFilter = null;
+                    setActiveKpiVisual(null);
+                } else {
+                    if (inputResultat.setSelectedValues) inputResultat.setSelectedValues([resVal]);
+                    else inputResultat.value = resVal;
+                }
+                shouldLoadData = true;
+            }
         }
 
         triggerMapReRender();
+        if (shouldLoadData) {
+            loadData();
+        }
     };
 
     window.resetKpiFilter = function() {
@@ -269,7 +321,13 @@ document.addEventListener('DOMContentLoaded', () => {
         legendFilters.pve = true;
         Object.keys(usagerLegendFilters).forEach(k => usagerLegendFilters[k] = true);
 
+        if (typeof inputUsager !== 'undefined' && inputUsager.setSelectedValues) inputUsager.setSelectedValues([]);
+        if (typeof inputDomaineSNC !== 'undefined' && inputDomaineSNC.setSelectedValues) inputDomaineSNC.setSelectedValues([]);
+        if (typeof inputThemeSNC !== 'undefined' && inputThemeSNC.setSelectedValues) inputThemeSNC.setSelectedValues([]);
+        if (typeof inputResultat !== 'undefined' && inputResultat.setSelectedValues) inputResultat.setSelectedValues([]);
+
         triggerMapReRender();
+        loadData();
     };
 
     window.toggleUsagerLegendFilter = function(categoryKey, event) {
@@ -3840,10 +3898,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (elements && elements.length > 0) {
                                 const index = elements[0].index;
                                 const domainName = sortedDomainsN[index][0];
-                                if (inputDomaineSNC.setSelectedValues) {
-                                    inputDomaineSNC.setSelectedValues([domainName]);
+                                const currentVals = inputDomaineSNC.getSelectedValues ? inputDomaineSNC.getSelectedValues() : (inputDomaineSNC.value ? [inputDomaineSNC.value] : []);
+                                if (currentVals.includes(domainName)) {
+                                    if (inputDomaineSNC.setSelectedValues) inputDomaineSNC.setSelectedValues([]);
+                                    else inputDomaineSNC.value = '';
+                                    activeKpiFilter = null;
+                                    setActiveKpiVisual(null);
                                 } else {
-                                    inputDomaineSNC.value = domainName;
+                                    if (inputDomaineSNC.setSelectedValues) inputDomaineSNC.setSelectedValues([domainName]);
+                                    else inputDomaineSNC.value = domainName;
+                                    activeKpiFilter = 'domaine:' + domainName;
+                                    setActiveKpiVisual('domaine:' + domainName);
                                 }
                                 loadData();
                             }
@@ -3989,10 +4054,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (elements && elements.length > 0) {
                                 const index = elements[0].index;
                                 const themeName = sortedThemesN[index][0];
-                                if (inputThemeSNC.setSelectedValues) {
-                                    inputThemeSNC.setSelectedValues([themeName]);
+                                const currentVals = inputThemeSNC.getSelectedValues ? inputThemeSNC.getSelectedValues() : (inputThemeSNC.value ? [inputThemeSNC.value] : []);
+                                if (currentVals.includes(themeName)) {
+                                    if (inputThemeSNC.setSelectedValues) inputThemeSNC.setSelectedValues([]);
+                                    else inputThemeSNC.value = '';
+                                    activeKpiFilter = null;
+                                    setActiveKpiVisual(null);
                                 } else {
-                                    inputThemeSNC.value = themeName;
+                                    if (inputThemeSNC.setSelectedValues) inputThemeSNC.setSelectedValues([themeName]);
+                                    else inputThemeSNC.value = themeName;
+                                    activeKpiFilter = 'theme:' + themeName;
+                                    setActiveKpiVisual('theme:' + themeName);
                                 }
                                 loadData();
                             }
@@ -4145,12 +4217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderTable() {
-        const tableBody = document.getElementById('table-body');
-        if (!tableBody) return;
-
-        tableBody.innerHTML = '';
-
+    function getFilteredTableData() {
         let data = [];
         if (activeKpiFilter === 'pej') {
             data = activeProcedures.filter(p => (p.type || '').toUpperCase().includes('PEJ'));
@@ -4179,10 +4246,19 @@ document.addEventListener('DOMContentLoaded', () => {
             data = [...activePoints];
         }
 
-        data = data.filter(item => {
+        return data.filter(item => {
             const isProc = Boolean(item.type && !item.resultat);
             return !isItemDynamicallyExcluded(item, isProc);
         });
+    }
+
+    function renderTable() {
+        const tableBody = document.getElementById('table-body');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+
+        let data = getFilteredTableData();
 
         // Tri
         if (tableSortColumn) {
@@ -4208,19 +4284,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const pageData = data.slice(startIndex, endIndex);
 
         if (pageData.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--color-text-muted); padding: 20px;">Aucun contrôle à afficher.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 20px;">Aucun contrôle à afficher.</td></tr>`;
         } else {
             pageData.forEach(row => {
                 const tr = document.createElement('tr');
-                const color = getMarkerColor(row.resultat);
+                const resText = row.resultat || (row.type ? `Infraction (${row.type})` : '');
+                const color = getMarkerColor(resText);
+                const communeText = row.nom_commun || ((row.x === null || row.x === undefined || row.x === 0) ? 'Non géolocalisée' : '');
                 tr.innerHTML = `
                     <td style="padding: 6px 8px;">${row.dc_id || ''}</td>
                     <td style="padding: 6px 8px;">${row.date_ctrl || ''}</td>
-                    <td style="padding: 6px 8px; font-weight: 600; color: ${color};">${row.resultat || ''}</td>
+                    <td style="padding: 6px 8px; font-weight: 600; color: ${color};">${resText}</td>
                     <td style="padding: 6px 8px;">${row.domaine || ''}</td>
                     <td style="padding: 6px 8px;">${row.theme || ''}</td>
+                    <td style="padding: 6px 8px;">${row.type_action || 'Non renseigné'}</td>
                     <td style="padding: 6px 8px;">${row.type_usager || ''}</td>
-                    <td style="padding: 6px 8px;">${row.nom_commun || ''}</td>
+                    <td style="padding: 6px 8px;">${communeText}</td>
                 `;
                 tableBody.appendChild(tr);
             });
@@ -4229,7 +4308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mise à jour de l'UI pagination
         const infoEl = document.getElementById('table-pagination-info');
         if (infoEl) {
-            infoEl.textContent = `Affichage de ${totalRows ? startIndex + 1 : 0} à ${endIndex} sur ${totalRows} contrôle${totalRows > 1 ? 's' : ''} (Page ${currentTablePage}/${totalPages})`;
+            infoEl.textContent = `Affichage de ${totalRows ? startIndex + 1 : 0} à ${endIndex} sur ${totalRows} ligne${totalRows > 1 ? 's' : ''} (Page ${currentTablePage}/${totalPages})`;
         }
 
         const btnPrev = document.getElementById('btn-page-prev');
@@ -4250,7 +4329,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (btnNext) {
         btnNext.addEventListener('click', () => {
-            const totalPages = Math.max(1, Math.ceil(activePoints.length / tableRowsPerPage));
+            const data = getFilteredTableData();
+            const totalPages = Math.max(1, Math.ceil(data.length / tableRowsPerPage));
             if (currentTablePage < totalPages) {
                 currentTablePage++;
                 renderTable();
@@ -4286,22 +4366,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnExportCsv) {
         btnExportCsv.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (activePoints.length === 0) {
-                alert('Aucun contrôle à exporter.');
+            const dataToExport = getFilteredTableData();
+            if (dataToExport.length === 0) {
+                alert('Aucune donnée à exporter.');
                 return;
             }
 
-            const headers = ['ID', 'Date', 'Resultat', 'Domaine', 'Theme', 'Type Usager', 'Commune', 'X', 'Y'];
-            const rows = activePoints.map(row => [
+            const headers = ['ID', 'Date', 'Resultat', 'Domaine', 'Theme', 'Type Action', 'Type Usager', 'Commune', 'X', 'Y'];
+            const rows = dataToExport.map(row => [
                 row.dc_id || '',
                 row.date_ctrl || '',
-                row.resultat || '',
+                row.resultat || (row.type ? `Infraction (${row.type})` : ''),
                 row.domaine || '',
                 row.theme || '',
+                row.type_action || 'Non renseigné',
                 row.type_usager || '',
-                row.nom_commun || '',
-                row.x || 0.0,
-                row.y || 0.0
+                row.nom_commun || ((row.x === null || row.x === undefined || row.x === 0) ? 'Non géolocalisée' : ''),
+                row.x !== null && row.x !== undefined ? row.x : 0.0,
+                row.y !== null && row.y !== undefined ? row.y : 0.0
             ]);
 
             const csvContent = "\uFEFF" + [

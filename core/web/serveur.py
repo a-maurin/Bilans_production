@@ -1211,6 +1211,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_valid["_code_dept_calc"] = get_dept_series(df_valid)
                     col_ta = "type_actio" if "type_actio" in df.columns else ("type_action" if "type_action" in df.columns else None)
                     col_insee = next((c for c in ("code_insee", "insee_comm", "insee_com", "insee", "code_com") if c in df_valid.columns), None)
+                    col_dom = next((c for c in ("domaine", "DOMAINE") if c in df_valid.columns), None)
+                    col_th = next((c for c in ("theme", "THEME") if c in df_valid.columns), None)
+                    col_res = next((c for c in ("resultat", "RESULTAT") if c in df_valid.columns), None)
+                    col_com = next((c for c in ("nom_commun", "NOM_COM", "commune") if c in df_valid.columns), None)
                     for r in df_valid.to_dict("records"):
                         dept_calc = str(r.get("_code_dept_calc", "")).strip()
                         code_dept_proc = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
@@ -1226,8 +1230,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "type": label,
                             "dc_id": str(r.get("dc_id", "")).strip() if pd.notna(r.get("dc_id")) else "",
                             "date_ctrl": str(r.get("date_ctrl", ""))[:10] if pd.notna(r.get("date_ctrl")) else "",
+                            "resultat": str(r.get(col_res, f"Infraction ({label})")).strip() if col_res and pd.notna(r.get(col_res)) else f"Infraction ({label})",
+                            "domaine": str(r.get(col_dom, "")).strip() if col_dom and pd.notna(r.get(col_dom)) else "",
+                            "theme": str(r.get(col_th, "")).strip() if col_th and pd.notna(r.get(col_th)) else "",
                             "type_action": str(r.get(col_ta, "Non renseigné")).strip() if col_ta and pd.notna(r.get(col_ta)) else "Non renseigné",
                             "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
+                            "nom_commun": str(r.get(col_com, "")).strip() if col_com and pd.notna(r.get(col_com)) else "",
                             "code_dept": code_dept_proc,
                             "code_insee": insee_proc,
                             "precision_loc": "Point de contrôle rattaché",
@@ -1242,7 +1250,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         from core.common.chargeurs_donnees import merge_pej_faits_locations
                         df_pej_loc = merge_pej_faits_locations(df_pej, project_root, echelle, code)
                         
-                        # --- FALLBACK COORDONNEES VIA df_pts_unfiltered ---
+                        # --- FALLBACK 1: COORDONNEES VIA df_pts_unfiltered ---
                         if not df_pts_unfiltered.empty and "dc_id" in df_pts_unfiltered.columns and "x" in df_pts_unfiltered.columns and "y" in df_pts_unfiltered.columns:
                             import re
                             df_pts_clean = df_pts_unfiltered.copy()
@@ -1268,29 +1276,75 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     if "precision_loc" in df_pej_loc.columns:
                                         df_pej_loc.loc[idx_found, "precision_loc"] = "Point de contrôle rattaché"
 
-                        if not df_pej_loc.empty and "x_faits" in df_pej_loc.columns and "y_faits" in df_pej_loc.columns:
-                            df_pej_valid = df_pej_loc.dropna(subset=["x_faits", "y_faits"]).copy()
-                            df_pej_valid["_code_dept_calc"] = get_dept_series(df_pej_valid)
-                            for r in df_pej_valid.to_dict("records"):
+                        # --- FALLBACK 2: CENTROIDES COMMUNAUX POUR PEJ ---
+                        missing_pej_mask = df_pej_loc["x_faits"].isna() | df_pej_loc["y_faits"].isna()
+                        if missing_pej_mask.any():
+                            try:
+                                from core.common.chargeurs_donnees import load_communes_centroides
+                                cen_com = load_communes_centroides(project_root)
+                                if not cen_com.empty:
+                                    insee_col = "code_insee" if "code_insee" in cen_com.columns else ("CODE_INSEE" if "CODE_INSEE" in cen_com.columns else "insee")
+                                    lat_col = "lat" if "lat" in cen_com.columns else "latitude_centre"
+                                    lon_col = "lon" if "lon" in cen_com.columns else "longitude_centre"
+                                    
+                                    if insee_col and lat_col in cen_com.columns and lon_col in cen_com.columns:
+                                        dict_lat = pd.to_numeric(cen_com.set_index(insee_col)[lat_col], errors="coerce").to_dict()
+                                        dict_lon = pd.to_numeric(cen_com.set_index(insee_col)[lon_col], errors="coerce").to_dict()
+                                        
+                                        col_insee_pej = next((c for c in ("code_insee", "insee_comm", "insee_com", "insee", "code_com") if c in df_pej_loc.columns), None)
+                                        if col_insee_pej:
+                                            pej_insee = df_pej_loc.loc[missing_pej_mask, col_insee_pej].astype(str).str.extract(r"(\d{1,5})", expand=False).fillna("").str.zfill(5)
+                                            mapped_pej_x = pej_insee.map(dict_lon)
+                                            mapped_pej_y = pej_insee.map(dict_lat)
+                                            found_pej = mapped_pej_x.notna() & mapped_pej_y.notna()
+                                            if found_pej.any():
+                                                idx_pej = pej_insee[found_pej].index
+                                                df_pej_loc.loc[idx_pej, "x_faits"] = mapped_pej_x[found_pej]
+                                                df_pej_loc.loc[idx_pej, "y_faits"] = mapped_pej_y[found_pej]
+                                                df_pej_loc.loc[idx_pej, "precision_loc"] = "Centroïde communal (Approximatif)"
+                            except Exception as e:
+                                print(f"Exception fallback communes PEJ: {e}")
+
+                        if not df_pej_loc.empty:
+                            df_pej_all = df_pej_loc.copy()
+                            df_pej_all["_code_dept_calc"] = get_dept_series(df_pej_all)
+                            for r in df_pej_all.to_dict("records"):
                                 dept_calc = str(r.get("_code_dept_calc", "")).strip()
                                 code_dept_pej = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
                                 insee_pej = str(r.get("code_insee", r.get("insee_comm", r.get("insee_com", r.get("insee", ""))))).strip()
                                 if insee_pej in ("N/A", "nan", "None", "<NA>"):
                                     insee_pej = ""
-                                prec_val = str(r.get("precision_loc", "GPS Fait (Exacte)")).strip()
-                                if not prec_val or prec_val in ("N/A", "nan", "None", "<NA>"):
-                                    prec_val = "GPS Fait (Exacte)"
+                                
+                                prec_val = str(r.get("precision_loc", "")).strip()
                                 try:
-                                    x_val = float(r["x_faits"])
-                                    y_val = float(r["y_faits"])
+                                    x_val = float(r["x_faits"]) if pd.notna(r.get("x_faits")) else None
+                                    y_val = float(r["y_faits"]) if pd.notna(r.get("y_faits")) else None
                                 except (ValueError, TypeError):
-                                    continue
+                                    x_val, y_val = None, None
+
+                                if x_val is None or y_val is None:
+                                    x_val, y_val = None, None
+                                    prec_val = "Infraction non localisée"
+                                elif not prec_val or prec_val in ("N/A", "nan", "None", "<NA>"):
+                                    prec_val = "GPS Fait (Exacte)"
+
+                                dom_val = str(r.get("DOMAINE", r.get("domaine", ""))).strip()
+                                if dom_val in ("N/A", "nan", "None", "<NA>"): dom_val = ""
+                                theme_val = str(r.get("THEME", r.get("theme", ""))).strip()
+                                if theme_val in ("N/A", "nan", "None", "<NA>"): theme_val = ""
+                                com_val = str(r.get("NOM_COM", r.get("NOM_COM_FAITS", r.get("nom_commun", r.get("commune", ""))))).strip()
+                                if com_val in ("N/A", "nan", "None", "<NA>"): com_val = "Non géolocalisée"
+
                                 procedures.append({
                                     "type": "PEJ",
                                     "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
                                     "date_ctrl": str(r.get("DATE_REF", ""))[:10] if pd.notna(r.get("DATE_REF")) else "",
+                                    "resultat": "Infraction (PEJ)",
+                                    "domaine": dom_val,
+                                    "theme": theme_val,
                                     "type_action": str(r.get("TYPE_ACTION", "Non renseigné")).strip() if pd.notna(r.get("TYPE_ACTION")) else "Non renseigné",
                                     "type_usager": str(r.get("type_usager", "Non renseigné")).strip() if pd.notna(r.get("type_usager")) else "Non renseigné",
+                                    "nom_commun": com_val if com_val else "Non géolocalisée",
                                     "code_dept": code_dept_pej,
                                     "code_insee": insee_pej,
                                     "precision_loc": prec_val,
@@ -1357,6 +1411,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         date_col_pve = "INF-DATE-MIF" if "INF-DATE-MIF" in df_pve.columns else "INF-DATE-INTG"
                         col_ta_pve = "type_action" if "type_action" in df_pve.columns else ("THEME" if "THEME" in df_pve.columns else ("type_actio" if "type_actio" in df_pve.columns else None))
                         col_usager_pve = "type_usager" if "type_usager" in df_pve.columns else ("USAGER" if "USAGER" in df_pve.columns else None)
+                        col_dom_pve = "DOMAINE" if "DOMAINE" in pve_valid.columns else ("domaine" if "domaine" in pve_valid.columns else None)
+                        col_th_pve = "THEME" if "THEME" in pve_valid.columns else ("theme" if "theme" in pve_valid.columns else None)
+                        col_com_pve = "NOM_COM" if "NOM_COM" in pve_valid.columns else ("nom_commun" if "nom_commun" in pve_valid.columns else ("INF-COMMUNE" if "INF-COMMUNE" in pve_valid.columns else None))
+
                         for r in pve_valid.to_dict("records"):
                             dept_calc = str(r.get("_code_dept_calc", "")).strip()
                             code_dept_pve = "" if dept_calc in ("N/A", "nan", "None") else dept_calc
@@ -1368,12 +1426,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 y_val = float(r[y_col])
                             except (ValueError, TypeError):
                                 continue
+                            
+                            dom_pve = str(r.get(col_dom_pve, "")).strip() if col_dom_pve and pd.notna(r.get(col_dom_pve)) else ""
+                            if dom_pve in ("N/A", "nan", "None", "<NA>"): dom_pve = ""
+                            th_pve = str(r.get(col_th_pve, "")).strip() if col_th_pve and pd.notna(r.get(col_th_pve)) else ""
+                            if th_pve in ("N/A", "nan", "None", "<NA>"): th_pve = ""
+                            com_pve = str(r.get(col_com_pve, "")).strip() if col_com_pve and pd.notna(r.get(col_com_pve)) else ""
+                            if com_pve in ("N/A", "nan", "None", "<NA>"): com_pve = ""
+
                             procedures.append({
                                 "type": "PVe",
                                 "dc_id": str(r.get("DC_ID", "")).strip() if pd.notna(r.get("DC_ID")) else "",
                                 "date_ctrl": str(r.get(date_col_pve, ""))[:10] if pd.notna(r.get(date_col_pve)) else "",
+                                "resultat": "PVe",
+                                "domaine": dom_pve,
+                                "theme": th_pve,
                                 "type_action": str(r.get(col_ta_pve, "Non renseigné")).strip() if col_ta_pve and pd.notna(r.get(col_ta_pve)) else "Non renseigné",
                                 "type_usager": str(r.get(col_usager_pve, "Non renseigné")).strip() if col_usager_pve and pd.notna(r.get(col_usager_pve)) else "Non renseigné",
+                                "nom_commun": com_pve,
                                 "code_dept": code_dept_pve,
                                 "code_insee": insee_pve,
                                 "precision_loc": str(r.get("precision_loc", "GPS Fait (Exacte)")),

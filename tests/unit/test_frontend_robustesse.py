@@ -208,6 +208,23 @@ def test_filtres_drawer_collapse():
     assert 'document.body.classList.toggle(\'has-map-fullscreen\'' in js_source, "Classe has-map-fullscreen absente dans explorer.js"
 
 
+def test_pej_table_export_alignment_and_type_action():
+    """
+    Vérifie l'intégration de getFilteredTableData(), de la colonne Type d'Action
+    et l'alignement de l'export CSV et de la pagination dans explorer.js et explorer.html.
+    """
+    js_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
+    html_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.html").read_text(encoding="utf-8")
+    serveur_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "serveur.py").read_text(encoding="utf-8")
+
+    assert 'function getFilteredTableData()' in js_source, "Fonction getFilteredTableData absente dans explorer.js"
+    assert 'data-sort="type_action"' in html_source, "En-tête type_action absent dans explorer.html"
+    assert "Type d'Action" in html_source, "Libellé Type d'Action absent dans explorer.html"
+    assert "dataToExport = getFilteredTableData()" in js_source, "Export CSV non raccordé à getFilteredTableData dans explorer.js"
+    assert "Fallback 2: CENTROIDES COMMUNAUX POUR PEJ" in serveur_source or "load_communes_centroides" in serveur_source, "Fallback centroïde communal PEJ absent dans serveur.py"
+
+
+
 
 
 

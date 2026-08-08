@@ -799,7 +799,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     tu_lower = {u.strip().lower() for u in type_usager if u.strip()}
                     if tu_lower and "type_usager" in df_pts.columns:
                         df_pts = df_pts[df_pts["type_usager"].astype(str).str.strip().str.lower().apply(
-                            lambda val: any(u in str(val) for u in tu_lower)
+                            lambda val: any(u in str(val).lower() or str(val).lower() in u for u in tu_lower if str(val).strip())
                         )].copy()
 
                 if domaines:
@@ -863,7 +863,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     df_pej = _filter_pej(df_pej, profile_cfg, cfg_obj, df_pts)
                 if type_usager and tu_lower and "type_usager" in df_pej.columns:
                     df_pej = df_pej[df_pej["type_usager"].astype(str).str.strip().str.lower().apply(
-                        lambda val: any(u in str(val) for u in tu_lower)
+                        lambda val: any(u in str(val).lower() or str(val).lower() in u for u in tu_lower if str(val).strip())
                     )].copy()
                 if domaines:
                     td_lower = {d.strip().lower() for d in domaines if d.strip()}
@@ -904,7 +904,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         usager_col = resolve_type_usager_champ(df_pa)
                         if type_usager and usager_col and tu_lower:
                             df_pa = df_pa[df_pa[usager_col].astype(str).str.strip().str.lower().apply(
-                                lambda val: any(u in str(val) for u in tu_lower)
+                                lambda val: any(u in str(val).lower() or str(val).lower() in u for u in tu_lower if str(val).strip())
                             )].copy()
                         if "DC_ID" in df_pa.columns:
                             if "DATE_REF" in df_pa.columns:

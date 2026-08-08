@@ -139,12 +139,18 @@ Composants principaux :
             padding: 0 15px;
             flex: 1;
             width: 100%;
+            transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1), gap 0.3s ease;
+        }
+
+        .explorer-container.filtres-collapsed {
+            grid-template-columns: 0px 1fr;
+            gap: 0;
         }
 
         .control-panel {
             position: sticky;
             top: 10px;
-            z-index: 10;
+            z-index: 100;
             /* Empêche les canvas/cartes de passer devant lors du scroll */
             max-height: calc(100vh - 30px);
             /* Hauteur max augmentée pour afficher tous les boutons */
@@ -153,6 +159,82 @@ Composants principaux :
             scrollbar-color: var(--color-border) transparent;
             padding-right: 4px;
             padding-bottom: 40px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+            transform: translateX(0);
+            width: 300px;
+        }
+
+        .control-panel.collapsed {
+            transform: translateX(-105%);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        .drawer-toggle-tab {
+            position: fixed;
+            top: 85px;
+            left: 0;
+            z-index: 1050;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--color-primary, #0f172a);
+            color: #ffffff;
+            border: 1px solid var(--color-primary-light, #3b82f6);
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 3px 4px 14px rgba(0, 0, 0, 0.18);
+            transition: all 0.2s ease;
+        }
+
+        .drawer-toggle-tab:hover {
+            background: #1e293b;
+            transform: translateX(3px);
+            box-shadow: 4px 6px 18px rgba(0, 0, 0, 0.25);
+        }
+
+        .drawer-toggle-tab.hidden {
+            display: none !important;
+        }
+
+        .btn-panel-toggle {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            border-radius: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-panel-toggle:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        /* Ajustements en mode Plein Écran Carte */
+        body.has-map-fullscreen .control-panel {
+            position: fixed !important;
+            top: 60px !important;
+            left: 10px !important;
+            z-index: 100005 !important;
+            max-height: calc(100vh - 75px) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body.has-map-fullscreen .drawer-toggle-tab {
+            z-index: 100001 !important;
+            top: 95px !important;
         }
 
         .control-panel::-webkit-scrollbar {
@@ -177,6 +259,11 @@ Composants principaux :
                 position: static !important;
                 max-height: none !important;
                 height: auto !important;
+                width: 100% !important;
+            }
+
+            .control-panel.collapsed {
+                display: none !important;
             }
         }
 
@@ -776,11 +863,23 @@ Composants principaux :
         <img src="/ref/programme/modele_ofb/log_ofb_couleur.png" alt="Logo OFB" class="logo-ofb">
         <div id="print-title"></div>
     </div>
+    <!-- Languette d'ouverture du volet de filtres lorsqu'il est masqué -->
+    <button type="button" id="btn-open-filtres-tab" class="drawer-toggle-tab hidden" title="Afficher les filtres" aria-label="Ouvrir le menu des filtres">
+        <span class="tab-icon">⚡</span>
+        <span class="tab-label">Filtres</span>
+        <span class="tab-arrow">▶</span>
+    </button>
+
     <main class="explorer-container">
         <!-- Panneau de Configuration Gauche -->
         <section class="control-panel">
             <div class="card">
-                <h2>Filtres d'exploration</h2>
+                <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h2 style="margin: 0;">Filtres d'exploration</h2>
+                    <button type="button" id="btn-close-filtres-panel" class="btn-panel-toggle" title="Réduire le volet des filtres" aria-label="Réduire le volet des filtres">
+                        <span>◀</span>
+                    </button>
+                </div>
                 <div id="profile-warning-banner" class="results-count-badge hidden"
                     style="margin-bottom: 12px; background: #fffbeb; border-color: #f59e0b; color: #b45309; text-align: left; display: none;">
                 </div>

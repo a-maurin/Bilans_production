@@ -699,6 +699,53 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- GESTION VOLET COULISSANT DES FILTRES (DRAWER) ---
+    const controlPanelEl = document.querySelector('.control-panel');
+    const explorerContainerEl = document.querySelector('.explorer-container');
+    const btnCloseFiltresPanel = document.getElementById('btn-close-filtres-panel');
+    const btnOpenFiltresTab = document.getElementById('btn-open-filtres-tab');
+
+    function toggleFiltresDrawer(show) {
+        if (!controlPanelEl || !explorerContainerEl) return;
+        const isCurrentlyCollapsed = controlPanelEl.classList.contains('collapsed');
+        const shouldShow = typeof show === 'boolean' ? show : isCurrentlyCollapsed;
+
+        if (shouldShow) {
+            controlPanelEl.classList.remove('collapsed');
+            explorerContainerEl.classList.remove('filtres-collapsed');
+            if (btnOpenFiltresTab) btnOpenFiltresTab.classList.add('hidden');
+            try { localStorage.setItem('ofbilan_explorer_filtres_collapsed', 'false'); } catch (e) {}
+        } else {
+            controlPanelEl.classList.add('collapsed');
+            explorerContainerEl.classList.add('filtres-collapsed');
+            if (btnOpenFiltresTab) btnOpenFiltresTab.classList.remove('hidden');
+            try { localStorage.setItem('ofbilan_explorer_filtres_collapsed', 'true'); } catch (e) {}
+        }
+
+        // Recalcul du rendu visuel des cartes et graphiques après animation
+        setTimeout(() => {
+            if (typeof map !== 'undefined' && map && typeof map.invalidateSize === 'function') {
+                map.invalidateSize();
+            }
+            window.dispatchEvent(new Event('resize'));
+        }, 310);
+    }
+
+    if (btnCloseFiltresPanel) {
+        btnCloseFiltresPanel.addEventListener('click', () => toggleFiltresDrawer(false));
+    }
+    if (btnOpenFiltresTab) {
+        btnOpenFiltresTab.addEventListener('click', () => toggleFiltresDrawer(true));
+    }
+
+    // Restauration de la préférence utilisateur sauvegardée dans localStorage
+    try {
+        const savedFiltresCollapsed = localStorage.getItem('ofbilan_explorer_filtres_collapsed');
+        if (savedFiltresCollapsed === 'true') {
+            toggleFiltresDrawer(false);
+        }
+    } catch (e) {}
+
     const btnToggleCodes = document.getElementById('btn-toggle-codes');
     const codesDropdown = document.getElementById('codes-dropdown');
 
@@ -4537,11 +4584,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const mapCard = document.getElementById('map')?.closest('.card');
             if (mapCard) {
                 const isFullscreen = mapCard.classList.toggle('map-fullscreen');
+                document.body.classList.toggle('has-map-fullscreen', isFullscreen);
                 document.body.style.overflow = isFullscreen ? 'hidden' : '';
 
                 if (isFullscreen) {
                     btnFullscreenMap.textContent = '🗗 Quitter';
                     btnFullscreenMap.title = 'Quitter le mode plein écran';
+                    if (typeof toggleFiltresDrawer === 'function') {
+                        toggleFiltresDrawer(false);
+                    }
                 } else {
                     btnFullscreenMap.textContent = '⛶ Plein écran';
                     btnFullscreenMap.title = 'Plein écran';

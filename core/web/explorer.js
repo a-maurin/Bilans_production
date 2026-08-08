@@ -188,6 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (filterName === 'controles') {
             currentMapMode = 'results';
+            const choroplethSelect = document.getElementById('choropleth-metric');
+            if (choroplethSelect) choroplethSelect.value = 'controles';
             legendFilters.ctrl_conforme = true;
             legendFilters.ctrl_infraction = true;
             legendFilters.ctrl_attente = true;
@@ -196,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
             legendFilters.pve = true;
         } else if (filterName === 'pej') {
             currentMapMode = 'results';
+            const choroplethSelect = document.getElementById('choropleth-metric');
+            if (choroplethSelect) choroplethSelect.value = 'procedures';
             legendFilters.ctrl_conforme = false;
             legendFilters.ctrl_infraction = false;
             legendFilters.ctrl_attente = false;
@@ -212,6 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
             legendFilters.pve = false;
         } else if (filterName === 'pve') {
             currentMapMode = 'results';
+            const choroplethSelect = document.getElementById('choropleth-metric');
+            if (choroplethSelect) choroplethSelect.value = 'procedures';
             legendFilters.ctrl_conforme = false;
             legendFilters.ctrl_infraction = false;
             legendFilters.ctrl_attente = false;
@@ -1841,6 +1847,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isControles) {
             (activePoints || []).forEach(pt => {
+                if (isItemDynamicallyExcluded(pt, false)) return;
+                if (['pej', 'pa', 'pve'].includes(activeKpiFilter)) return;
+                if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                    const target = normalizeStr(activeKpiFilter.substring(7));
+                    const cat = normalizeStr(getUsagerCategory(pt.type_usager));
+                    if (!cat.includes(target) && !target.includes(cat)) return;
+                }
+                if (activeKpiFilter && activeKpiFilter.startsWith('resultat:')) {
+                    const label = activeKpiFilter.substring(9).toLowerCase();
+                    const res = (pt.resultat || '').toLowerCase();
+                    if (label.includes('conforme') && !label.includes('non')) {
+                        if (!res.includes('conforme') || res.includes('non')) return;
+                    } else if (label.includes('non') || label.includes('infraction') || label.includes('manquement')) {
+                        if (!res.includes('infraction') && !res.includes('non') && !res.includes('manquement')) return;
+                    } else {
+                        if (res.includes('conforme') || res.includes('infraction') || res.includes('non') || res.includes('manquement')) return;
+                    }
+                }
+
+                const usagerCat = getUsagerCategory(pt.type_usager);
+                if (currentMapMode === 'usagers') {
+                    if (usagerLegendFilters[usagerCat] === false) return;
+                } else {
+                    const res = (pt.resultat || '').toLowerCase();
+                    if (res.includes('conforme') && !res.includes('non')) {
+                        if (legendFilters.ctrl_conforme === false) return;
+                    } else if (res.includes('infraction') || res.includes('non') || res.includes('manquement')) {
+                        if (legendFilters.ctrl_infraction === false) return;
+                    } else {
+                        if (legendFilters.ctrl_attente === false) return;
+                    }
+                }
                 const rawDept = pt.code_dept || pt.insee_dep || (pt.code_insee ? pt.code_insee.toString().trim().substring(0, 2) : '');
                 const ptDept = normCode(rawDept);
                 const ptInsee = normCode(pt.code_insee || pt.insee_comm || pt.insee_com);
@@ -1882,8 +1920,22 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else {
             (activeProcedures || []).forEach(p => {
+                if (isItemDynamicallyExcluded(p, true)) return;
+                if (activeKpiFilter === 'controles') return;
                 const ptype = (p.type || '').toUpperCase();
                 if (!ptype.includes('PEJ') && !ptype.includes('PVE')) return;
+                if (activeKpiFilter === 'pej' && !ptype.includes('PEJ')) return;
+                if (activeKpiFilter === 'pa' && !ptype.includes('PA')) return;
+                if (activeKpiFilter === 'pve' && !ptype.includes('PVE')) return;
+                if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+                    const target = normalizeStr(activeKpiFilter.substring(7));
+                    const cat = normalizeStr(getUsagerCategory(p.type_usager));
+                    if (!cat.includes(target) && !target.includes(cat)) return;
+                }
+
+                if (ptype.includes('PEJ') && legendFilters.pej === false) return;
+                if (ptype.includes('PA') && legendFilters.pa === false) return;
+                if (ptype.includes('PVE') && legendFilters.pve === false) return;
 
                 const rawDept = p.code_dept || p.insee_dep || (p.code_insee ? p.code_insee.toString().trim().substring(0, 2) : '');
                 const pDept = normCode(rawDept);
@@ -2017,6 +2069,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }).addTo(map);
+
+        if (typeof boundaryLayer !== 'undefined' && boundaryLayer && typeof boundaryLayer.bringToFront === 'function') {
+            try { boundaryLayer.bringToFront(); } catch (e) { }
+        }
 
         const legendTitle = document.getElementById('choropleth-legend-title');
         const legendItems = document.getElementById('choropleth-legend-items');
@@ -4619,33 +4675,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     wUsa.style.margin = '';
                 }
 
-                const mapContainer = document.getElementById('map');
-                if (mapContainer) {
-                    if (mapContainer.dataset.tmpW !== undefined) mapContainer.style.width = mapContainer.dataset.tmpW;
-                    if (mapContainer.dataset.tmpH !== undefined) mapContainer.style.height = mapContainer.dataset.tmpH;
-                }
 
-                // Attendre le reflow CSS avant d'invalider et re-centrer Leaflet et rafraîchir les graphiques
+                // Attendre le reflow CSS avant de restaurer Leaflet et les graphiques
                 setTimeout(() => {
+                    // Supprimer les snapshots canvas d'impression
+                    document.querySelectorAll('.print-canvas-snapshot').forEach(el => el.remove());
+
                     if (typeof map !== 'undefined' && map) {
+                        const mapEl2 = document.getElementById('map');
+                        if (mapEl2) { mapEl2.style.width = ''; mapEl2.style.height = ''; }
                         map.invalidateSize({ animate: false });
                         if (prePrintCenter && prePrintZoom !== null) {
                             map.setView(prePrintCenter, prePrintZoom, { animate: false });
                         }
-                        const overlayCanvas = document.querySelector('.leaflet-overlay-pane canvas');
-                        if (overlayCanvas && overlayCanvas.dataset.origOpacity !== undefined) {
-                            overlayCanvas.style.opacity = overlayCanvas.dataset.origOpacity;
-                        }
                     }
 
-                    // Supprimer l'image temporaire d'impression après le redessin du vectoriel
-                    document.querySelectorAll('.print-canvas-img').forEach(el => el.remove());
-
-                    // Redimensionner et forcer la mise à jour de tous les graphiques ChartJS
+                    // Redimensionner et mettre à jour tous les graphiques ChartJS
                     [chartDomains, chartThemes, chartResults, chartUsagers, typeof chartSeasonality !== 'undefined' ? chartSeasonality : null].forEach(c => {
-                        if (c) {
-                            try { c.resize(); c.update('none'); } catch (e) {}
-                        }
+                        if (c) { try { c.resize(); c.update('none'); } catch (e) {} }
                     });
                 }, 100);
             };
@@ -4655,112 +4702,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setTimeout(() => {
 
-                // Laisser le temps au DOM d'appliquer les styles avant de redessiner
-                setTimeout(() => {
-                    if (typeof map !== 'undefined') {
-                        const mapContainer = document.getElementById('map');
-                        if (mapContainer) {
-                            mapContainer.dataset.tmpW = mapContainer.style.width;
-                            mapContainer.dataset.tmpH = mapContainer.style.height;
-                            mapContainer.style.width = '610px';
-                            mapContainer.style.height = '350px';
-                        }
-                        map.invalidateSize();
-                        // Re-cadrer parfaitement sur les limites
-                        if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
-                            try { map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20], animate: false }); } catch (e) { }
-                        }
-                    }
+                // ─ Redimensionnement ChartJS pour le format A4 ─
+                const wDom = document.getElementById('wrapper-domains');
+                const wThe = document.getElementById('wrapper-themes');
+                if (wDom) { wDom.dataset.tmpH = wDom.style.height; wDom.style.height = '160px'; wDom.dataset.tmpMinH = wDom.style.minHeight; wDom.style.minHeight = '160px'; }
+                if (wThe) { wThe.dataset.tmpH = wThe.style.height; wThe.style.height = '160px'; wThe.dataset.tmpMinH = wThe.style.minHeight; wThe.style.minHeight = '160px'; }
 
-                    // Forcer une hauteur temporaire pour forcer ChartJS à réduire l'épaisseur de ses barres
-                    const wDom = document.getElementById('wrapper-domains');
-                    const wThe = document.getElementById('wrapper-themes');
-                    if (wDom) {
-                        wDom.dataset.tmpH = wDom.style.height; wDom.style.height = '160px';
-                        wDom.dataset.tmpMinH = wDom.style.minHeight; wDom.style.minHeight = '160px';
-                    }
-                    if (wThe) {
-                        wThe.dataset.tmpH = wThe.style.height; wThe.style.height = '160px';
-                        wThe.dataset.tmpMinH = wThe.style.minHeight; wThe.style.minHeight = '160px';
-                    }
+                const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
+                const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
+                if (wRes) { wRes.dataset.tmpW = wRes.style.width; wRes.dataset.tmpH = wRes.style.height; wRes.style.width = '110px'; wRes.style.height = '110px'; wRes.style.margin = '0 auto'; chartResults.resize(); }
+                if (wUsa) { wUsa.dataset.tmpW = wUsa.style.width; wUsa.dataset.tmpH = wUsa.style.height; wUsa.style.width = '110px'; wUsa.style.height = '110px'; wUsa.style.margin = '0 auto'; chartUsagers.resize(); }
+                if (typeof chartDomains !== 'undefined' && chartDomains && wDom) chartDomains.resize(wDom.clientWidth, 160);
+                if (typeof chartThemes !== 'undefined' && chartThemes && wThe) chartThemes.resize(wThe.clientWidth, 160);
 
-                    // Redimensionner les Donuts pour ne pas chevaucher la légende HTML
-                    const wRes = typeof chartResults !== 'undefined' && chartResults ? chartResults.canvas.parentNode : null;
-                    const wUsa = typeof chartUsagers !== 'undefined' && chartUsagers ? chartUsagers.canvas.parentNode : null;
-
-                    if (wRes) {
-                        wRes.dataset.tmpW = wRes.style.width;
-                        wRes.dataset.tmpH = wRes.style.height;
-                        wRes.style.width = '110px';
-                        wRes.style.height = '110px';
-                        wRes.style.margin = '0 auto';
-                        chartResults.resize();
+                // ─ Étape 1 : calibrer le conteneur carte aux dimensions PDF (étape JS obligatoire) ─
+                // Indispensable : invalidateSize() récalibre le canvas Leaflet sur ces dimensions.
+                // Sans cette étape, le canvas reste calibré sur les dims écran et le CSS print le clipse.
+                const mapEl = document.getElementById('map');
+                if (mapEl) { mapEl.style.width = '610px'; mapEl.style.height = '350px'; }
+                if (typeof map !== 'undefined' && map) {
+                    map.invalidateSize({ animate: false }); // canvas vidé + _redraw programmé sur prochain RAF
+                    if (typeof boundaryLayer !== 'undefined' && boundaryLayer) {
+                        try { map.fitBounds(boundaryLayer.getBounds(), { padding: [10, 10], animate: false }); } catch (e) {}
+                        // fitBounds(animate:false) déclenche moveend de façon synchrone
+                        // le renderer canvas programme un nouveau _redraw via requestAnimationFrame
                     }
-                    if (wUsa) {
-                        wUsa.dataset.tmpW = wUsa.style.width;
-                        wUsa.dataset.tmpH = wUsa.style.height;
-                        wUsa.style.width = '110px';
-                        wUsa.style.height = '110px';
-                        wUsa.style.margin = '0 auto';
-                        chartUsagers.resize();
-                    }
+                }
 
-                    if (typeof chartDomains !== 'undefined' && chartDomains && wDom) {
-                        chartDomains.resize(wDom.clientWidth, 160);
-                    }
-                    if (typeof chartThemes !== 'undefined' && chartThemes && wThe) {
-                        chartThemes.resize(wThe.clientWidth, 160);
-                    }
+                // ─ Étape 2 : attendre les tuiles IGN (max 5s) puis 2 RAF pour le canvas ─
+                // Principe : on capture le canvas EN PNG après son redessin complet.
+                // L'image statique contourne le bug Chromium qui rate les <canvas> récemment modifiés lors de window.print().
+                const MAX_MS = 5000;
+                const t0 = Date.now();
 
-                    // Délai pour garantir que le Canvas et les tuiles Leaflet ont fini de se redessiner
-                    setTimeout(() => {
-                        // FIX: Contourner le bug des navigateurs qui n'impriment pas les <canvas> fraîchement modifiés
-                        // On forcer d'abord la mise à jour synchrone du renderer vectoriel Canvas de Leaflet
-                        if (typeof map !== 'undefined' && map) {
-                            if (map._renderer && typeof map._renderer._update === 'function') {
-                                try { map._renderer._update(); } catch (e) { }
-                            }
-                            map.eachLayer(l => {
-                                if (l && l._renderer && typeof l._renderer._update === 'function') {
-                                    try { l._renderer._update(); } catch (e) { }
-                                }
-                            });
-                        }
+                const snapshotAndPrint = () => {
+                    // Supprimer anciens snapshots résiduels
+                    document.querySelectorAll('.print-canvas-snapshot').forEach(el => el.remove());
 
-                        // On convertit le canvas contenant le choroplèthe et les limites administratives en une <img> statique garantie d'imprimer !
-                        const canvas = document.querySelector('.leaflet-overlay-pane canvas');
-                        if (canvas) {
+                    // Capturer chaque canvas Leaflet (vecteurs + heatmap) en PNG transparent
+                    // et l'afficher comme overlay dans #map (z-index 450 : au-dessus du canvas vectoriel
+                    // z=400, en-dessous des marqueurs HTML z=600)
+                    if (mapEl) {
+                        document.querySelectorAll('#map canvas').forEach(canvas => {
                             try {
                                 const dataUrl = canvas.toDataURL('image/png');
-                                if (dataUrl && dataUrl.length > 100) {
-                                    const img = document.createElement('img');
-                                    img.src = dataUrl;
-                                    img.style.position = 'absolute';
-                                    img.style.top = canvas.style.top || '0px';
-                                    img.style.left = canvas.style.left || '0px';
-                                    // CRUCIAL : Cloner le transform pour éviter le décalage !
-                                    img.style.transform = canvas.style.transform;
-                                    img.style.transformOrigin = canvas.style.transformOrigin;
-                                    img.style.width = canvas.style.width || (canvas.width + 'px');
-                                    img.style.height = canvas.style.height || (canvas.height + 'px');
-                                    img.style.zIndex = '9999';
-                                    img.className = 'print-canvas-img';
-                                    canvas.parentElement.appendChild(img);
-                                    canvas.dataset.origOpacity = canvas.style.opacity;
-                                    canvas.style.opacity = '0'; // Cacher l'original uniquement si l'image est valide
-                                }
-                            } catch (e) {
-                                console.error('Erreur conversion canvas print:', e);
-                            }
-                        }
+                                if (!dataUrl || dataUrl.length < 200) return;
+                                const img = document.createElement('img');
+                                img.src = dataUrl;
+                                img.className = 'print-canvas-snapshot';
+                                img.style.cssText = [
+                                    'position:absolute', 'left:0', 'top:0',
+                                    'width:100%', 'height:100%',
+                                    'pointer-events:none',
+                                    'z-index:450',
+                                    '-webkit-print-color-adjust:exact',
+                                    'print-color-adjust:exact'
+                                ].join(';');
+                                mapEl.appendChild(img);
+                            } catch (e) {}
+                        });
+                    }
+                    window.print();
+                };
 
-                        // Impression immédiate après le délai de chargement des tuiles
-                        window.print();
-                    }, 2500);
-                }, 150);
+                const waitForTiles = () => {
+                    const pending = document.querySelectorAll(
+                        '.leaflet-tile-pane img.leaflet-tile:not(.leaflet-tile-loaded)'
+                    );
+                    if (pending.length === 0 || Date.now() - t0 > MAX_MS) {
+                        // 2 RAF : laisser le renderer canvas Leaflet achever son cycle de rendu
+                        // avant la capture toDataURL()
+                        requestAnimationFrame(() => requestAnimationFrame(snapshotAndPrint));
+                    } else {
+                        setTimeout(waitForTiles, 100);
+                    }
+                };
+                // Délai initial pour laisser Leaflet lancer les requêtes tiles
+                setTimeout(waitForTiles, 500);
+
             }, 350);
         });
     }
 });
+
 
 

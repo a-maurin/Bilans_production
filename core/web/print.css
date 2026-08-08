@@ -219,6 +219,15 @@
         print-color-adjust: exact !important;
     }
 
+    #map canvas, .leaflet-pane canvas, .leaflet-overlay-pane canvas, .leaflet-zoom-animated canvas, .leaflet-heatmap-layer,
+    #map img.leaflet-tile, .leaflet-tile-pane img, .leaflet-tile {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
     .leaflet-control-zoom, .leaflet-control-layers, .leaflet-control-attribution {
         display: none !important;
     }

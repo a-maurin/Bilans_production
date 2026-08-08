@@ -699,11 +699,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- GESTION VOLET COULISSANT DES FILTRES (DRAWER) ---
+    // --- GESTION VOLET COULISSANT DES FILTRES (DRAWER IN-FLOW) ---
     const controlPanelEl = document.querySelector('.control-panel');
     const explorerContainerEl = document.querySelector('.explorer-container');
     const btnCloseFiltresPanel = document.getElementById('btn-close-filtres-panel');
-    const btnOpenFiltresTab = document.getElementById('btn-open-filtres-tab');
+    const btnOpenFiltresPanel = document.getElementById('btn-open-filtres-panel');
+    const btnMapFullscreenFiltres = document.getElementById('btn-map-fullscreen-filtres');
 
     function toggleFiltresDrawer(show) {
         if (!controlPanelEl || !explorerContainerEl) return;
@@ -713,12 +714,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shouldShow) {
             controlPanelEl.classList.remove('collapsed');
             explorerContainerEl.classList.remove('filtres-collapsed');
-            if (btnOpenFiltresTab) btnOpenFiltresTab.classList.add('hidden');
             try { localStorage.setItem('ofbilan_explorer_filtres_collapsed', 'false'); } catch (e) {}
         } else {
             controlPanelEl.classList.add('collapsed');
             explorerContainerEl.classList.add('filtres-collapsed');
-            if (btnOpenFiltresTab) btnOpenFiltresTab.classList.remove('hidden');
             try { localStorage.setItem('ofbilan_explorer_filtres_collapsed', 'true'); } catch (e) {}
         }
 
@@ -734,8 +733,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCloseFiltresPanel) {
         btnCloseFiltresPanel.addEventListener('click', () => toggleFiltresDrawer(false));
     }
-    if (btnOpenFiltresTab) {
-        btnOpenFiltresTab.addEventListener('click', () => toggleFiltresDrawer(true));
+    if (btnOpenFiltresPanel) {
+        btnOpenFiltresPanel.addEventListener('click', () => toggleFiltresDrawer(true));
+    }
+    if (btnMapFullscreenFiltres) {
+        btnMapFullscreenFiltres.addEventListener('click', () => toggleFiltresDrawer(true));
     }
 
     // Restauration de la préférence utilisateur sauvegardée dans localStorage

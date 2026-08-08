@@ -143,8 +143,8 @@ Composants principaux :
         }
 
         .explorer-container.filtres-collapsed {
-            grid-template-columns: 0px 1fr;
-            gap: 0;
+            grid-template-columns: auto 1fr;
+            gap: 15px;
         }
 
         .control-panel {
@@ -159,47 +159,30 @@ Composants principaux :
             scrollbar-color: var(--color-border) transparent;
             padding-right: 4px;
             padding-bottom: 40px;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
-            transform: translateX(0);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
             width: 300px;
+            box-sizing: border-box;
         }
 
         .control-panel.collapsed {
-            transform: translateX(-105%);
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
+            position: static !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: fit-content !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            overflow: visible !important;
         }
 
-        .drawer-toggle-tab {
-            position: fixed;
-            top: 85px;
-            left: 0;
-            z-index: 1050;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            background: var(--color-primary, #0f172a);
-            color: #ffffff;
-            border: 1px solid var(--color-primary-light, #3b82f6);
-            border-left: none;
-            border-radius: 0 8px 8px 0;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 3px 4px 14px rgba(0, 0, 0, 0.18);
-            transition: all 0.2s ease;
-        }
-
-        .drawer-toggle-tab:hover {
-            background: #1e293b;
-            transform: translateX(3px);
-            box-shadow: 4px 6px 18px rgba(0, 0, 0, 0.25);
-        }
-
-        .drawer-toggle-tab.hidden {
+        .control-panel.collapsed .card {
             display: none !important;
+        }
+
+        .control-panel.collapsed #btn-open-filtres-panel {
+            display: inline-flex !important;
         }
 
         .btn-panel-toggle {
@@ -223,18 +206,24 @@ Composants principaux :
         }
 
         /* Ajustements en mode Plein Écran Carte */
+        body.has-map-fullscreen #btn-map-fullscreen-filtres {
+            display: inline-flex !important;
+        }
+
         body.has-map-fullscreen .control-panel {
             position: fixed !important;
             top: 60px !important;
             left: 10px !important;
             z-index: 100005 !important;
+            width: 300px !important;
             max-height: calc(100vh - 75px) !important;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+            background: var(--color-bg-card, #ffffff);
+            border-radius: 8px;
         }
 
-        body.has-map-fullscreen .drawer-toggle-tab {
-            z-index: 100001 !important;
-            top: 95px !important;
+        body.has-map-fullscreen .control-panel.collapsed {
+            display: none !important;
         }
 
         .control-panel::-webkit-scrollbar {
@@ -863,16 +852,12 @@ Composants principaux :
         <img src="/ref/programme/modele_ofb/log_ofb_couleur.png" alt="Logo OFB" class="logo-ofb">
         <div id="print-title"></div>
     </div>
-    <!-- Languette d'ouverture du volet de filtres lorsqu'il est masqué -->
-    <button type="button" id="btn-open-filtres-tab" class="drawer-toggle-tab hidden" title="Afficher les filtres" aria-label="Ouvrir le menu des filtres">
-        <span class="tab-icon">⚡</span>
-        <span class="tab-label">Filtres</span>
-        <span class="tab-arrow">▶</span>
-    </button>
-
     <main class="explorer-container">
         <!-- Panneau de Configuration Gauche -->
         <section class="control-panel">
+            <button type="button" id="btn-open-filtres-panel" class="btn btn-primary hidden" style="background: var(--color-primary, #0f172a); color: #ffffff; border: 1px solid var(--color-primary-light, #3b82f6); border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; display: none; align-items: center; gap: 6px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12);" title="Afficher les filtres">
+                <span>⚡</span> <span>Filtres</span> <span>▶</span>
+            </button>
             <div class="card">
                 <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                     <h2 style="margin: 0;">Filtres d'exploration</h2>
@@ -1107,6 +1092,9 @@ Composants principaux :
                         </div>
                         <h2 style="margin-bottom: 8px !important;">Cartographie</h2>
                         <div class="no-print map-toolbar-container">
+                                <button type="button" id="btn-map-fullscreen-filtres" class="btn btn-secondary btn-sm hidden" style="background: #1e3a8a; color: white; border: 1px solid #3b82f6; border-radius: 6px; font-weight: 600; font-size: 11px; padding: 3px 8px; cursor: pointer; display: none; align-items: center; gap: 4px; white-space: nowrap;" title="Afficher les filtres">
+                                    ⚡ Filtres ▶
+                                </button>
                                 <!-- Groupe 1: Modes de carte & Métrique -->
                                 <div class="map-toolbar-group">
                                     <div class="map-segmented-control">

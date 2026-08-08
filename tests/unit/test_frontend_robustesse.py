@@ -192,17 +192,17 @@ def test_api_profils_target_filtering_in_serveur():
 def test_filtres_drawer_collapse():
     """
     Vérifie la présence des éléments HTML, des règles CSS et des handlers JS
-    pour le volet coulissant réductible des filtres (drawer) et l'anti-chevauchement plein écran carte.
+    pour le volet coulissant réductible des filtres (drawer) et le positionnement in-flow zéro chevauchement.
     """
     js_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
     html_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.html").read_text(encoding="utf-8")
 
-    assert 'id="btn-open-filtres-tab"' in html_source, "Languette btn-open-filtres-tab absente dans explorer.html"
+    assert 'id="btn-open-filtres-panel"' in html_source, "Bouton btn-open-filtres-panel absent dans explorer.html"
     assert 'id="btn-close-filtres-panel"' in html_source, "Bouton btn-close-filtres-panel absent dans explorer.html"
+    assert 'id="btn-map-fullscreen-filtres"' in html_source, "Bouton btn-map-fullscreen-filtres absent dans explorer.html"
     assert '.explorer-container.filtres-collapsed' in html_source, "Style filtres-collapsed absent dans explorer.html"
-    assert '.drawer-toggle-tab' in html_source, "Style drawer-toggle-tab absent dans explorer.html"
     assert 'body.has-map-fullscreen .control-panel' in html_source, "Règle body.has-map-fullscreen .control-panel absente dans explorer.html"
-    assert 'body.has-map-fullscreen .drawer-toggle-tab' in html_source, "Règle body.has-map-fullscreen .drawer-toggle-tab absente dans explorer.html"
+    assert 'body.has-map-fullscreen #btn-map-fullscreen-filtres' in html_source, "Règle body.has-map-fullscreen #btn-map-fullscreen-filtres absente dans explorer.html"
     assert 'toggleFiltresDrawer' in js_source, "Fonction toggleFiltresDrawer absente dans explorer.js"
     assert 'ofbilan_explorer_filtres_collapsed' in js_source, "Stockage localStorage absent dans explorer.js"
     assert 'document.body.classList.toggle(\'has-map-fullscreen\'' in js_source, "Classe has-map-fullscreen absente dans explorer.js"

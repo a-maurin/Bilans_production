@@ -208,6 +208,9 @@ Composants principaux :
         /* Ajustements en mode Plein Écran Carte */
         body.has-map-fullscreen #btn-map-fullscreen-filtres {
             display: inline-flex !important;
+            flex: 0 0 auto !important;
+            width: auto !important;
+            max-width: fit-content !important;
         }
 
         body.has-map-fullscreen .control-panel {
@@ -1092,11 +1095,11 @@ Composants principaux :
                         </div>
                         <h2 style="margin-bottom: 8px !important;">Cartographie</h2>
                         <div class="no-print map-toolbar-container">
-                                <button type="button" id="btn-map-fullscreen-filtres" class="btn btn-secondary btn-sm hidden" style="background: #1e3a8a; color: white; border: 1px solid #3b82f6; border-radius: 6px; font-weight: 600; font-size: 11px; padding: 3px 8px; cursor: pointer; display: none; align-items: center; gap: 4px; white-space: nowrap;" title="Afficher les filtres">
-                                    ⚡ Filtres ▶
-                                </button>
                                 <!-- Groupe 1: Modes de carte & Métrique -->
                                 <div class="map-toolbar-group">
+                                    <button type="button" id="btn-map-fullscreen-filtres" class="btn btn-secondary btn-sm hidden" style="background: #1e3a8a; color: white; border: 1px solid #3b82f6; border-radius: 6px; font-weight: 600; font-size: 11px; padding: 4px 10px; cursor: pointer; display: none; align-items: center; gap: 4px; white-space: nowrap; flex: 0 0 auto; width: auto;" title="Afficher les filtres">
+                                        ⚡ Filtres ▶
+                                    </button>
                                     <div class="map-segmented-control">
                                         <button type="button" class="map-segmented-btn active" data-value="markers" title="Afficher les contrôles/infractions sous forme de points individuels">
                                             📍 Points

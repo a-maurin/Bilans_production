@@ -4,6 +4,34 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 
 ---
 
+## [v1.0.7] - 2026-08-08 : Bilan PNF v2, Pochoirs départementaux & Explorer dynamique
+
+### Explorer Web et Cartographie Dynamique
+* **Calibrage dynamique du choroplèthe** : Calcul dynamique de l'échelle et de la légende (min/max) des cartes choroplèthes et heatmaps selon les entités visibles dans le viewport.
+* **Cascade de géolocalisation des PEJ (4 niveaux)** : Intégration d'une cascade de géolocalisation à 4 niveaux pour les Procédures d'Enquête Judiciaire, affichage de l'avis de précision dans les infobulles et bandeau d'information dédié aux PEJ non géolocalisées.
+* **Bandeau cartographique & Pilule d'information** : Refonte ergonomique du bandeau cartographique avec pilule d'information flottante en mode plein écran.
+* **Rendu Web & Impression** : Optimisation de l'affichage des cartes choroplèthes, de l'impression PDF web et de l'encodage UTF-8 des infobulles.
+* **Filtrage des profils** : Masquage dynamique et filtrage backend des profils PDF dans l'Explorer Web.
+
+### Édition PDF et Rapports
+* **Restructuration Régionale PNF v2** : Bilan complet PNF v2 (partie consolidée PNF et fiches synthétiques départementales Côte-d'Or 21 / Haute-Marne 52).
+* **Modernisation des Titres & En-têtes** : Dynamisation des titres de rapports et modernisation visuelle de l'en-tête de brochure PDF.
+* **Harmonisation Cartographique & Symboles** : Calibrage des symboles cartographiques à 1.2 mm, fiabilisation du chargement des cartes fraîches et correction du bug `layout` dict (brochure forcée).
+* **Gabarit SRP R27 & Diffusion Externe** : Bascule de la diffusion externe par défaut et ajustements visuels du gabarit SRP R27.
+* **Performance CRS** : Optimisation des reprojections spatiales lors de l'édition des bilans PDF.
+
+### Référentiel & Données
+* **Shapefile 127 Communes PNF** : Prise en compte du référentiel `127_communes_AOA_et_statuts_adhesion.shp` pour l'attribution des communes aux zones PNF (Cœur PNF vs Aire d'adhésion avec fallback `null`).
+* **Pochoirs départementaux dynamiques** : Découpage et masquage spatial par département (`pochoir_sdXX`), marquage des cartes par tag département et adaptation dynamique des libellés.
+* **Consolidation PNF & Restrict Geo** : Unification de la détection `restrict_geo` et consolidation globale du profil PNF.
+
+### Architecture, Qualité du Code & Tests
+* **Gouvernance YAML-First** : Fiabilisation et alignement YAML-first du moteur d'édition.
+* **Liaison des En-têtes PDF** : Liaison automatique d'en-têtes pour supprimer les titres orphelins.
+* **Suite de Tests Unitaires** : Correction des régressions (gabarits, SQL Corse 2A/2B, CLI entry point) et support PyArrow.
+
+---
+
 ## [v1.0.6] - 2026-07-31 : Explorer Web interactif, Commentaires auto PDF & Correctifs
 
 ### Explorer Web et Cartographie Dynamique

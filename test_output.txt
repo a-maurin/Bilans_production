@@ -1,5 +1,0 @@
-ERROR:
-Traceback (most recent call last):
-  File "/media/e357/Windows/Users/aguirre.maurin/Documents/GitHub/OFBilan-Plugin-QGIS/tests/test_geojson.py", line 38, in <module>
-    from ofbilan.common.chargeurs_donnees import load_pnf_aoa_gdf
-ModuleNotFoundError: No module named 'ofbilan'

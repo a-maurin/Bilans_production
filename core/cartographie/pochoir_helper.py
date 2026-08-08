@@ -462,6 +462,9 @@ def is_map_valid_for_dept(
 ) -> bool:
     """True si la carte PNG correspond au département demandé."""
     if not map_png.exists():
+        return False
+    target = normalize_dept_code(dept_code)
+    marker_dept = read_map_dept_marker(map_png)
     if marker_dept is not None:
         return marker_dept == target
     return False

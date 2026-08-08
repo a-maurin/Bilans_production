@@ -362,6 +362,163 @@ Composants principaux :
             color: #991b1b !important;
         }
 
+        /* Map Toolbar Styling */
+        .map-toolbar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 11px;
+            background: #f8fafc;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+
+        .map-toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+        }
+
+        .map-segmented-control {
+            display: flex;
+            align-items: center;
+            background: #e2e8f0;
+            padding: 2px;
+            border-radius: 6px;
+            gap: 2px;
+        }
+
+        .map-segmented-btn {
+            background: transparent;
+            border: none;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            user-select: none;
+        }
+
+        .map-segmented-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.6);
+            color: #1e293b;
+        }
+
+        .map-segmented-btn.active {
+            background: var(--color-primary);
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .map-segmented-btn:active {
+            transform: scale(0.97);
+        }
+
+        .map-toolbar-divider {
+            width: 1px;
+            height: 16px;
+            background-color: #cbd5e1;
+            margin: 0 2px;
+            flex-shrink: 0;
+        }
+
+        .btn-map-action {
+            background: #ffffff;
+            border: 1px solid var(--color-border);
+            color: var(--color-primary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+            height: 26px;
+            box-sizing: border-box;
+        }
+
+        .btn-map-action:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            color: var(--color-primary);
+        }
+
+        .btn-map-action:active {
+            transform: scale(0.97);
+        }
+
+        /* Quick Year Dropdown Styling */
+        .quick-year-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .quick-year-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            z-index: 1000;
+            background: #ffffff;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            padding: 4px;
+            min-width: 120px;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .quick-year-dropdown:hover .quick-year-menu,
+        .quick-year-dropdown.open .quick-year-menu {
+            display: flex;
+        }
+
+        .quick-year-item {
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-text-main);
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.15s ease-in-out;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .quick-year-item:hover {
+            background: #f1f5f9;
+            color: var(--color-primary);
+        }
+
+        .quick-year-item.active {
+            background: var(--color-primary);
+            color: #ffffff;
+        }
+
         .map-loading-overlay {
             position: absolute;
             top: 0;
@@ -805,100 +962,109 @@ Composants principaux :
                                 style="background: #dc2626; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔄
                                 Réessayer</button>
                         </div>
-                        <div
-                            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-                            <h2 style="margin-bottom: 0 !important;">Données</h2>
-                            <div class="no-print"
-                                style="display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: 11px; align-items: center; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); max-width: 100%;">
-                                <label
-                                    style="margin: 0 !important; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
-                                    <input type="radio" name="map-mode" value="markers" checked style="margin: 0;">
-                                    Points
-                                </label>
-                                <label
-                                    style="margin: 0 !important; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
-                                    <input type="radio" name="map-mode" value="heatmap" style="margin: 0;"> Chaleur
-                                </label>
-                                <label
-                                    style="margin: 0 !important; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
-                                    <input type="radio" name="map-mode" value="choropleth" style="margin: 0;">
-                                    Choroplèthe
-                                </label>
-                                <div id="choropleth-options" class="hidden"
-                                    style="display: flex; align-items: center; gap: 4px; margin-left: 2px;">
-                                    <select id="choropleth-metric"
-                                        style="font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); background: #ffffff; color: var(--color-text-main); font-weight: 600; cursor: pointer;">
-                                        <option value="controles">📊 Contrôles</option>
-                                        <option value="infractions">⚖️ Infractions</option>
-                                    </select>
+                        <h2 style="margin-bottom: 8px !important;">Cartographie</h2>
+                        <div class="no-print map-toolbar-container">
+                                <!-- Groupe 1: Modes de carte & Métrique -->
+                                <div class="map-toolbar-group">
+                                    <div class="map-segmented-control">
+                                        <button type="button" class="map-segmented-btn active" data-value="markers" title="Afficher les contrôles/infractions sous forme de points individuels">
+                                            📍 Points
+                                        </button>
+                                        <button type="button" class="map-segmented-btn" data-value="heatmap" title="Afficher la densité sous forme de carte de chaleur">
+                                            🔥 Chaleur
+                                        </button>
+                                        <button type="button" class="map-segmented-btn" data-value="choropleth" title="Afficher la répartition géographique par commune/département/région">
+                                            🗺️ Choroplèthe
+                                        </button>
+                                        <!-- Radios masqués sous le capot pour rétrocompatibilité JS absolue -->
+                                        <div style="display: none;">
+                                            <input type="radio" name="map-mode" value="markers" checked>
+                                            <input type="radio" name="map-mode" value="heatmap">
+                                            <input type="radio" name="map-mode" value="choropleth">
+                                        </div>
+                                    </div>
+                                    <div id="choropleth-options" class="hidden"
+                                        style="display: flex; align-items: center; gap: 4px; margin-left: 2px;">
+                                        <select id="choropleth-metric"
+                                            style="font-size: 11px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--color-border); background: #ffffff; color: var(--color-text-main); font-weight: 600; cursor: pointer; height: 26px;"
+                                            title="Choisir l'indicateur à représenter sur la carte choroplèthe">
+                                            <option value="controles">📊 Contrôles</option>
+                                            <option value="infractions">⚖️ Infractions</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <span style="color: var(--color-border);">|</span>
-                                <div style="position: relative; display: inline-block;">
-                                    <button type="button" id="btn-toggle-dynamic-filter"
-                                        style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 4px; font-weight: 600; color: #b45309;"
-                                        title="Masquer à la volée des domaines, thèmes ou actions sans recharger le serveur">
-                                        🚫 Masquer <span id="dynamic-filter-badge" class="hidden"
-                                            style="background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 700;">0</span>
-                                    </button>
-                                    <div id="dynamic-filter-panel" class="hidden no-print"
-                                        style="position: absolute; top: 25px; right: 0; z-index: 1000; background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); width: 300px; padding: 10px; font-size: 11px; text-align: left;">
-                                        <div
-                                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-                                            <strong style="color: #1e293b;">Masquage à la volée (Carte/Vue)</strong>
-                                            <button type="button" id="btn-reset-dynamic-filter"
-                                                style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px; font-weight: 600;">Réinitialiser</button>
-                                        </div>
-                                        <div style="margin-bottom: 6px;">
-                                            <input type="text" id="dynamic-filter-search"
-                                                placeholder="🔍 Rechercher un filtre..."
-                                                style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--color-border); border-radius: 4px; box-sizing: border-box;">
-                                        </div>
-                                        <div
-                                            style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin;">
-                                            <div id="dynamic-filter-types-group">
-                                                <span
-                                                    style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Procédures
-                                                    / Catégories :</span>
-                                                <div id="dynamic-filter-types"
-                                                    style="display: flex; flex-direction: column; gap: 2px;"></div>
+
+                                <div class="map-toolbar-divider"></div>
+
+                                <!-- Groupe 2: Filtres "Masquer" & Années rapides -->
+                                <div class="map-toolbar-group">
+                                    <div style="position: relative; display: inline-block;">
+                                        <button type="button" id="btn-toggle-dynamic-filter" class="btn-map-action"
+                                            title="Masquer à la volée des domaines, thèmes ou actions sans recharger le serveur">
+                                            🚫 Masquer <span id="dynamic-filter-badge" class="hidden"
+                                                style="background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 700;">0</span>
+                                        </button>
+                                        <div id="dynamic-filter-panel" class="hidden no-print"
+                                            style="position: absolute; top: 32px; right: 0; z-index: 1000; background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); width: 300px; padding: 10px; font-size: 11px; text-align: left;">
+                                            <div
+                                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                                                <strong style="color: #1e293b;">Masquage à la volée (Carte/Vue)</strong>
+                                                <button type="button" id="btn-reset-dynamic-filter"
+                                                    style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 10px; font-weight: 600;">Réinitialiser</button>
                                             </div>
-                                            <div id="dynamic-filter-domaines-group">
-                                                <span
-                                                    style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Domaines
-                                                    :</span>
-                                                <div id="dynamic-filter-domaines"
-                                                    style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            <div style="margin-bottom: 6px;">
+                                                <input type="text" id="dynamic-filter-search"
+                                                    placeholder="🔍 Rechercher un filtre..."
+                                                    style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--color-border); border-radius: 4px; box-sizing: border-box;">
                                             </div>
-                                            <div id="dynamic-filter-themes-group">
-                                                <span
-                                                    style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Thèmes
-                                                    :</span>
-                                                <div id="dynamic-filter-themes"
-                                                    style="display: flex; flex-direction: column; gap: 2px;"></div>
-                                            </div>
-                                            <div id="dynamic-filter-actions-group">
-                                                <span
-                                                    style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Actions
-                                                    :</span>
-                                                <div id="dynamic-filter-actions"
-                                                    style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                            <div
+                                                style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin;">
+                                                <div id="dynamic-filter-types-group">
+                                                    <span
+                                                        style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Procédures
+                                                        / Catégories :</span>
+                                                    <div id="dynamic-filter-types"
+                                                        style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                                </div>
+                                                <div id="dynamic-filter-domaines-group">
+                                                    <span
+                                                        style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Domaines
+                                                        :</span>
+                                                    <div id="dynamic-filter-domaines"
+                                                        style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                                </div>
+                                                <div id="dynamic-filter-themes-group">
+                                                    <span
+                                                        style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Thèmes
+                                                        :</span>
+                                                    <div id="dynamic-filter-themes"
+                                                        style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                                </div>
+                                                <div id="dynamic-filter-actions-group">
+                                                    <span
+                                                        style="font-weight: 600; color: var(--color-primary); display: block; margin-bottom: 2px;">Actions
+                                                        :</span>
+                                                    <div id="dynamic-filter-actions"
+                                                        style="display: flex; flex-direction: column; gap: 2px;"></div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;">
+                                    </div>
                                 </div>
-                                <span style="color: var(--color-border);">|</span>
-                                <div id="quick-year-container" style="display: flex; gap: 4px; align-items: center;">
+
+                                <div class="map-toolbar-divider"></div>
+
+                                <!-- Groupe 3: Actions (Plein écran & PNG) -->
+                                <div class="map-toolbar-group">
+                                    <button type="button" id="btn-fullscreen-map" class="btn-map-action"
+                                        title="Afficher la carte en plein écran">⛶ Plein écran</button>
+                                    <button type="button" id="btn-export-map-png" class="btn-map-action"
+                                        title="Télécharger l'image de la carte">📥 PNG</button>
                                 </div>
-                                <span style="color: var(--color-border);">|</span>
-                                <button type="button" id="btn-fullscreen-map"
-                                    style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 2px; font-weight: 600; color: var(--color-primary);"
-                                    title="Plein écran">⛶ Plein écran</button>
-                                <span style="color: var(--color-border);">|</span>
-                                <button type="button" id="btn-export-map-png"
-                                    style="background: none; border: none; cursor: pointer; padding: 0; font-size: 11px; display: flex; align-items: center; gap: 2px; font-weight: 600; color: var(--color-primary);"
-                                    title="Télécharger l'image de la carte">📥 PNG</button>
                             </div>
-                        </div>
                         <div
                             style="position: relative; flex: 1; display: flex; flex-direction: column; min-height: 400px;">
                             <div id="map" style="margin-bottom: 0; flex: 1;"></div>

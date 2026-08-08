@@ -752,24 +752,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Génération des pastilles "Années Rapides" (Quick Years) ---
+    // --- Génération de la liste déroulante "Années Rapides" (Quick Years) au survol ---
     const quickYearContainer = document.getElementById('quick-year-container');
     if (quickYearContainer) {
-        // Générer pour l'année en cours + 3 années précédentes
-        for (let i = 0; i < 4; i++) {
+        quickYearContainer.innerHTML = '';
+
+        const dropdownWrapper = document.createElement('div');
+        dropdownWrapper.className = 'quick-year-dropdown';
+
+        const triggerBtn = document.createElement('button');
+        triggerBtn.type = 'button';
+        triggerBtn.id = 'quick-year-trigger';
+        triggerBtn.className = 'btn-map-action btn-quick-year active';
+        triggerBtn.title = "Sélectionner l'année de l'analyse";
+        triggerBtn.innerHTML = `Année : <span id="quick-year-label">${currentYear}</span> ▾`;
+
+        const menuPanel = document.createElement('div');
+        menuPanel.className = 'quick-year-menu';
+
+        // Générer pour l'année en cours + 5 années précédentes (6 années au total)
+        for (let i = 0; i < 6; i++) {
             const y = currentYear - i;
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn-quick-year';
-            btn.textContent = y;
-            if (i === 0) {
-                btn.classList.add('active'); // Présélection de l'année en cours
-            }
-            
-            btn.addEventListener('click', () => {
-                // Gestion des états visuels
-                document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+            const itemBtn = document.createElement('button');
+            itemBtn.type = 'button';
+            itemBtn.className = `quick-year-item ${i === 0 ? 'active' : ''}`;
+            itemBtn.dataset.year = y;
+            itemBtn.innerHTML = `<span>${y}</span> <span class="check-mark">${i === 0 ? '✓' : ''}</span>`;
+
+            itemBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // Mettre à jour l'étiquette du bouton déclencheur
+                const labelEl = document.getElementById('quick-year-label');
+                if (labelEl) labelEl.textContent = y;
+
+                // Gestion de la classe active sur les items
+                menuPanel.querySelectorAll('.quick-year-item').forEach(btn => {
+                    btn.classList.remove('active');
+                    const check = btn.querySelector('.check-mark');
+                    if (check) check.textContent = '';
+                });
+                itemBtn.classList.add('active');
+                const activeCheck = itemBtn.querySelector('.check-mark');
+                if (activeCheck) activeCheck.textContent = '✓';
+
+                // Refermer le menu si ouvert par clic
+                dropdownWrapper.classList.remove('open');
 
                 // Mise à jour des dates
                 if (dateDebEl) dateDebEl.value = `${y}-01-01`;
@@ -783,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Mise à jour du mode Comparaison N-1 (Année précédente complète)
+                // Mise à jour du mode Comparaison N-1
                 if (compareActiveCheck && compareActiveCheck.checked && compareDateDebEl && compareDateFinEl) {
                     const prevYear = y - 1;
                     compareDateDebEl.value = `${prevYear}-01-01`;
@@ -797,14 +825,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnUpdate) btnUpdate.click();
             });
 
-            // Insérer à la bonne place : plus petit (plus vieux) à gauche, plus grand (plus récent) à droite
-            quickYearContainer.insertBefore(btn, quickYearContainer.firstChild);
+            menuPanel.appendChild(itemBtn);
         }
+
+        dropdownWrapper.appendChild(triggerBtn);
+        dropdownWrapper.appendChild(menuPanel);
+        quickYearContainer.appendChild(dropdownWrapper);
+
+        // Support du clic pour ouvrir/fermer le menu déroulant
+        triggerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownWrapper.classList.toggle('open');
+        });
+
+        document.addEventListener('click', () => {
+            dropdownWrapper.classList.remove('open');
+        });
     }
 
-    // Gestion de la saisie manuelle pour retirer l'état actif des pastilles
+    // Gestion de la saisie manuelle pour adapter l'affichage
     const removeActiveChips = () => {
-        document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
+        const activeLabel = document.getElementById('quick-year-label');
+        const activeItem = document.querySelector('.quick-year-item.active');
+        if (activeItem) {
+            activeItem.classList.remove('active');
+            const check = activeItem.querySelector('.check-mark');
+            if (check) check.textContent = '';
+        }
+        if (activeLabel) activeLabel.textContent = 'Personnalisée';
     };
     if (dateDebEl) dateDebEl.addEventListener('change', removeActiveChips);
     if (dateFinEl) dateFinEl.addEventListener('change', removeActiveChips);
@@ -813,11 +861,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnResetQuickYears = document.getElementById('btn-reset');
     if (btnResetQuickYears) {
         btnResetQuickYears.addEventListener('click', () => {
-            // Un peu de délai pour laisser le reset du form se faire si c'est un <button type="reset">
             setTimeout(() => {
-                document.querySelectorAll('.btn-quick-year').forEach(b => b.classList.remove('active'));
-                const currentBtn = Array.from(document.querySelectorAll('.btn-quick-year')).find(b => b.textContent == currentYear);
-                if (currentBtn) currentBtn.classList.add('active');
+                const labelEl = document.getElementById('quick-year-label');
+                if (labelEl) labelEl.textContent = currentYear;
+                const menuItems = document.querySelectorAll('.quick-year-item');
+                menuItems.forEach(b => {
+                    const isCurrent = (b.dataset.year == currentYear);
+                    b.classList.toggle('active', isCurrent);
+                    const check = b.querySelector('.check-mark');
+                    if (check) check.textContent = isCurrent ? '✓' : '';
+                });
             }, 50);
         });
     }
@@ -4174,10 +4227,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Synchronisation du contrôle segmenté avec les boutons radios de mode cartographique
+    const segmentedButtons = document.querySelectorAll('.map-segmented-btn');
+    segmentedButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const val = btn.getAttribute('data-value');
+            const targetRadio = document.querySelector(`input[name="map-mode"][value="${val}"]`);
+            if (targetRadio) {
+                targetRadio.checked = true;
+                targetRadio.dispatchEvent(new Event('change'));
+            }
+        });
+    });
+
     // Gestion du basculement du mode carte (Points / Chaleur / Choroplèthe)
     document.querySelectorAll('input[name="map-mode"]').forEach(radio => {
         radio.addEventListener('change', () => {
             const selectedMode = radio.value;
+
+            // Synchroniser la classe active sur les boutons segmentés visuels
+            segmentedButtons.forEach(btn => {
+                if (btn.getAttribute('data-value') === selectedMode) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
             const isHeatmapMode = (selectedMode === 'heatmap');
             const isChoroplethMode = (selectedMode === 'choropleth');
 

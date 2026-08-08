@@ -2041,21 +2041,98 @@ document.addEventListener('DOMContentLoaded', () => {
         const counts = Array.from(entityCounts.values());
         const nonZeroCounts = counts.filter(c => c > 0).sort((a, b) => a - b);
         const maxVal = nonZeroCounts.length > 0 ? nonZeroCounts[nonZeroCounts.length - 1] : 0;
-
-        const q = (pct) => nonZeroCounts.length > 0 ? nonZeroCounts[Math.min(nonZeroCounts.length - 1, Math.floor(nonZeroCounts.length * pct))] : 0;
-        const t1 = q(0.20), t2 = q(0.40), t3 = q(0.60), t4 = q(0.80);
+        const minVal = nonZeroCounts.length > 0 ? nonZeroCounts[0] : 0;
 
         const paletteControles = ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'];
         const paletteInfractions = ['#f3e8ff', '#d8b4fe', '#a855f7', '#7e22ce', '#581c87'];
         const activePalette = isControles ? paletteControles : paletteInfractions;
 
+        // Algorithme de classification dynamique hybride (Quantiles / Intervalles stricts entiers)
+        const classes = [];
+        if (maxVal > 0) {
+            if (minVal === maxVal) {
+                classes.push({
+                    min: minVal,
+                    max: maxVal,
+                    color: activePalette[4],
+                    label: minVal === 1 ? '1' : `1 - ${maxVal}`
+                });
+            } else {
+                const numClasses = Math.min(5, maxVal - minVal + 1);
+
+                // Tentative de quantiles si effectifs suffisants
+                let percentileBreaks = [];
+                if (nonZeroCounts.length >= numClasses) {
+                    const getQ = (pct) => nonZeroCounts[Math.min(nonZeroCounts.length - 1, Math.floor(nonZeroCounts.length * pct))];
+                    const p20 = getQ(0.20);
+                    const p40 = getQ(0.40);
+                    const p60 = getQ(0.60);
+                    const p80 = getQ(0.80);
+                    percentileBreaks = [minVal, p20, p40, p60, p80, maxVal];
+                }
+
+                let usePercentiles = percentileBreaks.length === 6;
+                if (usePercentiles) {
+                    for (let i = 0; i < percentileBreaks.length - 1; i++) {
+                        if (percentileBreaks[i] >= percentileBreaks[i + 1]) {
+                            usePercentiles = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (usePercentiles) {
+                    for (let i = 0; i < 5; i++) {
+                        const low = i === 0 ? minVal : percentileBreaks[i] + 1;
+                        const high = percentileBreaks[i + 1];
+                        if (low <= high) {
+                            classes.push({
+                                min: low,
+                                max: high,
+                                color: activePalette[i],
+                                label: low === high ? `${low}` : (i === 4 ? `> ${percentileBreaks[4]}` : `${low} - ${high}`)
+                            });
+                        }
+                    }
+                }
+
+                // Repli sur intervalles linéaires stricts réguliers si quantiles non valides
+                if (classes.length === 0) {
+                    let lastEnd = minVal - 1;
+                    for (let i = 0; i < numClasses; i++) {
+                        const low = lastEnd + 1;
+                        let high;
+                        if (i === numClasses - 1) {
+                            high = maxVal;
+                        } else {
+                            high = Math.floor(minVal + (i + 1) * (maxVal - minVal) / numClasses);
+                        }
+                        if (high < low) high = low;
+                        lastEnd = high;
+
+                        const colorIdx = numClasses === 1 ? 4 : Math.min(4, Math.floor(i * 5 / numClasses));
+                        const label = (low === high) ? `${low}` : `${low} - ${high}`;
+                        classes.push({
+                            min: low,
+                            max: high,
+                            color: activePalette[colorIdx],
+                            label: label
+                        });
+                    }
+                }
+            }
+        }
+
         function getColor(val) {
-            if (val === 0) return 'transparent';
-            if (val <= t1) return activePalette[0];
-            if (val <= t2) return activePalette[1];
-            if (val <= t3) return activePalette[2];
-            if (val <= t4) return activePalette[3];
-            return activePalette[4];
+            if (!val || val <= 0) return 'transparent';
+            for (let c of classes) {
+                if (val >= c.min && val <= c.max) return c.color;
+            }
+            if (classes.length > 0) {
+                if (val < classes[0].min) return classes[0].color;
+                if (val > classes[classes.length - 1].max) return classes[classes.length - 1].color;
+            }
+            return activePalette[0];
         }
 
         choroplethLayer = L.geoJSON(currentBoundaryGeojson, {
@@ -2105,6 +2182,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (choroplethLayer) choroplethLayer.resetStyle(e.target);
                     },
                     click: function(e) {
+                        const currentScale = typeof selectEchelle !== 'undefined' && selectEchelle ? selectEchelle.value : '';
+                        if (currentScale === 'pnf') {
+                            // Désactivé pour le PNF : infobulle seule sans altération des filtres
+                            return;
+                        }
                         if (codeInsee) {
                             const inputCommune = document.getElementById('commune');
                             if (inputCommune) {
@@ -2143,25 +2225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            if (maxVal > 0) {
-                const steps = [
-                    { label: `1 - ${t1 || 1}`, color: activePalette[0] },
-                    { label: `${(t1 || 1) + 1} - ${t2 || (t1 + 1)}`, color: activePalette[1] },
-                    { label: `${(t2 || 2) + 1} - ${t3 || (t2 + 1)}`, color: activePalette[2] },
-                    { label: `${(t3 || 3) + 1} - ${t4 || (t3 + 1)}`, color: activePalette[3] },
-                    { label: `> ${t4 || 4}`, color: activePalette[4] }
-                ];
-
-                const uniqueSteps = [];
-                const seenLabels = new Set();
-                steps.forEach(s => {
-                    if (!seenLabels.has(s.label)) {
-                        seenLabels.add(s.label);
-                        uniqueSteps.push(s);
-                    }
-                });
-
-                uniqueSteps.forEach(s => {
+            if (classes.length > 0) {
+                classes.forEach(s => {
                     legendItems.innerHTML += `
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="width: 14px; height: 14px; background: ${s.color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 2px;"></span>

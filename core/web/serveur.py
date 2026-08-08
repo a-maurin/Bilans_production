@@ -1393,9 +1393,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if col != "geometry":
                                 gdf_boundary[col] = gdf_boundary[col].astype(str)
                     elif echelle == "pnf":
-                        shp_path = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
-                        gdf_boundary = gpd.read_file(shp_path)
-                        gdf_boundary.crs = "EPSG:2154"
+                        from core.common.chargeurs_donnees import get_pnf_127_communes_aoa_shp_path
+                        path_127 = get_pnf_127_communes_aoa_shp_path(Path(project_root))
+                        if path_127.exists():
+                            gdf_boundary = gpd.read_file(path_127)
+                            if gdf_boundary.crs is None:
+                                gdf_boundary.set_crs(epsg=2154, inplace=True)
+                        else:
+                            from core.cartographie.pochoir_helper import load_communes_gdf
+                            shp_path = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
+                            gdf_aoa = gpd.read_file(shp_path)
+                            if gdf_aoa.crs is None:
+                                gdf_aoa.set_crs(epsg=2154, inplace=True)
+                            target_code = code or "21, 52"
+                            gdf_com = load_communes_gdf(target_code, project_root=project_root)
+                            if gdf_com is not None and not gdf_com.empty:
+                                if gdf_com.crs is None:
+                                    gdf_com.set_crs(epsg=2154, inplace=True)
+                                try:
+                                    gdf_clipped = gpd.clip(gdf_com.to_crs(gdf_aoa.crs), gdf_aoa)
+                                    gdf_boundary = gdf_clipped if not gdf_clipped.empty else gdf_aoa
+                                except Exception as e_clip:
+                                    log_server(f"[EXPLORER_GEOJSON] Clip communes PNF echoue: {e_clip}", level="WARN")
+                                    gdf_boundary = gdf_aoa
+                            else:
+                                gdf_boundary = gdf_aoa
+
                         for col in gdf_boundary.columns:
                             if col != "geometry":
                                 gdf_boundary[col] = gdf_boundary[col].astype(str)
@@ -1455,7 +1478,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         perimeter_geojson_data = None
                         try:
                             gdf_perim = None
-                            if profile_cfg.get("restrict_geo") == "tub" or echelle == "pnf":
+                            if echelle == "pnf":
+                                shp_path_perim = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
+                                gdf_perim = gpd.read_file(shp_path_perim)
+                            elif profile_cfg.get("restrict_geo") == "tub":
                                 gdf_perim = gdf_boundary
                             elif echelle == "departement":
                                 gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=True)

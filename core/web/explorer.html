@@ -395,8 +395,9 @@ Composants principaux :
             width: 100%;
             box-sizing: border-box;
             margin-bottom: 8px;
-            overflow-x: auto;
-            scrollbar-width: thin;
+            position: relative;
+            z-index: 1000;
+            overflow: visible;
         }
 
         #choropleth-options:not(.hidden) {
@@ -515,9 +516,10 @@ Composants principaux :
             display: none;
             position: absolute;
             top: 100%;
-            left: 0;
+            right: 0;
+            left: auto;
             margin-top: 4px;
-            z-index: 1000;
+            z-index: 1001;
             background: #ffffff;
             border: 1px solid var(--color-border);
             border-radius: 6px;

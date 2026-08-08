@@ -462,9 +462,54 @@ def is_map_valid_for_dept(
 ) -> bool:
     """True si la carte PNG correspond au département demandé."""
     if not map_png.exists():
-        return False
-    target = normalize_dept_code(dept_code)
-    marker_dept = read_map_dept_marker(map_png)
     if marker_dept is not None:
         return marker_dept == target
     return False
+
+
+@lru_cache(maxsize=8)
+def get_national_regions_perim_gdf_cached(project_root_str: Optional[str] = None) -> gpd.GeoDataFrame:
+    """Mémoïse la création du périmètre régional/national dissous pour l'API web."""
+    root = Path(project_root_str) if project_root_str else None
+    gdf_dep_all = load_department_gdf("FR", project_root=root, dissolve=False)
+    if not gdf_dep_all.empty and "INSEE_REG" in gdf_dep_all.columns:
+        return gdf_dep_all.dissolve(by="INSEE_REG")
+    return gdf_dep_all
+
+
+@lru_cache(maxsize=8)
+def get_national_departments_wgs84_geojson_cached(project_root_str: Optional[str] = None) -> dict:
+    """Mémoïse le GeoJSON WGS84 des départements nationaux pour la cartographie front-end."""
+    import json
+    root = Path(project_root_str) if project_root_str else None
+    gdf_boundary = load_department_gdf("FR", project_root=root, dissolve=False)
+    if gdf_boundary.empty:
+        return {}
+    if gdf_boundary.crs is None:
+        gdf_boundary.set_crs(epsg=2154, inplace=True)
+    gdf_boundary_wgs84 = gdf_boundary.to_crs("EPSG:4326")
+    col_map = {c.lower(): c for c in gdf_boundary_wgs84.columns}
+    if "insee_dep" in col_map:
+        gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["insee_dep"]]
+        gdf_boundary_wgs84["insee_dep"] = gdf_boundary_wgs84[col_map["insee_dep"]]
+    elif "code_dept" in col_map:
+        gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["code_dept"]]
+
+    if "nom" in col_map:
+        gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom"]]
+        gdf_boundary_wgs84["nom"] = gdf_boundary_wgs84[col_map["nom"]]
+    elif "nom_dep" in col_map:
+        gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom_dep"]]
+
+    def _fix_str_encoding(val):
+        if isinstance(val, str) and ("Ã" in val or "Â" in val):
+            try:
+                return val.encode("iso-8859-1").decode("utf-8")
+            except Exception:
+                return val
+        return str(val) if val is not None else ""
+
+    for col in gdf_boundary_wgs84.columns:
+        if col != "geometry":
+            gdf_boundary_wgs84[col] = gdf_boundary_wgs84[col].apply(_fix_str_encoding)
+    return json.loads(gdf_boundary_wgs84.to_json())

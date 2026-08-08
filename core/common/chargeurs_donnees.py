@@ -128,6 +128,7 @@ _POINT_CTRL_RAW_CACHE = {}
 _PEJ_RAW_CACHE = {}
 _PA_RAW_CACHE = {}
 _PVE_RAW_CACHE = {}
+_FAITS_RAW_CACHE = {}
 
 
 def init_session_cache(
@@ -189,6 +190,7 @@ def clear_session_cache() -> None:
     _SESSION_CACHE["pej"] = None
     _SESSION_CACHE["pa"] = None
     _SESSION_CACHE["pve"] = None
+    _FAITS_RAW_CACHE.clear()
 
 
 def safe_to_datetime(series: pd.Series) -> pd.Series:
@@ -2408,16 +2410,26 @@ def merge_pej_faits_locations(
         path = get_points_infrac_pj_path(root)
         gdf = pd.DataFrame()
         if path and path.exists():
-            try:
-                gdf = read_vector_attributes(path)
-            except Exception as e:
-                lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
+            path_str = str(path)
+            if path_str in _FAITS_RAW_CACHE:
+                gdf = _FAITS_RAW_CACHE[path_str].copy()
+            else:
+                try:
+                    gdf = read_vector_attributes(path)
+                    _FAITS_RAW_CACHE[path_str] = gdf.copy()
+                except Exception as e:
+                    lg.warning("Lecture FAITS pour localisations PEJ impossible (%s) : %s", path, e)
         elif path:
             # Fallback en cas de mock dans les tests ou fichier virtuel
-            try:
-                gdf = read_vector_attributes(path)
-            except Exception:
-                gdf = pd.DataFrame()
+            path_str = str(path)
+            if path_str in _FAITS_RAW_CACHE:
+                gdf = _FAITS_RAW_CACHE[path_str].copy()
+            else:
+                try:
+                    gdf = read_vector_attributes(path)
+                    _FAITS_RAW_CACHE[path_str] = gdf.copy()
+                except Exception:
+                    gdf = pd.DataFrame()
 
     out = pej.copy()
     if "x_faits" not in out.columns:

@@ -2748,9 +2748,17 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         };
 
-        // Helper fetch unique avec journalisation systématique
+        // Cache client pour les requêtes /api/data
+        if (!window.apiDataCache) window.apiDataCache = new Map();
+
+        // Helper fetch unique avec journalisation systématique et cache client
         const fetchOne = (params) => {
             const cacheKey = JSON.stringify(params);
+            if (window.apiDataCache.has(cacheKey)) {
+                sendClientLog('INFO', `Données /api/data restituées depuis le cache client pour code ${params.code}`, 'explorer.js', 'fetchOne');
+                return Promise.resolve(JSON.parse(JSON.stringify(window.apiDataCache.get(cacheKey))));
+            }
+
             sendClientLog('INFO', `Demande de données /api/data (Échelle: ${params.echelle}, Code: ${params.code}, Période: ${params['date-deb']} -> ${params['date-fin']})`, 'explorer.js', 'fetchOne');
             return fetch('/api/data', {
                 method: 'POST',
@@ -2767,6 +2775,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ptsCount = (data.points || []).length;
                 const procCount = (data.procedures || []).length;
                 sendClientLog('INFO', `Réponse /api/data reçue pour code ${params.code}: ${ptsCount} point(s) de contrôle, ${procCount} procédure(s)`, 'explorer.js', 'fetchOne');
+
+                if (window.apiDataCache.size > 30) {
+                    const firstKey = window.apiDataCache.keys().next().value;
+                    window.apiDataCache.delete(firstKey);
+                }
+                window.apiDataCache.set(cacheKey, data);
+
                 return data;
             }).catch(err => {
                 sendClientLog('ERROR', `Erreur réseau /api/data : ${err.message}`, 'explorer.js', 'fetchOne');

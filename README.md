@@ -96,6 +96,13 @@ python -m ofbilan --profil pnf --code 21 --diffusion externe --no-cartes
 
 ---
 
+## 🔒 Sécurité, Confidentialité & Exécution Hors-Ligne
+
+* **Aucune Fuite de Données Métier :** Le traitement des procédures et données sensibles s'effectue exclusivement en local via le serveur HTTP interne (`http://localhost:8000`). Aucune donnée métier n'est envoyée à l'extérieur.
+* **Assets GUI 100% Autonomes (Zero CDN) :** Toutes les dépendances web (`Leaflet`, `Chart.js`, `Driver.js`, `MarkerCluster`, `html2canvas`) sont stockées et servies en local (`core/web/vendor/`). L'application fonctionne sans aucun appel à des CDN distants, évitant toute fuite de métadonnées et assurant une compatibilité parfaite avec les réseaux restreints.
+
+---
+
 ## 📂 Structure du Projet
 
 *   `ofbilan_plugin.py` : Point d'entrée de l'extension QGIS.

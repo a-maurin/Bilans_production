@@ -25,7 +25,8 @@ Toutes les modifications notables apportées au projet **OFBilan** depuis la ver
 * **Pochoirs départementaux dynamiques** : Découpage et masquage spatial par département (`pochoir_sdXX`), marquage des cartes par tag département et adaptation dynamique des libellés.
 * **Consolidation PNF & Restrict Geo** : Unification de la détection `restrict_geo` et consolidation globale du profil PNF.
 
-### Architecture, Qualité du Code & Tests
+### Architecture, Qualité du Code & Sécurité
+* **Autonomisation locale des assets Web GUI (Zero CDN / Zero Data Leak)** : Isolation complète des dépendances front-end (`Leaflet`, `Chart.js`, `Driver.js`, `MarkerCluster`, `html2canvas`) désormais hébergées en local (`core/web/vendor/`) avec contrôle d'intégrité SHA-256 (`scripts/download_vendor_assets.py`), garantissant un fonctionnement 100% autonome en réseau restreint/hors-ligne (*air-gapped*) sans fuite de métadonnées.
 * **Gouvernance YAML-First** : Fiabilisation et alignement YAML-first du moteur d'édition.
 * **Liaison des En-têtes PDF** : Liaison automatique d'en-têtes pour supprimer les titres orphelins.
 * **Suite de Tests Unitaires** : Correction des régressions (gabarits, SQL Corse 2A/2B, CLI entry point) et support PyArrow.

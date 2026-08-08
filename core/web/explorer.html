@@ -39,14 +39,11 @@ Composants principaux :
     <title>OFBilan Explorer - Office Français de la Biodiversité</title>
     <link rel="stylesheet" href="style.css?v=1.1.1">
     <link rel="stylesheet" href="print.css" media="print">
-    <!-- Leaflet.js CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <!-- Leaflet.markercluster CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-    <!-- Driver.js CSS pour la visite guidée -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css" />
+    <!-- Assets Vendor Autonomes (CSS) -->
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <link rel="stylesheet" href="vendor/MarkerCluster.css" />
+    <link rel="stylesheet" href="vendor/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="vendor/driver.css" />
     <style>
         @keyframes dataFadeIn {
             from {
@@ -1382,19 +1379,13 @@ Composants principaux :
         Généré avec OFBilan - Logiciel libre (GNU GPLv3). Auteur : Aguirre MAURIN
     </div>
 
-    <!-- Leaflet.js Javascript -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- Leaflet.markercluster JS -->
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-    <!-- Leaflet.heat JS -->
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-    <!-- Chart.js Javascript -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- HTML2Canvas for Map Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- Driver.js pour la visite guidée -->
-    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <!-- Assets Vendor Autonomes (JS) -->
+    <script src="vendor/leaflet.js"></script>
+    <script src="vendor/leaflet.markercluster.js"></script>
+    <script src="vendor/leaflet-heat.js"></script>
+    <script src="vendor/chart.umd.js"></script>
+    <script src="vendor/html2canvas.min.js"></script>
+    <script src="vendor/driver.js.iife.js"></script>
     <!-- Frontend controller script -->
     <script src="explorer.js?v=1.2.3"></script>
     <!-- Modal Aide / Guide Complet -->

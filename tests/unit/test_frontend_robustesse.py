@@ -173,7 +173,7 @@ def test_map_fullscreen_layout_fix():
     assert "transform: none !important;" in html_source, "transform: none absente de .map-fullscreen dans explorer.html"
     assert "document.body.style.overflow = isFullscreen ? 'hidden' : ''" in js_source, "Gestion de l'overflow du body absente dans explorer.js"
     assert "map.invalidateSize" in js_source, "Invalidation de taille de carte absente dans explorer.js"
-    assert "flex-wrap: wrap;" in html_source, "flex-wrap: wrap absent de la barre d'outils carte dans explorer.html"
+    assert "flex-wrap: nowrap;" in html_source, "flex-wrap: nowrap absent de la barre d'outils carte dans explorer.html"
     assert "transform: translateY" not in html_source, "transform: translateY ne doit pas être présent dans dataFadeIn"
 
 

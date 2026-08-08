@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (filterName === 'pej') {
             currentMapMode = 'results';
             const choroplethSelect = document.getElementById('choropleth-metric');
-            if (choroplethSelect) choroplethSelect.value = 'procedures';
+            if (choroplethSelect) choroplethSelect.value = 'pej';
             legendFilters.ctrl_conforme = false;
             legendFilters.ctrl_infraction = false;
             legendFilters.ctrl_attente = false;
@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (filterName === 'pve') {
             currentMapMode = 'results';
             const choroplethSelect = document.getElementById('choropleth-metric');
-            if (choroplethSelect) choroplethSelect.value = 'procedures';
+            if (choroplethSelect) choroplethSelect.value = 'pve';
             legendFilters.ctrl_conforme = false;
             legendFilters.ctrl_infraction = false;
             legendFilters.ctrl_attente = false;
@@ -1977,6 +1977,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (activeKpiFilter === 'controles') return;
                 const ptype = (p.type || '').toUpperCase();
                 if (!ptype.includes('PEJ') && !ptype.includes('PVE')) return;
+                if (metric === 'pej' && !ptype.includes('PEJ')) return;
+                if (metric === 'pve' && !ptype.includes('PVE')) return;
                 if (activeKpiFilter === 'pej' && !ptype.includes('PEJ')) return;
                 if (activeKpiFilter === 'pa' && !ptype.includes('PA')) return;
                 if (activeKpiFilter === 'pve' && !ptype.includes('PVE')) return;
@@ -1984,6 +1986,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const target = normalizeStr(activeKpiFilter.substring(7));
                     const cat = normalizeStr(getUsagerCategory(p.type_usager));
                     if (!cat.includes(target) && !target.includes(cat)) return;
+                }
+                if (currentMapMode === 'usagers') {
+                    const cat = getUsagerCategory(p.type_usager);
+                    if (usagerLegendFilters[cat] === false) return;
                 }
 
                 if (ptype.includes('PEJ') && legendFilters.pej === false) return;
@@ -2002,7 +2008,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         details.total++;
                         if (ptype.includes('PEJ')) details.pej++;
                         if (ptype.includes('PVE')) details.pve++;
-                        entityCounts.set(key, details.total);
+                        const valToSet = (metric === 'pej') ? details.pej : ((metric === 'pve') ? details.pve : (details.pej + details.pve));
+                        entityCounts.set(key, valToSet);
                         matched = true;
                         break;
                     }
@@ -2023,7 +2030,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     details.total++;
                                     if (ptype.includes('PEJ')) details.pej++;
                                     if (ptype.includes('PVE')) details.pve++;
-                                    entityCounts.set(key, details.total);
+                                    const valToSet = (metric === 'pej') ? details.pej : ((metric === 'pve') ? details.pve : (details.pej + details.pve));
+                                    entityCounts.set(key, valToSet);
                                     matched = true;
                                     break;
                                 }
@@ -2044,8 +2052,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const minVal = nonZeroCounts.length > 0 ? nonZeroCounts[0] : 0;
 
         const paletteControles = ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'];
-        const paletteInfractions = ['#f3e8ff', '#d8b4fe', '#a855f7', '#7e22ce', '#581c87'];
-        const activePalette = isControles ? paletteControles : paletteInfractions;
+        const palettePej = ['#f3e8ff', '#d8b4fe', '#a855f7', '#7e22ce', '#581c87'];
+        const palettePve = ['#e0e7ff', '#c7d2fe', '#818cf8', '#4f46e5', '#312e81'];
+        const paletteInfractions = ['#fce7f3', '#fbcfe8', '#f472b6', '#db2777', '#831843'];
+
+        let activePalette = paletteControles;
+        if (metric === 'pej') activePalette = palettePej;
+        else if (metric === 'pve') activePalette = palettePve;
+        else if (metric === 'infractions') activePalette = paletteInfractions;
 
         // Algorithme de classification dynamique hybride (Quantiles / Intervalles stricts entiers)
         const classes = [];
@@ -2163,10 +2177,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (codeDept) tooltipText += ` (${codeDept})`;
                 tooltipText += `<br>`;
 
-                if (isControles) {
-                    tooltipText += `📊 Contrôles : <strong>${info.total}</strong>`;
+                if (metric === 'controles') {
+                    tooltipText += `📊 Contrôles : <strong>${info.controles}</strong>`;
+                } else if (metric === 'pej') {
+                    tooltipText += `📝 PEJ : <strong>${info.pej}</strong>`;
+                } else if (metric === 'pve') {
+                    tooltipText += `📱 PVe : <strong>${info.pve}</strong>`;
                 } else {
-                    tooltipText += `⚖️ Infractions : <strong>${info.total}</strong><br>`;
+                    tooltipText += `⚖️ Infractions : <strong>${info.pej + info.pve}</strong><br>`;
                     tooltipText += `<span style="font-size:10px; color:#475569;">• PEJ : ${info.pej} | PVe : ${info.pve}</span>`;
                 }
 
@@ -2212,16 +2230,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const legendTitle = document.getElementById('choropleth-legend-title');
         const legendItems = document.getElementById('choropleth-legend-items');
 
-        if (legendTitle) {
-            legendTitle.textContent = 'Légende';
+        let usagerSubTitle = '';
+        if (activeKpiFilter && activeKpiFilter.startsWith('usager:')) {
+            usagerSubTitle = ` (${activeKpiFilter.substring(7)})`;
         }
+
+        if (legendTitle) {
+            if (metric === 'controles') legendTitle.textContent = `Légende - Contrôles${usagerSubTitle}`;
+            else if (metric === 'pej') legendTitle.textContent = `Légende - PEJ${usagerSubTitle}`;
+            else if (metric === 'pve') legendTitle.textContent = `Légende - PVe${usagerSubTitle}`;
+            else legendTitle.textContent = `Légende - Infractions${usagerSubTitle}`;
+        }
+
+        let zeroLabel = '0 contrôle';
+        if (metric === 'pej') zeroLabel = '0 PEJ';
+        else if (metric === 'pve') zeroLabel = '0 PVe';
+        else if (metric === 'infractions') zeroLabel = '0 infraction';
 
         if (legendItems) {
             legendItems.innerHTML = '';
             legendItems.innerHTML += `
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span style="width: 14px; height: 14px; background: #e2e8f0; border: 1px solid #cbd5e1; opacity: 0.5; border-radius: 2px;"></span>
-                    <span>0 ${isControles ? 'contrôle' : 'infraction'}</span>
+                    <span>${zeroLabel}</span>
                 </div>
             `;
 
@@ -4230,7 +4261,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnReset = document.getElementById('btn-reset');
     if (btnReset) {
         btnReset.addEventListener('click', () => {
-            clearDataResponseCache();
             if (typeof resetKpiFilter === 'function') resetKpiFilter();
             const now = new Date();
             const currentYear = now.getFullYear();

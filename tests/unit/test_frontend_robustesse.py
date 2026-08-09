@@ -224,8 +224,38 @@ def test_pej_table_export_alignment_and_type_action():
     assert "Fallback 2: CENTROIDES COMMUNAUX POUR PEJ" in serveur_source or "load_communes_centroides" in serveur_source, "Fallback centroïde communal PEJ absent dans serveur.py"
 
 
+def test_directeur_enquete_extraction_in_serveur():
+    """Vérifie la présence de l'extraction directeur_enquete dans serveur.py."""
+    serveur_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "serveur.py").read_text(encoding="utf-8")
+    assert "_extract_directeur_enquete" in serveur_source, "_extract_directeur_enquete absent de serveur.py"
+    assert "_DIRECTEUR_ENQUETE_COLS" in serveur_source, "_DIRECTEUR_ENQUETE_COLS absent de serveur.py"
+    assert '"directeur_enquete": _extract_directeur_enquete(r)' in serveur_source, "Injection directeur_enquete absente du bloc PEJ"
 
 
+def test_directeur_enquete_extraction_logic():
+    """Vérifie la logique fail-soft de _extract_directeur_enquete."""
+    from core.web.serveur import _extract_directeur_enquete
+
+    assert _extract_directeur_enquete({"DIRECTEUR_ENQUETE": "Dupont Jean"}) == "Dupont Jean"
+    assert _extract_directeur_enquete({"DIRECTEUR ENQUETE": "Martin Paul"}) == "Martin Paul"
+    assert _extract_directeur_enquete({"DIRECTEUR_ENQUETE": "N/A"}) == ""
+    assert _extract_directeur_enquete({"DIRECTEUR_ENQUETE": ""}) == ""
+    assert _extract_directeur_enquete({}) == ""
+    assert _extract_directeur_enquete({"RESPONSABLE_ENQUETE": "Durand"}) == "Durand"
+
+
+def test_pej_directeur_column_conditional_ui():
+    """Vérifie la colonne conditionnelle Directeur d'enquête dans explorer.js/html."""
+    js_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.js").read_text(encoding="utf-8")
+    html_source = (Path(__file__).resolve().parents[2] / "core" / "web" / "explorer.html").read_text(encoding="utf-8")
+
+    assert 'function isOnlyPejView(data)' in js_source, "isOnlyPejView absent de explorer.js"
+    assert 'th-directeur-enquete' in html_source, "En-tête th-directeur-enquete absent de explorer.html"
+    assert 'data-sort="directeur_enquete"' in html_source, "data-sort directeur_enquete absent de explorer.html"
+    assert "Directeur d'enquête" in html_source, "Libellé Directeur d'enquête absent de explorer.html"
+    assert "row.directeur_enquete || 'Non renseigné'" in js_source, "Affichage directeur_enquete absent de renderTable"
+    assert "exportPejOnly = isOnlyPejView(dataToExport)" in js_source, "Export CSV conditionnel PEJ absent de explorer.js"
+    assert "Directeur d\\'enquête" in js_source, "En-tête CSV Directeur d'enquête absent de explorer.js"
 
 
 

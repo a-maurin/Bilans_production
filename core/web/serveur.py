@@ -175,6 +175,24 @@ def get_latest_version():
             pass
     return "v1.0.2"
 
+_DIRECTEUR_ENQUETE_COLS = (
+    "DIRECTEUR_ENQUETE", "DIRECTEUR ENQUETE", "DIRECTEUR_D_ENQUETE",
+    "NOM_DIRECTEUR_ENQUETE", "DIRECTEUR_DE_L_ENQUETE",
+    "RESPONSABLE_ENQUETE", "PILOTE_ENQUETE", "DIRECTEUR",
+)
+
+
+def _extract_directeur_enquete(record: dict) -> str:
+    """Extrait l'identité du directeur d'enquête depuis un enregistrement PEJ."""
+    for col in _DIRECTEUR_ENQUETE_COLS:
+        val = record.get(col)
+        if val is not None and pd.notna(val):
+            s = str(val).strip()
+            if s and s not in ("N/A", "nan", "None", "<NA>"):
+                return s
+    return ""
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
@@ -1349,7 +1367,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     "code_insee": insee_pej,
                                     "precision_loc": prec_val,
                                     "x": x_val,
-                                    "y": y_val
+                                    "y": y_val,
+                                    "directeur_enquete": _extract_directeur_enquete(r),
                                 })
                     except Exception as e:
                         print(f"Exception merging pej faits: {e}")
@@ -1854,4 +1873,4 @@ def run_server():
         raise
 
 if __name__ == "__main__":
-    run_server()
+    run_server()

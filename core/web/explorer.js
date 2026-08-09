@@ -4217,6 +4217,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function isOnlyPejView(data) {
+        return activeKpiFilter === 'pej'
+            || (data.length > 0 && data.every(row =>
+                row.type === 'PEJ'
+                || (row.resultat && row.resultat.includes('PEJ'))
+            ));
+    }
+
     function getFilteredTableData() {
         let data = [];
         if (activeKpiFilter === 'pej') {
@@ -4259,6 +4267,20 @@ document.addEventListener('DOMContentLoaded', () => {
         tableBody.innerHTML = '';
 
         let data = getFilteredTableData();
+        const showDirecteur = isOnlyPejView(data);
+
+        const thDirecteur = document.getElementById('th-directeur-enquete');
+        if (thDirecteur) {
+            thDirecteur.style.display = showDirecteur ? '' : 'none';
+        }
+
+        if (!showDirecteur && tableSortColumn === 'directeur_enquete') {
+            tableSortColumn = '';
+            document.querySelectorAll('.data-table th[data-sort]').forEach(header => {
+                const baseText = header.textContent.replace(/[⇅▲▼]/g, '').trim();
+                header.textContent = `${baseText} ⇅`;
+            });
+        }
 
         // Tri
         if (tableSortColumn) {
@@ -4283,8 +4305,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const endIndex = Math.min(startIndex + tableRowsPerPage, totalRows);
         const pageData = data.slice(startIndex, endIndex);
 
+        const emptyColspan = showDirecteur ? 9 : 8;
         if (pageData.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 20px;">Aucun contrôle à afficher.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="${emptyColspan}" style="text-align: center; color: var(--color-text-muted); padding: 20px;">Aucun contrôle à afficher.</td></tr>`;
         } else {
             pageData.forEach(row => {
                 const tr = document.createElement('tr');
@@ -4300,6 +4323,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="padding: 6px 8px;">${row.type_action || 'Non renseigné'}</td>
                     <td style="padding: 6px 8px;">${row.type_usager || ''}</td>
                     <td style="padding: 6px 8px;">${communeText}</td>
+                    ${showDirecteur ? `<td style="padding: 6px 8px;">${row.directeur_enquete || 'Non renseigné'}</td>` : ''}
                 `;
                 tableBody.appendChild(tr);
             });
@@ -4372,19 +4396,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const headers = ['ID', 'Date', 'Resultat', 'Domaine', 'Theme', 'Type Action', 'Type Usager', 'Commune', 'X', 'Y'];
-            const rows = dataToExport.map(row => [
-                row.dc_id || '',
-                row.date_ctrl || '',
-                row.resultat || (row.type ? `Infraction (${row.type})` : ''),
-                row.domaine || '',
-                row.theme || '',
-                row.type_action || 'Non renseigné',
-                row.type_usager || '',
-                row.nom_commun || ((row.x === null || row.x === undefined || row.x === 0) ? 'Non géolocalisée' : ''),
-                row.x !== null && row.x !== undefined ? row.x : 0.0,
-                row.y !== null && row.y !== undefined ? row.y : 0.0
-            ]);
+            const exportPejOnly = isOnlyPejView(dataToExport);
+            const headers = ['ID', 'Date', 'Resultat', 'Domaine', 'Theme', 'Type Action', 'Type Usager', 'Commune'];
+            if (exportPejOnly) {
+                headers.push('Directeur d\'enquête');
+            }
+            headers.push('X', 'Y');
+            const rows = dataToExport.map(row => {
+                const rowData = [
+                    row.dc_id || '',
+                    row.date_ctrl || '',
+                    row.resultat || (row.type ? `Infraction (${row.type})` : ''),
+                    row.domaine || '',
+                    row.theme || '',
+                    row.type_action || 'Non renseigné',
+                    row.type_usager || '',
+                    row.nom_commun || ((row.x === null || row.x === undefined || row.x === 0) ? 'Non géolocalisée' : ''),
+                ];
+                if (exportPejOnly) {
+                    rowData.push(row.directeur_enquete || 'Non renseigné');
+                }
+                rowData.push(
+                    row.x !== null && row.x !== undefined ? row.x : 0.0,
+                    row.y !== null && row.y !== undefined ? row.y : 0.0
+                );
+                return rowData;
+            });
 
             const csvContent = "\uFEFF" + [
                 headers.join(';'),

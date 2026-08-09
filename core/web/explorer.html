@@ -1325,12 +1325,12 @@ Composants principaux :
                     </div>
                 </div>
             </div>
-            <!-- Tableau détaillé des contrôles -->
+            <!-- Tableau détaillé des données -->
             <div class="card" id="card-table-controles" style="margin-top: 15px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;"
                     id="toggle-table-header">
                     <h2 style="margin-bottom: 0 !important; display: flex; align-items: center; gap: 8px;">
-                        <span id="table-toggle-icon">▶</span> Détail des contrôles chargés
+                        <span id="table-toggle-icon">▶</span> Détail des données chargées
                     </h2>
                     <button type="button" id="btn-export-csv" class="btn btn-secondary"
                         style="padding: 4px 8px !important; font-size: 11px !important;">Exporter en CSV</button>
@@ -1348,6 +1348,8 @@ Composants principaux :
                                 <th style="padding: 8px; cursor: pointer;" data-sort="type_action">Type d'Action ⇅</th>
                                 <th style="padding: 8px; cursor: pointer;" data-sort="type_usager">Usager ⇅</th>
                                 <th style="padding: 8px; cursor: pointer;" data-sort="nom_commun">Commune ⇅</th>
+                                <th id="th-directeur-enquete" style="padding: 8px; cursor: pointer; display: none;"
+                                    data-sort="directeur_enquete">Directeur d'enquête ⇅</th>
                             </tr>
                         </thead>
                         <tbody id="table-body">

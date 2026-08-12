@@ -1,10 +1,9 @@
 @echo off
 chcp 65001 >nul
-setlocal enabledelayedexpansion
+setlocal EnableDelayedExpansion
 
 cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
-set "PYTHONPATH=%PROJECT_ROOT%;%PROJECT_ROOT%\src;%PYTHONPATH%"
 
 echo =====================================
 echo     Lancement du serveur OFBilan
@@ -12,69 +11,55 @@ echo =====================================
 echo.
 echo Recherche de l'interpreteur Python de QGIS...
 
-set QGIS_PYTHON=""
+set "QGIS_PYTHON="
 
-:: Cherche dans les installations standards de QGIS dans C:\Program Files\
+:: Priorite : wrappers python-qgis*.bat qui configurent PYTHONHOME correctement
 for /d %%i in ("C:\Program Files\QGIS*") do (
-    if exist "%%i\bin\python-qgis.bat" (
-        set QGIS_PYTHON="%%i\bin\python-qgis.bat"
-        goto :found
-    )
-    if exist "%%i\bin\python-qgis-ltr.bat" (
-        set QGIS_PYTHON="%%i\bin\python-qgis-ltr.bat"
-        goto :found
-    )
+    if "!QGIS_PYTHON!"=="" if exist "%%i\bin\python-qgis-ltr.bat" set "QGIS_PYTHON=%%i\bin\python-qgis-ltr.bat"
 )
+for /d %%i in ("C:\Program Files\QGIS*") do (
+    if "!QGIS_PYTHON!"=="" if exist "%%i\bin\python-qgis.bat" set "QGIS_PYTHON=%%i\bin\python-qgis.bat"
+)
+if "!QGIS_PYTHON!"=="" if exist "%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis-ltr.bat" set "QGIS_PYTHON=%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis-ltr.bat"
+if "!QGIS_PYTHON!"=="" if exist "%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis.bat" set "QGIS_PYTHON=%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis.bat"
+if "!QGIS_PYTHON!"=="" if exist "C:\OSGeo4W64\bin\python-qgis-ltr.bat" set "QGIS_PYTHON=C:\OSGeo4W64\bin\python-qgis-ltr.bat"
 
-:: Cherche dans les installations OSGeo4W
-if exist "%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis.bat" (
-    set QGIS_PYTHON="%LOCALAPPDATA%\Programs\OSGeo4W\bin\python-qgis.bat"
-    goto :found
-)
-if exist "C:\OSGeo4W64\bin\python-qgis.bat" (
-    set QGIS_PYTHON="C:\OSGeo4W64\bin\python-qgis.bat"
-    goto :found
-)
-if exist "C:\OSGeo4W\bin\python-qgis.bat" (
-    set QGIS_PYTHON="C:\OSGeo4W\bin\python-qgis.bat"
-    goto :found
-)
-
-:found
-if %QGIS_PYTHON%=="" (
-    echo [ERREUR] Impossible de trouver une installation standard de QGIS.
-    echo Veuillez modifier manuellement ce script pour pointer vers votre fichier "python-qgis.bat".
+if "!QGIS_PYTHON!"=="" (
+    echo [ERREUR] Impossible de trouver python-qgis-ltr.bat ou python-qgis.bat.
+    echo         Verifiez que QGIS est installe dans C:\Program Files.
     pause
     exit /b 1
 )
 
-echo [OK] Interpreteur trouve : %QGIS_PYTHON%
+echo [OK] Interpreteur trouve : "!QGIS_PYTHON!"
 echo.
 
-:: Verification et installation des dependances Python requises
-echo Verification des dependances Python...
-cmd /c %QGIS_PYTHON% -c "import odf" >nul 2>&1
-if errorlevel 1 (
-    echo [INFO] Installation de odfpy (lecture fichiers ODS)...
-    cmd /c %QGIS_PYTHON% -m pip install --quiet --user odfpy
-    if errorlevel 1 (
-        echo [ATTENTION] Impossible d'installer odfpy automatiquement.
-        echo             Les fichiers PEJ/PA au format ODS ne pourront pas etre charges.
-        echo             Installez manuellement : pip install odfpy
-    ) else (
-        echo [OK] odfpy installe avec succes.
-    )
-) else (
-    echo [OK] odfpy disponible.
-)
+:: Verifier et installer odfpy via un script Python temporaire
+:: (evite les problemes de redirection sur les wrappers .bat)
+echo Verification de la bibliotheque odfpy...
+set "TMP_CHECK=%TEMP%\ofbilan_odf_check.py"
+(
+    echo import sys
+    echo try:
+    echo     import odf
+    echo except ImportError:
+    echo     import subprocess
+    echo     subprocess.check_call^([sys.executable, '-m', 'pip', 'install', '--quiet', '--user', 'odfpy']^)
+    echo     print^('[OK] odfpy installe avec succes.'^)
+) > "%TMP_CHECK%"
+
+call "!QGIS_PYTHON!" "%TMP_CHECK%"
+del "%TMP_CHECK%" >nul 2>&1
+
 echo.
 echo [OK] Demarrage du serveur...
 echo.
 
-cmd /c %QGIS_PYTHON% "%PROJECT_ROOT%\core\web\serveur.py"
+:: NE PAS definir PYTHONPATH ici : serveur.py gere son propre sys.path
+:: et python-qgis*.bat configure PYTHONHOME correctement
+call "!QGIS_PYTHON!" "%PROJECT_ROOT%\core\web\serveur.py"
 if errorlevel 1 (
     echo.
-    echo [ERREUR] Le serveur a rencontre une erreur au demarrage.
+    echo [ERREUR] Le serveur s'est arrete avec une erreur.
     pause
 )
-exit /b

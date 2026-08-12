@@ -62,7 +62,7 @@ def apply_server_debug_mode(enabled: bool | None = None) -> bool:
     try:
         import logging
         from core.configuration_journalisation import configure_logging
-        configure_logging(logging.DEBUG if IS_DEBUG else logging.ERROR)
+        configure_logging(logging.DEBUG if IS_DEBUG else logging.INFO)
     except Exception:
         pass
     return IS_DEBUG
@@ -1916,7 +1916,7 @@ def run_server():
     # S'assurer que l'on sert depuis le bon dossier
     os.chdir(str(WEB_DIR))
 
-    pass
+    apply_server_debug_mode()
     init_server_logger()
     log_server(f"Initialisation du serveur web OFBilan (Port: {PORT}, PID: {os.getpid()})")
 
@@ -1943,6 +1943,13 @@ def run_server():
     except KeyboardInterrupt:
         log_server("Interruption utilisateur (Ctrl+C). Extinction du serveur.", level="INFO")
         finalize_server_logger(reason="Stopped by user (Ctrl+C)")
+    except OSError as e:
+        if getattr(e, "errno", None) in (10048, 98) or "10048" in str(e) or "Address already in use" in str(e):
+            log_server(f"Le port {PORT} est déjà utilisé par une autre instance du serveur.", level="ERROR")
+            log_server(f"Veuillez fermer l'instance existante ou modifier le port dans la configuration.", level="WARNING")
+        else:
+            log_server(f"Erreur d'ouverture du port {PORT} : {e}", level="CRITICAL")
+        finalize_server_logger(reason=f"Port Error ({e})")
     except Exception as e:
         log_server(f"Erreur critique serveur : {e}", level="CRITICAL")
         finalize_server_logger(reason=f"Crashed ({e})")

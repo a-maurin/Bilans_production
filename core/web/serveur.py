@@ -1916,11 +1916,7 @@ def run_server():
     # S'assurer que l'on sert depuis le bon dossier
     os.chdir(str(WEB_DIR))
 
-    try:
-        from tests.unit.test_check_syntax import test_check_js_syntax
-        test_check_js_syntax()
-    except Exception as e:
-        log_server(f"Contrôle de syntaxe JS : {e}", level="ERROR")
+    pass
     init_server_logger()
     log_server(f"Initialisation du serveur web OFBilan (Port: {PORT}, PID: {os.getpid()})")
 

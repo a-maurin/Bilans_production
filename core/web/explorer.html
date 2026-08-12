@@ -1236,8 +1236,53 @@ Composants principaux :
                             </div>
                         </div>
                         <div id="map-pej-unmapped-banner" class="hidden no-print"
-                            style="margin-top: 6px; padding: 6px 12px; background: #fffbebf5; border: 1px solid #fef3c7; color: #92400e; border-radius: 6px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                            <span>⚠️ <strong id="pej-unmapped-count">0</strong> procédure(s) judiciaire(s) (PEJ) n'ont pas pu être géolocalisée(s) et sont exclues de la représentation cartographique.</span>
+                            style="margin-top: 6px; padding: 6px 12px; background: #fffbebf5; border: 1px solid #fef3c7; color: #92400e; border-radius: 6px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; transition: background 0.2s;"
+                            title="Cliquez pour comprendre l'origine et les causes possibles du non-affichage"
+                            onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbebf5'">
+                            <span>⚠️ <strong id="pej-unmapped-count">0</strong> procédure(s) judiciaire(s) (PEJ) n'ont pas pu être géolocalisée(s) et sont exclues de la carte.</span>
+                            <span style="font-weight: 600; text-decoration: underline; font-size: 10px; whitespace: nowrap; color: #b45309;">ℹ️ Pourquoi ?</span>
+                        </div>
+
+                        <!-- Modale d'information explicative sur les PEJ non géolocalisées -->
+                        <div id="modal-pej-unmapped-info" class="hidden" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(3px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px;">
+                            <div class="card" style="max-width: 540px; width: 100%; max-height: 85vh; overflow-y: auto; background: #ffffff; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); border: 1px solid #e2e8f0; padding: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+                                    <h3 style="margin: 0; font-size: 15px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                                        <span>ℹ️</span> Origine du non-affichage des PEJ sur la carte
+                                    </h3>
+                                    <button type="button" id="btn-close-pej-unmapped-modal" style="background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: #64748b;" title="Fermer">&times;</button>
+                                </div>
+                                <div style="font-size: 12px; color: #334155; line-height: 1.6;">
+                                    <p style="margin-top: 0;">Certaines Procédures Enquête Judiciaire (PEJ) enregistrées dans l'outil source <strong>OSCEAN</strong> ne peuvent pas être positionnées sur la carte interactive d'OFBilan pour les raisons suivantes :</p>
+                                    
+                                    <div style="background: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">
+                                        <strong style="color: #1e3a8a; display: block; margin-bottom: 4px;">1. Absence de pointage GPS dans l'application OSCEAN</strong>
+                                        Lors de la création de la procédure, l'agent ou le greffe peut avoir saisi la saisine sans positionner explicitement de point de géolocalisation ($X, Y$) sur la carte interactive des faits d'infraction.
+                                    </div>
+
+                                    <div style="background: #f8fafc; border-left: 3px solid #f59e0b; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">
+                                        <strong style="color: #78350f; display: block; margin-bottom: 4px;">2. Masquage de la commune lors de l'export SIG central</strong>
+                                        Dans les requêtes d'exportation automatiques de la base nationale OSCEAN (fichiers GPKG/CSV), si un fait ne possède pas de point GPS, le script d'export d'origine attribue des coordonnées nulles ($X=0, Y=0$) et remplace le nom de la commune par la mention <em>« Non géolocalisée »</em>.
+                                    </div>
+
+                                    <div style="background: #f8fafc; border-left: 3px solid #10b981; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">
+                                        <strong style="color: #064e3b; display: block; margin-bottom: 4px;">3. Fallbacks automatiques appliqués par OFBilan</strong>
+                                        OFBilan applique une cascade de secours pour rattraper un maximum de PEJ :
+                                        <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                            <li>Jointure tolérante sur l'identifiant du dossier (avec/sans préfixe <code>OF</code> et numéro de procédure).</li>
+                                            <li>Rattachement au point de contrôle administratif OSCEAN originel.</li>
+                                            <li>Positionnement automatique sur le centroïde de la commune.</li>
+                                        </ul>
+                                    </div>
+
+                                    <p style="margin-bottom: 0; font-style: italic; color: #64748b; margin-top: 12px; border-top: 1px dashed #e2e8f0; padding-top: 8px;">
+                                        <strong>Note :</strong> Ces procédures restent intégralement comptabilisées dans tous les indicateurs, tableaux de bord et bilans d'activité d'OFBilan. Elles sont uniquement masquées de la vue spatiale afin d'éviter tout positionnement erroné.
+                                    </p>
+                                </div>
+                                <div style="margin-top: 16px; text-align: right;">
+                                    <button type="button" id="btn-ok-pej-unmapped-modal" class="btn" style="padding: 6px 16px; font-size: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;">Compris</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column; min-width: 0;">

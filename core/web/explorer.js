@@ -3212,10 +3212,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     pveByKey.forEach((markers, tKey) => getOrCreateCluster(tKey, pveParent, pveByTerritory, getDynamicClusterOpts('#F97316', false, 'cluster-pve')).addLayers(markers));
                 }
 
-                // --- Gestion du bandeau discret des PEJ non localisées ---
+                // --- Gestion du bandeau discret des PEJ non localisées & Modale Explicative ---
                 const bannerEl = document.getElementById('map-pej-unmapped-banner');
                 const unmappedCountEl = document.getElementById('pej-unmapped-count');
                 const totalCountEl = document.getElementById('pej-total-count');
+                const modalEl = document.getElementById('modal-pej-unmapped-info');
+                const btnCloseModal = document.getElementById('btn-close-pej-unmapped-modal');
+                const btnOkModal = document.getElementById('btn-ok-pej-unmapped-modal');
+
                 if (bannerEl && unmappedCountEl) {
                     const stats = resN.stats || {};
                     const totalPej = stats.total_pej || 0;
@@ -3228,6 +3232,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         bannerEl.classList.remove('hidden');
                     } else {
                         bannerEl.classList.add('hidden');
+                    }
+
+                    if (!bannerEl.dataset.hasListener) {
+                        bannerEl.dataset.hasListener = "true";
+                        const openModal = () => {
+                            if (modalEl) modalEl.classList.remove('hidden');
+                        };
+                        const closeModal = () => {
+                            if (modalEl) modalEl.classList.add('hidden');
+                        };
+                        bannerEl.addEventListener('click', openModal);
+                        if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
+                        if (btnOkModal) btnOkModal.addEventListener('click', closeModal);
+                        if (modalEl) {
+                            modalEl.addEventListener('click', (e) => {
+                                if (e.target === modalEl) closeModal();
+                            });
+                        }
                     }
                 }
 

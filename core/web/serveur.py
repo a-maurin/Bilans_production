@@ -1471,6 +1471,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             })
                 
                 geojson_data = None
+                perimeter_geojson_data = None
                 try:
                     import geopandas as gpd
                     if profile_cfg.get("restrict_geo") == "tub":
@@ -1543,66 +1544,71 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             is_multi_unit = (echelle in ("region", "bmi", "national", "france") or str(code).upper() in ("FR", "FRANCE", "NATIONAL"))
                             gdf_boundary = load_department_gdf(code, project_root=project_root, dissolve=not is_multi_unit)
 
-                        if not gdf_boundary.empty:
-                            if gdf_boundary.crs is None:
-                                gdf_boundary.set_crs(epsg=2154, inplace=True)
-                            gdf_boundary_wgs84 = gdf_boundary.to_crs("EPSG:4326")
-                            
-                            # Normalisation des propriétés identifiantes pour le choroplèthe front-end (insensible à la casse)
-                            col_map = {c.lower(): c for c in gdf_boundary_wgs84.columns}
-                            if "insee_dep" in col_map:
-                                gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["insee_dep"]]
-                                gdf_boundary_wgs84["insee_dep"] = gdf_boundary_wgs84[col_map["insee_dep"]]
-                            elif "code_dept" in col_map:
-                                gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map["code_dept"]]
+                    if gdf_boundary is not None and not gdf_boundary.empty:
+                        if gdf_boundary.crs is None:
+                            gdf_boundary.set_crs(epsg=2154, inplace=True)
+                        gdf_boundary_wgs84 = gdf_boundary.to_crs("EPSG:4326")
+                        
+                        # Normalisation des propriétés identifiantes pour le choroplèthe front-end (insensible à la casse)
+                        col_map = {c.lower(): c for c in gdf_boundary_wgs84.columns}
+                        
+                        for dep_alias in ["code_dept", "insee_dep", "code_dep", "dep"]:
+                            if dep_alias in col_map:
+                                gdf_boundary_wgs84["code_dept"] = gdf_boundary_wgs84[col_map[dep_alias]]
+                                gdf_boundary_wgs84["insee_dep"] = gdf_boundary_wgs84[col_map[dep_alias]]
+                                break
 
-                            if "nom" in col_map:
-                                gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom"]]
-                                gdf_boundary_wgs84["nom"] = gdf_boundary_wgs84[col_map["nom"]]
-                            elif "nom_dep" in col_map:
-                                gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map["nom_dep"]]
+                        for nom_alias in ["nom", "nom_dept", "nom_dep", "nom_com", "nom_comm", "nom_commune", "libelle"]:
+                            if nom_alias in col_map:
+                                gdf_boundary_wgs84["nom_dept"] = gdf_boundary_wgs84[col_map[nom_alias]]
+                                gdf_boundary_wgs84["nom"] = gdf_boundary_wgs84[col_map[nom_alias]]
+                                break
 
-                            if "insee_comm" in col_map:
-                                gdf_boundary_wgs84["code_insee"] = gdf_boundary_wgs84[col_map["insee_comm"]]
-                            elif "insee_com" in col_map:
-                                gdf_boundary_wgs84["code_insee"] = gdf_boundary_wgs84[col_map["insee_com"]]
+                        for insee_alias in ["code_insee", "insee_comm", "insee_com", "insee", "insee_com_m", "com"]:
+                            if insee_alias in col_map:
+                                gdf_boundary_wgs84["code_insee"] = gdf_boundary_wgs84[col_map[insee_alias]]
+                                gdf_boundary_wgs84["insee_comm"] = gdf_boundary_wgs84[col_map[insee_alias]]
+                                break
 
-                            def _fix_str_encoding(val):
-                                if isinstance(val, str) and ("Ã" in val or "Â" in val):
-                                    try:
-                                        return val.encode("iso-8859-1").decode("utf-8")
-                                    except Exception:
-                                        return val
-                                return str(val) if val is not None else ""
+                        def _fix_str_encoding(val):
+                            if isinstance(val, str) and ("Ã" in val or "Â" in val):
+                                try:
+                                    return val.encode("iso-8859-1").decode("utf-8")
+                                except Exception:
+                                    return val
+                            return str(val) if val is not None else ""
 
-                            for col in gdf_boundary_wgs84.columns:
-                                if col != "geometry":
-                                    gdf_boundary_wgs84[col] = gdf_boundary_wgs84[col].apply(_fix_str_encoding)
-                            geojson_data = json.loads(gdf_boundary_wgs84.to_json())
-                            nb_features = len(geojson_data.get("features", [])) if isinstance(geojson_data, dict) else 0
-                            log_server(f"[EXPLORER_GEOJSON] GeoJSON généré avec succès : {nb_features} entité(s) (Échelle: {echelle}, Code: {code})", level="INFO")
+                        for col in gdf_boundary_wgs84.columns:
+                            if col != "geometry":
+                                gdf_boundary_wgs84[col] = gdf_boundary_wgs84[col].apply(_fix_str_encoding)
+                        geojson_data = json.loads(gdf_boundary_wgs84.to_json())
+                        nb_features = len(geojson_data.get("features", [])) if isinstance(geojson_data, dict) else 0
+                        log_server(f"[EXPLORER_GEOJSON] GeoJSON généré avec succès : {nb_features} entité(s) (Échelle: {echelle}, Code: {code})", level="INFO")
 
-                            # Construction du périmètre administratif officiel (perimeter_geojson)
-                            perimeter_geojson_data = None
-                            try:
-                                gdf_perim = None
-                                if echelle == "pnf":
-                                    shp_path_perim = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
-                                    gdf_perim = gpd.read_file(shp_path_perim)
-                                elif profile_cfg.get("restrict_geo") == "tub":
-                                    gdf_perim = gdf_boundary
-                                elif echelle == "departement":
-                                    gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=True)
-                                else:
-                                    gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=False)
+                        # Construction du périmètre administratif officiel (perimeter_geojson)
+                        try:
+                            gdf_perim = None
+                            if echelle == "pnf":
+                                target_dep = code if code else "21, 52"
+                                gdf_perim = load_department_gdf(target_dep, project_root=project_root, dissolve=False)
+                            elif profile_cfg.get("restrict_geo") == "tub":
+                                gdf_perim = load_department_gdf("FR", project_root=project_root, dissolve=False)
+                            elif echelle == "departement":
+                                gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=False)
+                            else:
+                                is_multi_unit = (echelle in ("region", "bmi", "national", "france") or str(code).upper() in ("FR", "FRANCE", "NATIONAL"))
+                                gdf_perim = load_department_gdf(code, project_root=project_root, dissolve=not is_multi_unit)
 
-                                if gdf_perim is not None and not gdf_perim.empty:
-                                    if gdf_perim.crs is None:
-                                        gdf_perim.set_crs(epsg=2154, inplace=True)
-                                    gdf_perim_wgs84 = gdf_perim.to_crs("EPSG:4326")
-                                    perimeter_geojson_data = json.loads(gdf_perim_wgs84.to_json())
-                            except Exception as e_perim:
-                                print(f"Error loading perimeter geojson: {e_perim}")
+                            if gdf_perim is not None and not gdf_perim.empty:
+                                if gdf_perim.crs is None:
+                                    gdf_perim.set_crs(epsg=2154, inplace=True)
+                                gdf_perim_wgs84 = gdf_perim.to_crs("EPSG:4326")
+                                for col in gdf_perim_wgs84.columns:
+                                    if col != "geometry":
+                                        gdf_perim_wgs84[col] = gdf_perim_wgs84[col].astype(str)
+                                perimeter_geojson_data = json.loads(gdf_perim_wgs84.to_json())
+                        except Exception as e_perim:
+                            print(f"Error loading perimeter geojson: {e_perim}")
 
                 except Exception as e:
                     import traceback

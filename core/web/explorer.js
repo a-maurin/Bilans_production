@@ -1965,7 +1965,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentBoundaryGeojson.features.forEach((feature, idx) => {
             const props = feature.properties || {};
             const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
-            const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+            const codeInsee = normCode(props.code_insee || props.CODE_INSEE || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com || props.insee || props.INSEE || props.insee_com_m);
             const rawNom = props.nom_comm || props.nom_dept || props.NOM_DEP || props.NOM_COM || props.nom || props.insee_dep || `Zone ${idx + 1}`;
             const nom = fixUtf8Encoding(rawNom);
 
@@ -2063,7 +2063,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (pointInFeatureGeom([px, py], feat)) {
                                 const props = feat.properties || {};
                                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
-                                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                                const codeInsee = normCode(props.code_insee || props.CODE_INSEE || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com || props.insee || props.INSEE || props.insee_com_m);
                                 const key = codeInsee || codeDept || `feat_${i}`;
                                 const details = entityDetails.get(key);
                                 if (details) {
@@ -2130,7 +2130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (pointInFeatureGeom([px, py], feat)) {
                                 const props = feat.properties || {};
                                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
-                                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                                const codeInsee = normCode(props.code_insee || props.CODE_INSEE || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com || props.insee || props.INSEE || props.insee_com_m);
                                 const key = codeInsee || codeDept || `feat_${i}`;
                                 const details = entityDetails.get(key);
                                 if (details) {
@@ -2260,7 +2260,7 @@ document.addEventListener('DOMContentLoaded', () => {
             style: function(feature) {
                 const props = feature.properties || {};
                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
-                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                const codeInsee = normCode(props.code_insee || props.CODE_INSEE || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com || props.insee || props.INSEE || props.insee_com_m);
                 const featureKey = codeInsee || codeDept || `feat_${currentBoundaryGeojson.features.indexOf(feature)}`;
 
                 const count = entityCounts.get(featureKey) || 0;
@@ -2276,7 +2276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             onEachFeature: function(feature, layer) {
                 const props = feature.properties || {};
                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
-                const codeInsee = normCode(props.code_insee || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com);
+                const codeInsee = normCode(props.code_insee || props.CODE_INSEE || props.insee_comm || props.insee_com || props.INSEE_COM || props.INSEE_COMM || props.com || props.insee || props.INSEE || props.insee_com_m);
                 const featureKey = codeInsee || codeDept || `feat_${currentBoundaryGeojson.features.indexOf(feature)}`;
                 const info = entityDetails.get(featureKey) || { nom: 'Zone', total: 0, pej: 0, pve: 0, controles: 0 };
 

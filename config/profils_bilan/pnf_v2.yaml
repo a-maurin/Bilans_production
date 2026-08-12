@@ -94,6 +94,13 @@ options:
     label: "Indicateurs par commune"
     default: true
     ask: false
+  agent_service:
+    label: "Organisme / Service"
+    default: "tous"
+
+agent_rules:
+  pnf_keywords: ["PNF", "PARC", "FORETS", "FORET"]
+  ofb_keywords: ["OFB", "SD", "BRIGADE"]
 
 mapping_pnf:
   charte_themes:

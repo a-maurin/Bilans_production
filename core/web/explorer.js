@@ -1088,6 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Logique PNF : Forcer l'échelle et bloquer le code géographique
             const pnfDeptContainer = document.getElementById('pnf-dept-container');
+            const pnfAgentContainer = document.getElementById('pnf-agent-container');
             if (val === 'pnf') {
                 if (selectEchelle) {
                     selectEchelle.value = 'pnf';
@@ -1100,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (btnToggleCodes) btnToggleCodes.disabled = true;
                 if (pnfDeptContainer) pnfDeptContainer.classList.remove('hidden');
+                if (pnfAgentContainer) pnfAgentContainer.classList.remove('hidden');
                 warnings.push("Le périmètre géographique est verrouillé sur le Parc National de Forêts (Départements 21 et 52).");
             } else if (val === 'tub') {
                 if (selectEchelle) {
@@ -1114,6 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (btnToggleCodes) btnToggleCodes.disabled = true;
                 if (pnfDeptContainer) pnfDeptContainer.classList.add('hidden');
+                if (pnfAgentContainer) pnfAgentContainer.classList.add('hidden');
                 warnings.push("Le périmètre géographique est verrouillé sur la zone TUB (Risque, Infectée, Interdiction).");
             } else {
                 if (selectEchelle) {
@@ -1127,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (btnToggleCodes) btnToggleCodes.disabled = selectEchelle.value === 'national';
                 if (pnfDeptContainer) pnfDeptContainer.classList.add('hidden');
+                if (pnfAgentContainer) pnfAgentContainer.classList.add('hidden');
             }
 
             if (warnings.length > 0) {
@@ -2838,9 +2842,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const finEl = isComparePeriod ? compareDateFinEl : dateFinEl;
             const selectProfil = document.getElementById('profil-select');
             const pnfDeptEl = document.getElementById('pnf-dept-select');
+            const pnfAgentEl = document.getElementById('pnf-agent-select');
             return {
                 profil: selectProfil ? selectProfil.value : 'global',
                 pnf_dept: pnfDeptEl ? pnfDeptEl.value : '',
+                agent_service: pnfAgentEl ? pnfAgentEl.value : 'tous',
                 'date-deb': debEl ? debEl.value : '',
                 'date-fin': finEl ? finEl.value : '',
                 echelle: selectEchelle.value,
@@ -3400,11 +3406,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 } else if (resN && resN.geojson) {
                     currentBoundaryGeojson = resN.geojson;
-                    currentPerimeterGeojson = resN.perimeter_geojson || resN.geojson;
+                    currentPerimeterGeojson = resN.perimeter_geojson || { type: "FeatureCollection", features: [] };
                     hasGeojson = true;
                 }
 
-                if (!currentPerimeterGeojson.features || currentPerimeterGeojson.features.length === 0) {
+                const currentEchelle = document.getElementById('echelle-select')?.value || '';
+                if ((!currentPerimeterGeojson.features || currentPerimeterGeojson.features.length === 0) && !['pnf', 'departement'].includes(currentEchelle)) {
                     currentPerimeterGeojson = currentBoundaryGeojson;
                 }
 
@@ -3485,6 +3492,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         fillOpacity: 0.60,
                         interactive: false
                     }).addTo(map);
+
+                    if (boundaryLayer && typeof boundaryLayer.bringToFront === 'function') {
+                        try { boundaryLayer.bringToFront(); } catch (e) {}
+                    }
                 }
 
                 // Center/zoom map
@@ -4477,11 +4488,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inputResultat.setSelectedValues) inputResultat.setSelectedValues([]);
             else inputResultat.value = '';
 
-            if (inputCommune) inputCommune.value = '';
+            const pnfDeptEl = document.getElementById('pnf-dept-select');
+            if (pnfDeptEl) pnfDeptEl.value = '';
+            const pnfAgentEl = document.getElementById('pnf-agent-select');
+            if (pnfAgentEl) pnfAgentEl.value = 'tous';
 
             // Rechargement automatique des données réinitialisées
             loadData();
         });
+    }
+
+    // Écouteurs de changement pour les options spécifiques PNF
+    const pnfDeptSelect = document.getElementById('pnf-dept-select');
+    if (pnfDeptSelect) {
+        pnfDeptSelect.addEventListener('change', () => loadData());
+    }
+    const pnfAgentSelect = document.getElementById('pnf-agent-select');
+    if (pnfAgentSelect) {
+        pnfAgentSelect.addEventListener('change', () => loadData());
     }
 
     // Écouteurs d'événements cliquables pour Chiffres Clés (KPI) et Graphiques Donuts

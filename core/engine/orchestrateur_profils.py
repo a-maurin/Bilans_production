@@ -1352,6 +1352,43 @@ def _filter_by_type_usager(pt: pd.DataFrame, targets: list[str]) -> pd.DataFrame
     return pt[mask].copy()
 
 
+def filter_by_agent_service(df: pd.DataFrame, col_candidates: list[str], target_service: str, profile_cfg: dict = None) -> pd.DataFrame:
+    """Filtre un DataFrame selon l'organisme / service (OFB vs PNF).
+
+    - target_service: "tous", "ofb", "pnf"
+    - NULL / indéterminés sont attribués par défaut à l'OFB lors du filtre OFB.
+    """
+    if df is None or df.empty or not target_service or str(target_service).strip().lower() == "tous":
+        return df
+
+    target_service = str(target_service).strip().lower()
+    if target_service not in ("ofb", "pnf"):
+        return df
+
+    agent_rules = profile_cfg.get("agent_rules", {}) if isinstance(profile_cfg, dict) else {}
+    pnf_keywords = agent_rules.get("pnf_keywords", ["PNF", "PARC", "FORETS", "FORET"])
+
+    col_found = None
+    for c in col_candidates:
+        if c in df.columns:
+            col_found = c
+            break
+
+    if not col_found:
+        if target_service == "ofb":
+            return df.copy()
+        else:
+            return df.iloc[0:0].copy()
+
+    val_series = df[col_found].fillna("").astype(str).str.upper()
+    is_pnf = val_series.apply(lambda x: any(k in x for k in pnf_keywords))
+
+    if target_service == "pnf":
+        return df[is_pnf].copy()
+    else:
+        return df[~is_pnf].copy()
+
+
 def _safe_type_usager_for_filename(label: str) -> str:
     """Retourne une version du libellé type usager sûre pour les noms de fichiers."""
     if not label or not isinstance(label, str):

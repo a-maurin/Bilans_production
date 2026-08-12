@@ -1020,6 +1020,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         df_pts, df_pej, df_pa, df_pve, project_root, log
                     )
 
+                # 4.ter. Filtrage par organisme / service d'agents (OFB vs PNF)
+                agent_service = params.get("agent_service", "tous")
+                if agent_service and str(agent_service).strip().lower() != "tous":
+                    from core.engine.orchestrateur_profils import filter_by_agent_service
+                    df_pts = filter_by_agent_service(df_pts, ["entite_ctrl", "entit_ctrl", "entite", "entit"], agent_service, profile_cfg)
+                    df_pej = filter_by_agent_service(df_pej, ["entite", "ENTITE", "ENTITE_ORIGINE_PROCEDURE"], agent_service, profile_cfg)
+                    df_pa = filter_by_agent_service(df_pa, ["ENTITE_ORIGINE_PROCEDURE", "entite", "UNITE_libelle"], agent_service, profile_cfg)
+                    df_pve = filter_by_agent_service(df_pve, ["UNITE_libelle", "unite_libelle", "UNITE_LIBELLE", "UNITE", "unite"], agent_service, profile_cfg)
+
                 total_controles = len(df_pts)
                 total_pej = len(df_pej)
                 total_pa = count_pa_induites_par_controles(df_pts)
@@ -1472,6 +1481,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 
                 geojson_data = None
                 perimeter_geojson_data = None
+                gdf_boundary = None
                 try:
                     import geopandas as gpd
                     if profile_cfg.get("restrict_geo") == "tub":
@@ -1483,31 +1493,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             if col != "geometry":
                                 gdf_boundary[col] = gdf_boundary[col].astype(str)
                     elif echelle == "pnf":
-                        from core.common.chargeurs_donnees import get_pnf_127_communes_aoa_shp_path
-                        path_127 = get_pnf_127_communes_aoa_shp_path(Path(project_root))
-                        if path_127.exists():
-                            gdf_boundary = gpd.read_file(path_127)
+                        from core.common.chargeurs_donnees import get_pnf_127_communes_aoa_shp_path, get_pnf_aoa_shp_path
+                        # Entités du territoire PNF (127 communes) pour la discrétisation du choroplèthe
+                        shp_127 = get_pnf_127_communes_aoa_shp_path(Path(project_root))
+                        if shp_127.exists():
+                            gdf_boundary = gpd.read_file(shp_127)
                             if gdf_boundary.crs is None:
                                 gdf_boundary.set_crs(epsg=2154, inplace=True)
                         else:
-                            from core.cartographie.pochoir_helper import load_communes_gdf
-                            shp_path = Path(project_root) / "ref" / "programme" / "sig" / "PNF" / "aoa_2021_pnforets" / "AOA_2021_PNForets.shp"
-                            gdf_aoa = gpd.read_file(shp_path)
-                            if gdf_aoa.crs is None:
-                                gdf_aoa.set_crs(epsg=2154, inplace=True)
-                            target_code = code or "21, 52"
-                            gdf_com = load_communes_gdf(target_code, project_root=project_root)
-                            if gdf_com is not None and not gdf_com.empty:
-                                if gdf_com.crs is None:
-                                    gdf_com.set_crs(epsg=2154, inplace=True)
-                                try:
-                                    gdf_clipped = gpd.clip(gdf_com.to_crs(gdf_aoa.crs), gdf_aoa)
-                                    gdf_boundary = gdf_clipped if not gdf_clipped.empty else gdf_aoa
-                                except Exception as e_clip:
-                                    log_server(f"[EXPLORER_GEOJSON] Clip communes PNF echoue: {e_clip}", level="WARN")
-                                    gdf_boundary = gdf_aoa
-                            else:
-                                gdf_boundary = gdf_aoa
+                            from core.cartographie.pochoir_helper import load_department_gdf
+                            target_dep = (code and str(code).strip()) or "21, 52"
+                            gdf_boundary = load_department_gdf(target_dep, project_root=project_root, dissolve=False)
+
+                        # Périmètre officiel de l'AOA du Parc (contour bleu boundaryLayer unique, sans bordures internes)
+                        shp_aoa = get_pnf_aoa_shp_path(Path(project_root))
+                        if shp_aoa and shp_aoa.exists():
+                            try:
+                                gdf_aoa = gpd.read_file(shp_aoa)
+                                if gdf_aoa.crs is None:
+                                    gdf_aoa.set_crs(epsg=2154, inplace=True)
+                                union_geom = gdf_aoa.geometry.unary_union
+                                gdf_aoa_dissolved = gpd.GeoDataFrame(geometry=[union_geom], crs=gdf_aoa.crs)
+                                gdf_aoa_wgs84 = gdf_aoa_dissolved.to_crs("EPSG:4326")
+                                perimeter_geojson_data = json.loads(gdf_aoa_wgs84.to_json())
+                            except Exception as e_aoa:
+                                log_server(f"[EXPLORER_GEOJSON] AOA PNF non chargé : {e_aoa}", level="WARN")
 
                         for col in gdf_boundary.columns:
                             if col != "geometry":
@@ -1589,8 +1599,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         try:
                             gdf_perim = None
                             if echelle == "pnf":
-                                target_dep = code if code else "21, 52"
-                                gdf_perim = load_department_gdf(target_dep, project_root=project_root, dissolve=False)
+                                if perimeter_geojson_data is None:
+                                    target_dep = (code and str(code).strip()) or "21, 52"
+                                    gdf_perim = load_department_gdf(target_dep, project_root=project_root, dissolve=False)
+                                else:
+                                    gdf_perim = None
                             elif profile_cfg.get("restrict_geo") == "tub":
                                 gdf_perim = load_department_gdf("FR", project_root=project_root, dissolve=False)
                             elif echelle == "departement":
@@ -1646,7 +1659,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "points": points,
                     "procedures": procedures,
                     "geojson": geojson_data,
-                    "perimeter_geojson": perimeter_geojson_data or geojson_data
+                    "perimeter_geojson": perimeter_geojson_data if perimeter_geojson_data is not None else (None if echelle in ("pnf", "departement") else geojson_data)
                 }
 
                 log_debug("Construction geojson terminée.")

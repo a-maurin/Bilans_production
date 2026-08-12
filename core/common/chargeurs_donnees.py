@@ -499,9 +499,16 @@ def load_point_ctrl(
                     new_cols[col] = "resultat"
                 elif col_upper == "RESULTAT_CONTROLE" and col != "resultat_controle" and "resultat_controle" not in df.columns:
                     new_cols[col] = "resultat_controle"
+                elif col_upper in ("ENTITE_CTRL", "ENTIT_CTRL", "ENTITE") and col != "entite_ctrl" and "entite_ctrl" not in df.columns:
+                    new_cols[col] = "entite_ctrl"
             
             if new_cols:
                 df.rename(columns=new_cols, inplace=True)
+            
+            if "entite_ctrl" in df.columns and "entit_ctrl" not in df.columns:
+                df["entit_ctrl"] = df["entite_ctrl"]
+            elif "entit_ctrl" in df.columns and "entite_ctrl" not in df.columns:
+                df["entite_ctrl"] = df["entit_ctrl"]
     
             # Nom de commune
             if "nom_commune" in df.columns and "nom_commun" not in df.columns:
@@ -2220,6 +2227,13 @@ def load_pve(
         elif "INF-DEPART" in df.columns and "INF-DEPARTEMENT" not in df.columns:
             df["INF-DEPARTEMENT"] = df["INF-DEPART"]
 
+        # Alias UNITE_libelle
+        unite_col = next((c for c in df.columns if str(c).upper() in ("UNITE_LIBELLE", "UNITE_LIBEL", "UNITE_LIB", "UNITE")), None)
+        if unite_col and "UNITE_libelle" not in df.columns:
+            df["UNITE_libelle"] = df[unite_col]
+        if "UNITE_libelle" in df.columns and "unite_libelle" not in df.columns:
+            df["unite_libelle"] = df["UNITE_libelle"]
+
         # Date de mise en force (MIF)
         if "INF-DATE-MIF" in df.columns:
             df["INF-DATE-MIF"] = safe_to_datetime(df["INF-DATE-MIF"])
@@ -2753,7 +2767,7 @@ def load_points_infrac_pj(
     elif "commune_fa" in gdf.columns:
         commune_col = "commune_fa"
 
-    cols = ["dossier", "natinf", "x_infrac", "y_infrac", "geometry"]
+    cols = ["dossier", "natinf", "entite", "x_infrac", "y_infrac", "geometry"]
     if commune_col is not None:
         cols.insert(2, commune_col)
     cols = [c for c in cols if c in gdf.columns]
@@ -2788,8 +2802,9 @@ def load_pj_with_geometry(
         return gpd.GeoDataFrame(columns=list(pej.columns) + ["geometry"], crs=pts_pj.crs)
 
     pts_dedup = pts_pj.drop_duplicates(subset="dossier", keep="first")
+    merge_cols = [c for c in ["dossier", "entite", "geometry"] if c in pts_dedup.columns]
     merged = pej_with_geom.merge(
-        pts_dedup[["dossier", "geometry"]],
+        pts_dedup[merge_cols],
         left_on="DC_ID",
         right_on="dossier",
         how="left",

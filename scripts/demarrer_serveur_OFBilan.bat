@@ -53,10 +53,10 @@ echo.
 
 :: Verification et installation des dependances Python requises
 echo Verification des dependances Python...
-call %QGIS_PYTHON% -c "import odf" 2>nul
+cmd /c %QGIS_PYTHON% -c "import odf" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installation de odfpy (lecture fichiers ODS)...
-    call %QGIS_PYTHON% -m pip install --quiet --user odfpy
+    cmd /c %QGIS_PYTHON% -m pip install --quiet --user odfpy
     if errorlevel 1 (
         echo [ATTENTION] Impossible d'installer odfpy automatiquement.
         echo             Les fichiers PEJ/PA au format ODS ne pourront pas etre charges.
@@ -71,7 +71,7 @@ echo.
 echo [OK] Demarrage du serveur...
 echo.
 
-call %QGIS_PYTHON% "%PROJECT_ROOT%\core\web\serveur.py"
+cmd /c %QGIS_PYTHON% "%PROJECT_ROOT%\core\web\serveur.py"
 if errorlevel 1 (
     echo.
     echo [ERREUR] Le serveur a rencontre une erreur au demarrage.

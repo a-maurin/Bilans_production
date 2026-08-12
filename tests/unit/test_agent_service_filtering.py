@@ -1,8 +1,7 @@
 import pytest
 import pandas as pd
 from pathlib import Path
-from core.engine.orchestrateur_profils import filter_by_agent_service
-from core.common.chargeurs_donnees import load_profile_config
+from core.engine.orchestrateur_profils import filter_by_agent_service, load_profile_config
 
 def test_filter_by_agent_service_basic():
     df = pd.DataFrame({

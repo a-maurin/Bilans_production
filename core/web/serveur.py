@@ -38,8 +38,34 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 import pandas as pd
 from pathlib import Path
+
+def check_is_debug() -> bool:
+    if "--debug" in sys.argv or os.environ.get("DEBUG") == "1" or os.environ.get("OFBILAN_DEBUG") == "1":
+        return True
+    try:
+        from core.parametres_utilisateur import lire_parametres
+        return bool(lire_parametres().get("tech", {}).get("mode_debug", False))
+    except Exception:
+        return False
+
+IS_DEBUG = check_is_debug()
+
+def apply_server_debug_mode(enabled: bool | None = None) -> bool:
+    global IS_DEBUG
+    if enabled is None:
+        IS_DEBUG = check_is_debug()
+    else:
+        IS_DEBUG = bool(enabled)
+    try:
+        import logging
+        from core.configuration_journalisation import configure_logging
+        configure_logging(logging.DEBUG if IS_DEBUG else logging.ERROR)
+    except Exception:
+        pass
+    return IS_DEBUG
 
 # Ajouter le dossier actuel au path pour importer reparer_logo
 WEB_DIR = Path(__file__).resolve().parent
@@ -110,7 +136,7 @@ def init_server_logger(log_file: Path | str | None = None) -> Path:
 
 def log_server(msg: str, level: str = "INFO", log_file: Path | str | None = None) -> None:
     """
-    Inscrit un message horodaté dans le fichier de log du serveur et sur stdout.
+    Inscrit un message horodaté dans le fichier de log du serveur et sur la console via logger.
     """
     target_log = Path(log_file) if log_file else _SERVER_LOG_FILE
     from datetime import datetime
@@ -124,6 +150,14 @@ def log_server(msg: str, level: str = "INFO", log_file: Path | str | None = None
                 f.write(formatted_msg)
         except Exception:
             pass
+
+    try:
+        import logging
+        logger = logging.getLogger("ofbilan.serveur")
+        lvl = getattr(logging, level.upper(), logging.INFO)
+        logger.log(lvl, msg)
+    except Exception:
+        pass
 
 def finalize_server_logger(reason: str = "Stopped", log_file: Path | str | None = None) -> None:
     """
@@ -197,6 +231,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
 
+    def log_message(self, format, *args):
+        msg = format % args
+        if IS_DEBUG:
+            log_server(f"HTTP {self.address_string()} - {msg}", level="DEBUG")
+        else:
+            code = str(args[1]) if len(args) > 1 else ""
+            if code.startswith(("4", "5")):
+                log_server(f"HTTP Error {self.address_string()} - {msg}", level="ERROR")
+
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.send_header('Pragma', 'no-cache')
@@ -214,7 +257,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         try:
             super().handle()
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            print(f"  [Réseau] Connexion interrompue par le navigateur ({e.__class__.__name__})")
+            log_server(f"Connexion réseau interrompue par le client ({e.__class__.__name__})", level="DEBUG")
 
     def do_GET(self):
         parsed_path = self.path.split('?')[0]
@@ -586,6 +629,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             sauvegarder_parametres(nouveaux_parametres)
             
             parametres_mis_a_jour = lire_parametres()
+            mode_debug_active = bool(parametres_mis_a_jour.get("tech", {}).get("mode_debug", False))
+            apply_server_debug_mode(mode_debug_active)
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -651,7 +696,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 elif params.get("brochure") is False:
                     cmd.append("--no-brochure")
 
-                if params.get("mode_debug") or params.get("debug"):
+                is_debug_req = params.get("mode_debug")
+                if is_debug_req is None:
+                    is_debug_req = params.get("debug")
+                if is_debug_req is None:
+                    try:
+                        from core.parametres_utilisateur import lire_parametres
+                        is_debug_req = bool(lire_parametres().get("tech", {}).get("mode_debug", False))
+                    except Exception:
+                        is_debug_req = False
+
+                if is_debug_req:
                     cmd.append("--debug")
 
                 # Désactiver l'ouverture automatique du PDF sous Windows lors du run de la GUI
@@ -1634,7 +1689,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 total_usagers_controles = sum(usagers_counts.values()) if usagers_counts else 0
 
-                pej_mapped_count = len([p for p in procedures if str(p.get("type", "")).upper() == "PEJ"])
+                pej_mapped_count = len([p for p in procedures if str(p.get("type", "")).upper() == "PEJ" and p.get("x") is not None and p.get("y") is not None])
                 unmapped_pej = max(0, int(total_pej) - pej_mapped_count)
 
                 response_data = {
@@ -1806,47 +1861,52 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 def preload_data_async():
     import threading
+    import time
+
     def target():
-        def log_preload(msg):
-            print(msg)
-            log_server(msg.strip(), level="INFO")
+        def log_preload(msg, level="INFO"):
+            log_server(msg.strip(), level=level)
             with _preload_lock:
-                _PRELOAD_LOGS.append(msg)
+                _PRELOAD_LOGS.append(msg.strip())
                 if len(_PRELOAD_LOGS) > 20:
                     _PRELOAD_LOGS.pop(0)
 
+        t_start = time.perf_counter()
         try:
-            log_preload("  Démarrage du chargement des données en arrière-plan...")
             project_root = Path(__file__).resolve().parents[2]
-            
+
             try:
                 from core.common.verifier_dependances import verifier_et_installer_accelerateurs
-                verifier_et_installer_accelerateurs(log_preload)
+                verifier_et_installer_accelerateurs(log_preload if IS_DEBUG else None)
             except Exception as e:
                 log_server(f"Erreur lors de la vérification des accélérateurs : {e}", level="WARNING")
 
+            t0 = time.perf_counter()
+            log_preload("[1/3] Chargement des données d'activité (points de contrôle, PEJ, PA, PVe)...")
             from core.common.chargeurs_donnees import init_session_cache
-            log_preload("  Chargement des données (points de contrôle, PEJ, PA, PVe)...")
             init_session_cache(project_root)
-            log_preload("  Données d'activité chargées en mémoire cache.")
+            log_preload(f"Données d'activité chargées en mémoire cache ({time.perf_counter() - t0:.1f}s)")
 
-            # 5. Charger le shapefile des départements
+            t1 = time.perf_counter()
+            log_preload("[2/3] Chargement des contours géographiques...")
             try:
                 from core.cartographie.pochoir_helper import get_departements_admin_shp, _load_all_departements
                 shp = get_departements_admin_shp(project_root)
-                log_preload("  Chargement des contours géographiques...")
                 _load_all_departements(str(shp.resolve()))
+                log_preload(f"Contours géographiques chargés ({time.perf_counter() - t1:.1f}s)")
             except Exception as e:
-                log_preload(f"  Note: Impossible de pré-charger les contours : {e}")
+                log_preload(f"Impossible de pré-charger les contours : {e}", level="WARNING")
 
-            log_preload("  Données chargées avec succès en mémoire. L'explorer est prêt !")
+            log_preload("[3/3] Finalisation du cache et préparation de l'explorateur...")
+            elapsed = time.perf_counter() - t_start
+            log_preload(f"Initialisation des données terminée avec succès (en {elapsed:.1f}s). L'explorateur est prêt !")
             global _PRELOAD_STATUS
             with _preload_lock:
                 _PRELOAD_STATUS = "ready"
         except Exception as e:
             import traceback
             traceback_str = traceback.format_exc()
-            log_preload(f"  Erreur lors du pré-chargement : {e}\n{traceback_str}")
+            log_preload(f"Échec du pré-chargement : {e}\n{traceback_str if IS_DEBUG else ''}", level="ERROR")
             with _preload_lock:
                 _PRELOAD_STATUS = "error"
 
@@ -1855,44 +1915,38 @@ def preload_data_async():
 def run_server():
     # S'assurer que l'on sert depuis le bon dossier
     os.chdir(str(WEB_DIR))
-    
+
     try:
         from tests.unit.test_check_syntax import test_check_js_syntax
         test_check_js_syntax()
     except Exception as e:
-        log_server(f"SYNTAX CHECK RESULTS: {e}", level="ERROR")
+        log_server(f"Contrôle de syntaxe JS : {e}", level="ERROR")
     init_server_logger()
-    log_server(f"Initialisation du serveur web (Port: {PORT}, PID: {os.getpid()})")
-    
+    log_server(f"Initialisation du serveur web OFBilan (Port: {PORT}, PID: {os.getpid()})")
+
     import atexit
     atexit.register(lambda: finalize_server_logger(reason="Terminated"))
-    
+
     # Lancement du pré-chargement des données en tâche de fond
     try:
         preload_data_async()
     except Exception as e:
         log_server(f"Impossible d'initialiser le pré-chargement : {e}", level="ERROR")
-        print(f"Impossible d'initialiser le pré-chargement : {e}")
-    
+
     socketserver.TCPServer.allow_reuse_address = True
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
-            print(f"\n=================================================================================")
-            print(f"  Serveur OFBilan actif sur http://localhost:{PORT}")
-            print(f"  L'explorateur s'ouvrira automatiquement à la fin du préchargement des données.")
-            print(f"  Appuyez sur Ctrl+C pour arrêter le serveur.")
-            print(f"=================================================================================\n")
             log_server(f"Serveur web actif sur http://localhost:{PORT}")
-            
+            log_server("L'explorateur web s'ouvre automatiquement. Appuyez sur Ctrl+C pour arrêter.")
+
             if os.environ.get("OFBILAN_RESTART") != "1":
                 import webbrowser
                 webbrowser.open(f"http://localhost:{PORT}/loading.html")
-                
+
             httpd.serve_forever()
     except KeyboardInterrupt:
         log_server("Interruption utilisateur (Ctrl+C). Extinction du serveur.", level="INFO")
         finalize_server_logger(reason="Stopped by user (Ctrl+C)")
-        print("\nServeur arrêté.")
     except Exception as e:
         log_server(f"Erreur critique serveur : {e}", level="CRITICAL")
         finalize_server_logger(reason=f"Crashed ({e})")

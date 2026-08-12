@@ -455,8 +455,8 @@ def test_merge_pej_faits_locations_fallbacks(monkeypatch, tmp_path: Path) -> Non
     assert res.loc[2, "precision_loc"] == "Centroïde communal (Approximatif)"
     assert res.loc[2, "x_faits"] == 5.01
 
-    assert res.loc[3, "precision_loc"] == "Centroïde départemental (Approximatif)"
-    assert res.loc[3, "x_faits"] == 5.01
+    assert pd.isna(res.loc[3, "precision_loc"])
+    assert pd.isna(res.loc[3, "x_faits"])
 
 
 

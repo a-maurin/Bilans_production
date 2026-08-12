@@ -36,7 +36,8 @@ echo.
 
 :: Verifier et installer odfpy via un script Python temporaire
 :: (evite les problemes de redirection sur les wrappers .bat)
-echo Verification de la bibliotheque odfpy...
+if "%DEBUG%"=="1" echo Verification de la bibliotheque odfpy...
+if "%OFBILAN_DEBUG%"=="1" echo Verification de la bibliotheque odfpy...
 set "TMP_CHECK=%TEMP%\ofbilan_odf_check.py"
 (
     echo import sys
@@ -55,9 +56,13 @@ echo.
 echo [OK] Demarrage du serveur...
 echo.
 
+set "DEBUG_ARG="
+if "%DEBUG%"=="1" set "DEBUG_ARG=--debug"
+if "%OFBILAN_DEBUG%"=="1" set "DEBUG_ARG=--debug"
+
 :: NE PAS definir PYTHONPATH ici : serveur.py gere son propre sys.path
 :: et python-qgis*.bat configure PYTHONHOME correctement
-call "!QGIS_PYTHON!" "%PROJECT_ROOT%\core\web\serveur.py"
+call "!QGIS_PYTHON!" "%PROJECT_ROOT%\core\web\serveur.py" !DEBUG_ARG!
 if errorlevel 1 (
     echo.
     echo [ERREUR] Le serveur s'est arrete avec une erreur.

@@ -2574,28 +2574,50 @@ def merge_pej_faits_locations(
     if "y_faits" not in out.columns:
         out["y_faits"] = np.nan
 
+    def _clean_pej_id(val):
+        if pd.isna(val):
+            return ""
+        s = str(val).strip()
+        s = re.sub(r"\.0$", "", s)
+        s = re.sub(r"^OF", "", s, flags=re.IGNORECASE).strip()
+        s = re.sub(r"^SD\d+[\s_-]*", "", s, flags=re.IGNORECASE).strip()
+        return re.sub(r"[\s\-_]", "", s).upper()
+
     if not gdf.empty:
-        # Filtre entité SD
+        # Filtre entité SD souple par numéro de département
         ent_col = next((c for c in ("entite", "ENTITE", "Entite") if c in gdf.columns), None)
         if ent_col is not None:
             from core.common.utilitaires_metier import get_departements_pour_perimetre
             dept_codes = get_departements_pour_perimetre(echelle, code)
             if dept_codes and "FR" not in dept_codes:
-                sd_list = [f"SD{d}" for d in dept_codes]
+                dept_set = {str(d).strip().zfill(2) for d in dept_codes}
                 if str(echelle).strip().lower() == "bmi":
                     from core.common.utilitaires_metier import get_bmi_filters
                     bmi_filters = get_bmi_filters(code)
-                    sd_list.append(str(bmi_filters.get("entite_pej", code)).upper())
-                gdf = gdf[gdf[ent_col].astype(str).str.strip().isin(sd_list)].copy()
+                    dept_set.add(str(bmi_filters.get("entite_pej", code)).upper())
+
+                def _match_sd_entite(val):
+                    if pd.isna(val):
+                        return False
+                    v_str = str(val).strip().upper()
+                    for d in dept_set:
+                        if d in v_str:
+                            return True
+                        digits = re.findall(r"\d+", v_str)
+                        if any(d == dig.zfill(2) for dig in digits):
+                            return True
+                    return False
+
+                gdf = gdf[gdf[ent_col].apply(_match_sd_entite)].copy()
 
         # Filtre NATINF optionnel
         if not gdf.empty and natinf_list:
             natinf_col = next((c for c in ("natinf", "NATINF") if c in gdf.columns), None)
             if natinf_col:
-                natinf_vals = {str(n) for n in natinf_list}
-                gdf = gdf[gdf[natinf_col].astype(str).isin(natinf_vals)].copy()
+                natinf_vals = {re.sub(r"\.0$", "", str(n)).strip() for n in natinf_list}
+                gdf = gdf[gdf[natinf_col].astype(str).str.strip().str.replace(r"\.0$", "", regex=True).isin(natinf_vals)].copy()
 
-        doss_col = next((c for c in ("dossier", "DOSSIER") if c in gdf.columns), None)
+        doss_col = next((c for c in ("dossier", "DOSSIER", "code_pej", "NUMERO_PROCEDURE") if c in gdf.columns), None)
         xcol = "x_infrac" if "x_infrac" in gdf.columns else ("x" if "x" in gdf.columns else None)
         ycol = "y_infrac" if "y_infrac" in gdf.columns else ("y" if "y" in gdf.columns else None)
 
@@ -2606,34 +2628,79 @@ def merge_pej_faits_locations(
             )
             keep_cols = [doss_col, xcol, ycol] + ([commune_col] if commune_col else [])
             loc = gdf[keep_cols].copy()
-            loc["_doss"] = loc[doss_col].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
-            loc = loc.drop_duplicates(subset="_doss", keep="first")
+            loc["_doss_raw"] = loc[doss_col].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
+            loc["_doss_clean"] = loc[doss_col].apply(_clean_pej_id)
             rename_map = {xcol: "x_faits", ycol: "y_faits"}
             if commune_col is not None:
                 rename_map[commune_col] = "NOM_COM_FAITS"
-            loc = loc.rename(columns=rename_map).drop(columns=[doss_col], errors="ignore")
+            loc = loc.rename(columns=rename_map)
 
-            out["_dc"] = out["DC_ID"].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
-            out = out.drop(columns=["x_faits", "y_faits"], errors="ignore").merge(loc, left_on="_dc", right_on="_doss", how="left")
-            out = out.drop(columns=["_dc", "_doss"], errors="ignore")
+            # Passe 1 : jointure brute DC_ID
+            out["_dc_raw"] = out["DC_ID"].astype(str).astype(object).str.strip().apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
+            loc_raw = loc.drop_duplicates(subset="_doss_raw", keep="first")
+            out = out.drop(columns=["x_faits", "y_faits"], errors="ignore").merge(
+                loc_raw[["_doss_raw", "x_faits", "y_faits"] + (["NOM_COM_FAITS"] if commune_col else [])],
+                left_on="_dc_raw",
+                right_on="_doss_raw",
+                how="left",
+            )
+            out = out.drop(columns=["_dc_raw", "_doss_raw"], errors="ignore")
 
-            # Expose un nom de commune exploitable pour les tableaux PDF quand l'ODS ne le fournit pas.
+            # Passe 2 : jointure tolérante DC_ID nettoyé (sans préfixe OF)
+            still_missing = out["x_faits"].isna() | out["y_faits"].isna()
+            if still_missing.any():
+                out["_dc_clean"] = out["DC_ID"].apply(_clean_pej_id)
+                loc_clean = loc.drop_duplicates(subset="_doss_clean", keep="first")
+                merged_clean = out.loc[still_missing, ["_dc_clean"]].merge(
+                    loc_clean[["_doss_clean", "x_faits", "y_faits"] + (["NOM_COM_FAITS"] if commune_col else [])],
+                    left_on="_dc_clean",
+                    right_on="_doss_clean",
+                    how="left",
+                )
+                idx_m = out[still_missing].index
+                out.loc[idx_m, "x_faits"] = merged_clean["x_faits"].values
+                out.loc[idx_m, "y_faits"] = merged_clean["y_faits"].values
+                if commune_col and "NOM_COM_FAITS" in merged_clean.columns:
+                    if "NOM_COM_FAITS" not in out.columns:
+                        out["NOM_COM_FAITS"] = pd.NA
+                    s_m = pd.Series(merged_clean["NOM_COM_FAITS"].values, index=idx_m)
+                    out.loc[idx_m, "NOM_COM_FAITS"] = out.loc[idx_m, "NOM_COM_FAITS"].combine_first(s_m)
+                out = out.drop(columns=["_dc_clean"], errors="ignore")
+
+            # Passe 3 : jointure de secours sur NUMERO_PROCEDURE
+            still_missing = out["x_faits"].isna() | out["y_faits"].isna()
+            if still_missing.any() and "NUMERO_PROCEDURE" in out.columns:
+                out["_numproc_clean"] = out["NUMERO_PROCEDURE"].apply(_clean_pej_id)
+                loc_clean = loc.drop_duplicates(subset="_doss_clean", keep="first")
+                merged_numproc = out.loc[still_missing, ["_numproc_clean"]].merge(
+                    loc_clean[["_doss_clean", "x_faits", "y_faits"] + (["NOM_COM_FAITS"] if commune_col else [])],
+                    left_on="_numproc_clean",
+                    right_on="_doss_clean",
+                    how="left",
+                )
+                idx_m = out[still_missing].index
+                out.loc[idx_m, "x_faits"] = merged_numproc["x_faits"].values
+                out.loc[idx_m, "y_faits"] = merged_numproc["y_faits"].values
+                if commune_col and "NOM_COM_FAITS" in merged_numproc.columns:
+                    if "NOM_COM_FAITS" not in out.columns:
+                        out["NOM_COM_FAITS"] = pd.NA
+                    s_m = pd.Series(merged_numproc["NOM_COM_FAITS"].values, index=idx_m)
+                    out.loc[idx_m, "NOM_COM_FAITS"] = out.loc[idx_m, "NOM_COM_FAITS"].combine_first(s_m)
+                out = out.drop(columns=["_numproc_clean"], errors="ignore")
+
             if "NOM_COM_FAITS" in out.columns:
                 if "NOM_COM" in out.columns:
                     out["NOM_COM"] = out["NOM_COM"].fillna(out["NOM_COM_FAITS"])
-                    out["NOM_COM"] = out["NOM_COM"].astype(str).str.strip().replace({"": pd.NA})
-        else:
-            out["NOM_COM"] = out["NOM_COM_FAITS"].astype(str).str.strip().replace({"": pd.NA})
+                    out["NOM_COM"] = out["NOM_COM"].astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+                else:
+                    out["NOM_COM"] = out["NOM_COM_FAITS"].astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
             
-    # === FALLBACK OSCEAN : Tenter de récupérer la commune pour les PEJ non localisées ===
-    # On charge TOUTES les années OSCEAN disponibles (pas de filtre date) pour maximiser
-    # les chances de retrouver une commune, y compris pour les compléments de dossiers
-    # dont la date de contrôle est antérieure à la période du bilan.
-    missing = out["NOM_COM"].isna() if "NOM_COM" in out.columns else pd.Series(True, index=out.index)
+    # === FALLBACK OSCEAN & CSV NON-LOCALISÉS : Récupération du nom de commune ===
+    has_nom_com = "NOM_COM" in out.columns
+    missing = out["NOM_COM"].isna() if has_nom_com else pd.Series(True, index=out.index)
     if missing.any():
         try:
-            oscean_gdf = load_point_ctrl(root, echelle=echelle, code=code)  # toutes les années
-            
+            oscean_gdf = load_point_ctrl(root, echelle=echelle, code=code)
             if not oscean_gdf.empty and "dc_id" in oscean_gdf.columns and "nom_commun" in oscean_gdf.columns:
                 oscean_dc = oscean_gdf[["dc_id", "nom_commun"]].dropna(subset=["nom_commun"]).copy()
                 oscean_dc["dc_id"] = oscean_dc["dc_id"].astype(str).apply(lambda val: re.sub(r"\.0$", "", str(val)) if pd.notna(val) else "")
@@ -2646,7 +2713,7 @@ def merge_pej_faits_locations(
                     oscean_num = oscean_num.drop_duplicates(subset=["code_pej"])
                 
                 def _recover_commune(row):
-                    if pd.notna(row.get("NOM_COM")):
+                    if pd.notna(row.get("NOM_COM")) and str(row.get("NOM_COM")).strip() not in ("", "nan", "None", "<NA>"):
                         return row.get("NOM_COM")
                     dc_id = str(row.get("DC_ID", "")).replace(".0", "")
                     num_proc = str(row.get("NUMERO_PROCEDURE", "")).replace(".0", "")
@@ -2662,14 +2729,39 @@ def merge_pej_faits_locations(
                     return pd.NA
 
                 out["NOM_COM"] = out.apply(_recover_commune, axis=1)
-                
-                # Re-vérifier les manquantes après récupération
-                new_missing = out["NOM_COM"].isna()
-                n_recup = missing.sum() - new_missing.sum()
-                if n_recup > 0:
-                    lg.info("PEJ : %s ligne(s) sans commune récupérée(s) via OSCEAN.", n_recup)
         except Exception as e:
             lg.warning("Impossible de charger les points OSCEAN pour la récupération des communes PEJ manquantes : %s", e)
+
+    # Récupération de secours via le CSV des faits PEJ non localisés
+    has_nom_com = "NOM_COM" in out.columns
+    missing = (out["NOM_COM"].isna() | out["NOM_COM"].astype(str).str.strip().isin(["", "nan", "None", "<NA>"])) if has_nom_com else pd.Series(True, index=out.index)
+    if missing.any():
+        try:
+            df_nl = load_pej_non_localises(root)
+            if not df_nl.empty:
+                col_com_nl = next((c for c in ("insee_comm", "nom_com", "NOM_COM", "commune", "COMMUNE") if c in df_nl.columns), None)
+                col_dc_nl = next((c for c in ("DC_ID", "dc_id", "dossier", "DOSSIER") if c in df_nl.columns), None)
+                col_num_nl = next((c for c in ("NUMERO_PROCEDURE", "numero_procedure", "code_pej") if c in df_nl.columns), None)
+                if col_com_nl:
+                    dict_dc = {}
+                    dict_num = {}
+                    if col_dc_nl:
+                        dict_dc = df_nl.dropna(subset=[col_com_nl]).set_index(df_nl[col_dc_nl].apply(_clean_pej_id))[col_com_nl].to_dict()
+                    if col_num_nl:
+                        dict_num = df_nl.dropna(subset=[col_com_nl]).set_index(df_nl[col_num_nl].apply(_clean_pej_id))[col_num_nl].to_dict()
+                    
+                    if "NOM_COM" not in out.columns:
+                        out["NOM_COM"] = pd.NA
+
+                    for idx in out[missing].index:
+                        row = out.loc[idx]
+                        dc_clean = _clean_pej_id(row.get("DC_ID"))
+                        num_clean = _clean_pej_id(row.get("NUMERO_PROCEDURE"))
+                        found_com = dict_dc.get(dc_clean) or dict_num.get(num_clean)
+                        if found_com and pd.notna(found_com):
+                            out.loc[idx, "NOM_COM"] = str(found_com).strip()
+        except Exception as e:
+            lg.warning("PEJ : échec de la récupération des communes depuis le CSV des non localisées : %s", e)
     # === FIN FALLBACK ===
 
     # Garantir que DATE_REF reste datetime après le merge (le join Pandas peut en faire un object)
@@ -2751,36 +2843,8 @@ def merge_pej_faits_locations(
             except Exception as e:
                 lg.warning("PEJ : échec du fallback centroïde communal : %s", e)
 
-        # Fallback Niveau 4 : Centroïde du département
-        missing_xy = out["x_faits"].isna() | out["y_faits"].isna()
-        if missing_xy.any():
-            try:
-                cen_com = load_communes_centroides(root)
-                if not cen_com.empty:
-                    cen_com["dept"] = cen_com["code_insee"].astype(str).str.zfill(5).str[:2]
-                    dept_lon = cen_com.groupby("dept")["lon"].mean().to_dict()
-                    dept_lat = cen_com.groupby("dept")["lat"].mean().to_dict()
-                    
-                    dept_cols = ("NUM_DEPART", "CODE_DEPT", "DEPT", "DEPARTEMENT", "DEP", "DPT", "CODE_DEP", "num_depart", "code_dept", "dept", "departement", "dep", "ENTITE_ORIGINE_PROCEDURE", "entite_origine_procedure")
-
-                    for idx in out[missing_xy].index:
-                        row = out.loc[idx]
-                        dept_val = None
-                        for c in dept_cols:
-                            if c in row and pd.notna(row[c]):
-                                m = re.search(r"(\d+)", str(row[c]))
-                                if m:
-                                    d_str = m.group(1).zfill(2)[:2]
-                                    if d_str in dept_lon:
-                                        dept_val = d_str
-                                        break
-                                    
-                        if dept_val and dept_val in dept_lon and dept_val in dept_lat:
-                            out.loc[idx, "x_faits"] = dept_lon[dept_val]
-                            out.loc[idx, "y_faits"] = dept_lat[dept_val]
-                            out.loc[idx, "precision_loc"] = "Centroïde départemental (Approximatif)"
-            except Exception as e:
-                lg.warning("PEJ : échec du fallback centroïde départemental : %s", e)
+        # Note: Le fallback niveau 4 (centroïde départemental) a été retiré afin de ne pas fausser les cartes de chaleur.
+        # Les PEJ non géolocalisées conservent x_faits/y_faits à NaN.
 
     n = int(out["x_faits"].notna().sum())
     if n:

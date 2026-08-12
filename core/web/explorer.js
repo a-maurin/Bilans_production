@@ -3216,15 +3216,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const bannerEl = document.getElementById('map-pej-unmapped-banner');
                 const unmappedCountEl = document.getElementById('pej-unmapped-count');
                 const totalCountEl = document.getElementById('pej-total-count');
-                if (bannerEl && unmappedCountEl && totalCountEl) {
+                if (bannerEl && unmappedCountEl) {
                     const stats = resN.stats || {};
                     const totalPej = stats.total_pej || 0;
-                    const mappedPej = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase() === 'PEJ').length : 0;
+                    const mappedPej = resN.procedures ? resN.procedures.filter(p => (p.type || '').toUpperCase() === 'PEJ' && p.x !== null && p.x !== undefined && p.y !== null && p.y !== undefined).length : 0;
                     const unmappedPej = (stats.unmapped_pej !== undefined) ? stats.unmapped_pej : Math.max(0, totalPej - mappedPej);
                     
                     if (totalPej > 0 && unmappedPej > 0) {
                         unmappedCountEl.textContent = unmappedPej;
-                        totalCountEl.textContent = totalPej;
+                        if (totalCountEl) totalCountEl.textContent = totalPej;
                         bannerEl.classList.remove('hidden');
                     } else {
                         bannerEl.classList.add('hidden');
@@ -4262,7 +4262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         } else {
-            data = [...activePoints];
+            data = [...activePoints, ...activeProcedures];
         }
 
         return data.filter(item => {

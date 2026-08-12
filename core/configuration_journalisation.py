@@ -21,27 +21,91 @@ import sys
 from pathlib import Path
 
 
-def configure_logging(console_level: int = logging.ERROR) -> None:
+class OFBConsoleFormatter(logging.Formatter):
+    """
+    Formateur console harmonisé et élégant pour OFBilan.
+    Affiche des badges colorés ([INFO], [DEBUG], [WARN], [ERREUR], [CRITIQUE])
+    et inclut l'horodatage ainsi que le nom du module en mode DEBUG.
+    """
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    GRAY = "\033[90m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD_RED = "\033[1;91m"
+
+    LEVEL_BADGES = {
+        logging.DEBUG: ("🔍 [DEBUG]", CYAN, "[DEBUG]"),
+        logging.INFO: ("ℹ️  [INFO]", BLUE, "[INFO]"),
+        logging.WARNING: ("⚠️  [WARN]", YELLOW, "[WARN]"),
+        logging.ERROR: ("❌ [ERREUR]", RED, "[ERREUR]"),
+        logging.CRITICAL: ("🚨 [CRITIQUE]", BOLD_RED, "[CRITIQUE]"),
+    }
+
+    def __init__(self, is_debug: bool = False, use_colors: bool | None = None) -> None:
+        super().__init__()
+        self.is_debug = is_debug
+        if use_colors is None:
+            use_colors = hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
+            if use_colors and sys.platform == "win32":
+                try:
+                    from core.common.ofb_charte import _enable_windows_vt100
+                    _enable_windows_vt100()
+                except Exception:
+                    pass
+        self.use_colors = use_colors
+
+    def format(self, record: logging.LogRecord) -> str:
+        badge_info = self.LEVEL_BADGES.get(
+            record.levelno,
+            (f"[{record.levelname}]", self.RESET, f"[{record.levelname}]"),
+        )
+        fancy_badge, color, plain_badge = badge_info
+
+        if self.use_colors:
+            badge = f"{color}{fancy_badge}{self.RESET}"
+        else:
+            badge = plain_badge
+
+        msg = record.getMessage()
+
+        if self.is_debug or record.levelno <= logging.DEBUG:
+            from datetime import datetime
+            time_str = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+            time_prefix = f"{self.GRAY}[{time_str}]{self.RESET}" if self.use_colors else f"[{time_str}]"
+            name_prefix = f"{self.GRAY}[{record.name}]{self.RESET}" if self.use_colors else f"[{record.name}]"
+            return f"{time_prefix} {badge} {name_prefix} {msg}"
+        else:
+            return f"{badge} {msg}"
+
+
+def configure_logging(console_level: int = logging.INFO) -> None:
     """
     Configure le logging pour les scripts de bilans.
 
-    - Les loggers 'ofbilan' et 'core' sont réglés sur DEBUG pour tout enregistrer.
-    - Le StreamHandler (console) filtre selon console_level (ERROR par défaut en mode normal).
-    - Sortie console : stderr
+    - Les loggers 'ofbilan' et 'core' sont réglés sur DEBUG pour tout enregistrer dans les fichiers.
+    - Le StreamHandler (console) filtre selon console_level (INFO par défaut en mode normal).
+    - Sortie console : stderr avec formateur harmonisé OFBConsoleFormatter.
     """
+    is_debug = console_level <= logging.DEBUG
+    formatter = OFBConsoleFormatter(is_debug=is_debug)
+
     for logger_name in ("ofbilan", "core"):
         logger = logging.getLogger(logger_name)
         logger.setLevel(logging.DEBUG)
-        
+
         # Ajustement des handlers existants
         for h in list(logger.handlers):
             if not isinstance(h, logging.FileHandler):
                 h.setLevel(console_level)
+                h.setFormatter(formatter)
 
         if not any(not isinstance(h, logging.FileHandler) for h in logger.handlers):
             sh = logging.StreamHandler(sys.stderr)
             sh.setLevel(console_level)
-            formatter = logging.Formatter("%(levelname)s - %(message)s")
             sh.setFormatter(formatter)
             logger.addHandler(sh)
 

@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(err => console.error('Erreur chargement profils:', err));
 
     let userDefaultGabarit = 'gabarit_defaut';
+    let loadedUserSettings = null;
 
     fetch('/api/settings')
         .then(res => {
@@ -79,11 +80,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return res.json();
         })
         .then(data => {
+            loadedUserSettings = data;
             if (data && data.geo && data.geo.gabarit_defaut) {
                 userDefaultGabarit = data.geo.gabarit_defaut;
                 if (selectGabarit && !selectGabarit.value) {
                     selectGabarit.value = userDefaultGabarit;
                 }
+            }
+            const setTechDebugEl = document.getElementById('set-tech-debug');
+            if (setTechDebugEl && data && data.tech && typeof data.tech.mode_debug !== 'undefined') {
+                setTechDebugEl.checked = !!data.tech.mode_debug;
             }
         })
         .catch(err => console.error('Erreur chargement settings:', err));
@@ -736,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
             diffusion: document.getElementById('diffusion').value,
             preset: document.getElementById('preset').value,
             gabarit: selectGabarit && selectGabarit.value ? selectGabarit.value : null,
-            mode_debug: debugCheckbox ? debugCheckbox.checked : false
+            mode_debug: debugCheckbox ? debugCheckbox.checked : (loadedUserSettings && loadedUserSettings.tech ? !!loadedUserSettings.tech.mode_debug : false)
         };
 
         // Call backend API

@@ -1257,12 +1257,12 @@ Composants principaux :
                                     
                                     <div style="background: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">
                                         <strong style="color: #1e3a8a; display: block; margin-bottom: 4px;">1. Absence de pointage GPS dans l'application OSCEAN</strong>
-                                        Lors de la création de la procédure, l'agent ou le greffe peut avoir saisi la saisine sans positionner explicitement de point de géolocalisation ($X, Y$) sur la carte interactive des faits d'infraction.
+                                        Lors de la création de la procédure, l'agent peut ne pas avoir saisi immédiatement la localisation du ou des faits faisant l'objet de la procédure.
                                     </div>
 
                                     <div style="background: #f8fafc; border-left: 3px solid #f59e0b; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">
-                                        <strong style="color: #78350f; display: block; margin-bottom: 4px;">2. Masquage de la commune lors de l'export SIG central</strong>
-                                        Dans les requêtes d'exportation automatiques de la base nationale OSCEAN (fichiers GPKG/CSV), si un fait ne possède pas de point GPS, le script d'export d'origine attribue des coordonnées nulles ($X=0, Y=0$) et remplace le nom de la commune par la mention <em>« Non géolocalisée »</em>.
+                                        <strong style="color: #78350f; display: block; margin-bottom: 4px;">2. Masquage de la commune lors de l'export SIG</strong>
+                                        Dans les requêtes d'exportation de la base nationale OSCEAN, si un fait ne possède pas de point GPS, OFBilan attribue des coordonnées nulles ($X=0, Y=0$) et remplace le nom de la commune par la mention « Non géolocalisée ».
                                     </div>
 
                                     <div style="background: #f8fafc; border-left: 3px solid #10b981; padding: 10px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;">

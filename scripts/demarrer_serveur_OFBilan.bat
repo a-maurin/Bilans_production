@@ -30,6 +30,25 @@ if %QGIS_PYTHON%=="" (
 )
 
 echo [OK] Interpreteur trouve : %QGIS_PYTHON%
+echo.
+
+:: Verification et installation des dependances Python requises
+echo Verification des dependances Python...
+%QGIS_PYTHON% -c "import odf" 2>nul
+if errorlevel 1 (
+    echo [INFO] Installation de odfpy (lecture fichiers ODS)...
+    %QGIS_PYTHON% -m pip install --quiet --user odfpy
+    if errorlevel 1 (
+        echo [ATTENTION] Impossible d'installer odfpy automatiquement.
+        echo             Les fichiers PEJ/PA au format ODS ne pourront pas etre charges.
+        echo             Installez manuellement : pip install odfpy
+    ) else (
+        echo [OK] odfpy installe avec succes.
+    )
+) else (
+    echo [OK] odfpy disponible.
+)
+echo.
 echo [OK] Demarrage du serveur...
 echo.
 

@@ -616,6 +616,9 @@ def load_pej(
     global _SESSION_CACHE
     if _SESSION_CACHE["active"] and _SESSION_CACHE["pej"] is not None:
         df = _SESSION_CACHE["pej"].copy()
+        if df.empty or "DATE_REF" not in df.columns:
+            # Le préchargement a échoué (ex. odfpy absent) — retour propre sans crash
+            return pd.DataFrame()
         if date_deb is not None and date_fin is not None:
             deb_ts = pd.to_datetime(date_deb)
             fin_ts = pd.to_datetime(date_fin)
@@ -731,6 +734,9 @@ def load_pa(
     global _SESSION_CACHE
     if _SESSION_CACHE["active"] and _SESSION_CACHE["pa"] is not None:
         df = _SESSION_CACHE["pa"].copy()
+        if df.empty or "DATE_REF" not in df.columns:
+            # Le préchargement a échoué (ex. odfpy absent) — retour propre sans crash
+            return pd.DataFrame()
         if date_deb is not None and date_fin is not None:
             deb_ts = pd.to_datetime(date_deb)
             fin_ts = pd.to_datetime(date_fin)

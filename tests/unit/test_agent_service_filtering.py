@@ -61,3 +61,21 @@ def test_explorer_js_has_agent_service_params():
     content = js_path.read_text(encoding="utf-8")
     assert "pnf-agent-select" in content
     assert "agent_service" in content
+
+
+def test_filter_by_agent_service_accents_and_multicol():
+    df = pd.DataFrame({
+        "entite": ["SD21", "Parc National de Forêts", "SD52"],
+        "UNITE_libelle": ["SD21", "P.N.F - Agents", "Brigade"],
+        "val": [100, 200, 300]
+    })
+    cfg = {"agent_rules": {"pnf_keywords": ["PNF", "P.N.F", "PARC", "FORETS", "FORET", "FORÊTS", "FORÊT"]}}
+
+    df_pnf = filter_by_agent_service(df, ["entite_ctrl"], "pnf", cfg)
+    assert len(df_pnf) == 1
+    assert df_pnf.iloc[0]["val"] == 200
+
+    df_ofb = filter_by_agent_service(df, ["entite_ctrl"], "ofb", cfg)
+    assert len(df_ofb) == 2
+    assert set(df_ofb["val"]) == {100, 300}
+

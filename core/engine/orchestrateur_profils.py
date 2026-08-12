@@ -1366,22 +1366,36 @@ def filter_by_agent_service(df: pd.DataFrame, col_candidates: list[str], target_
         return df
 
     agent_rules = profile_cfg.get("agent_rules", {}) if isinstance(profile_cfg, dict) else {}
-    pnf_keywords = agent_rules.get("pnf_keywords", ["PNF", "PARC", "FORETS", "FORET"])
+    pnf_keywords = agent_rules.get("pnf_keywords", ["PNF", "P.N.F", "PARC", "FORETS", "FORET", "FORÊTS", "FORÊT"])
 
-    col_found = None
-    for c in col_candidates:
-        if c in df.columns:
-            col_found = c
-            break
+    # Étendre la recherche à toutes les colonnes candidates pertinentes
+    all_candidates = list(col_candidates) if col_candidates else []
+    standard_cols = [
+        "entite_ctrl", "entit_ctrl", "entite", "entit", "ENTITE", "ENTITE_CTRL",
+        "ENTITE_ORIGINE_PROCEDURE", "entite_origine_procedure",
+        "UNITE_libelle", "unite_libelle", "UNITE_LIBELLE", "UNITE", "unite",
+        "service", "SERVICE", "service_nom", "service_ctrl", "organisme", "ORGANISME",
+        "agent", "AGENT", "libelle_service", "libelle_unite", "partenaire", "partenaires"
+    ]
+    for sc in standard_cols:
+        if sc not in all_candidates:
+            all_candidates.append(sc)
 
-    if not col_found:
+    present_cols = [c for c in all_candidates if c in df.columns]
+
+    if not present_cols:
         if target_service == "ofb":
             return df.copy()
         else:
             return df.iloc[0:0].copy()
 
-    val_series = df[col_found].fillna("").astype(str).str.upper()
-    is_pnf = val_series.apply(lambda x: any(k in x for k in pnf_keywords))
+    pnf_keywords_upper = [str(k).upper() for k in pnf_keywords]
+    is_pnf = pd.Series(False, index=df.index)
+
+    for col in present_cols:
+        val_series = df[col].fillna("").astype(str).str.upper()
+        col_is_pnf = val_series.apply(lambda x: any(k in x for k in pnf_keywords_upper))
+        is_pnf = is_pnf | col_is_pnf
 
     if target_service == "pnf":
         return df[is_pnf].copy()
@@ -1465,7 +1479,8 @@ def _filter_pej(
     dept_codes = get_departements_pour_perimetre(cfg.echelle, cfg.code)
     if dept_codes and "FR" not in dept_codes and "ENTITE_ORIGINE_PROCEDURE" in pej.columns:
         dept_extracted = pej["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'(\d+)')[0]
-        pej = pej[dept_extracted.isin(dept_codes)].copy()
+        pnf_m = pej["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.upper().str.contains(r'PNF|PARC|FORET', regex=True, na=False)
+        pej = pej[dept_extracted.isin(dept_codes) | pnf_m].copy()
 
     # Déduplication par DC_ID
     if "DC_ID" in pej.columns:
@@ -1487,7 +1502,7 @@ def _filter_pej(
         return pej.copy()
 
     if ft == "type_usager":
-        targets = (profile.get("filter", {}) or {}).get("type_usager_target") or []
+        targets = (profile.get("filter", {}) or {}) .get("type_usager_target") or []
         if targets and "type_usager" in pej.columns:
             return _filter_by_type_usager(pej, targets)
         return pej.copy()
@@ -1512,7 +1527,8 @@ def _filter_pa(
 
     # Restreindre systématiquement aux procédures de l'entité SD concernée
     if entity_sds and "ENTITE_ORIGINE_PROCEDURE" in pa.columns:
-        pa = pa[pa["ENTITE_ORIGINE_PROCEDURE"].isin(entity_sds)].copy()
+        pnf_m = pa["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.upper().str.contains(r'PNF|PARC|FORET', regex=True, na=False)
+        pa = pa[pa["ENTITE_ORIGINE_PROCEDURE"].isin(entity_sds) | pnf_m].copy()
 
     dc_ids_dept: Set[str] = set()
     if (

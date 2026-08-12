@@ -38,7 +38,11 @@ Fonctionnalités avancées :
 ========================================================================================
 """
 from __future__ import annotations
+import gzip
+import hashlib
+import json
 import logging
+import pickle
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -129,6 +133,80 @@ _PEJ_RAW_CACHE = {}
 _PA_RAW_CACHE = {}
 _PVE_RAW_CACHE = {}
 _FAITS_RAW_CACHE = {}
+
+
+def _get_cache_dir(root: Path) -> Path:
+    cache_dir = root / "data" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def _compute_files_signature(files: List[Path]) -> str:
+    items = []
+    for f in sorted(files, key=lambda p: str(p)):
+        try:
+            stat = f.stat()
+            items.append(f"{f.name}:{stat.st_size}:{stat.st_mtime}")
+        except OSError:
+            items.append(f"{f.name}:missing")
+    raw = "|".join(items)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _load_disk_cache(root: Path, cache_key: str, files_sig: str) -> Optional[pd.DataFrame]:
+    try:
+        cache_dir = _get_cache_dir(root)
+        meta_file = cache_dir / f"{cache_key}.meta.json"
+        data_file = cache_dir / f"{cache_key}.pkl.gz"
+        
+        if not meta_file.exists() or not data_file.exists():
+            return None
+            
+        with open(meta_file, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+            
+        if meta.get("files_sig") != files_sig:
+            logger.info("Cache disque '%s' obsolète (fichiers sources modifiés).", cache_key)
+            return None
+            
+        logger.info("Chargement rapide depuis le cache disque : %s", cache_key)
+        with gzip.open(data_file, "rb") as f:
+            df = pickle.load(f)
+        return df
+    except Exception as e:
+        logger.warning("Échec de la lecture du cache disque '%s' (corrompu ?) : %s", cache_key, e)
+        try:
+            cache_dir = _get_cache_dir(root)
+            (cache_dir / f"{cache_key}.meta.json").unlink(missing_ok=True)
+            (cache_dir / f"{cache_key}.pkl.gz").unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
+
+def _save_disk_cache(root: Path, cache_key: str, files_sig: str, df: pd.DataFrame) -> None:
+    try:
+        cache_dir = _get_cache_dir(root)
+        meta_file = cache_dir / f"{cache_key}.meta.json"
+        data_file = cache_dir / f"{cache_key}.pkl.gz"
+        tmp_data_file = cache_dir / f"{cache_key}.pkl.gz.tmp"
+        
+        with gzip.open(tmp_data_file, "wb") as f:
+            pickle.dump(df, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+        tmp_data_file.replace(data_file)
+        
+        meta = {
+            "files_sig": files_sig,
+            "rows": len(df),
+            "cols": len(df.columns)
+        }
+        with open(meta_file, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+            
+        logger.info("Cache disque sauvegardé : %s (%d lignes)", cache_key, len(df))
+    except Exception as e:
+        logger.warning("Impossible d'écrire le cache disque '%s' : %s", cache_key, e)
 
 
 def init_session_cache(
@@ -456,6 +534,13 @@ def load_point_ctrl(
             raise ValueError(f"Erreur de conversion des dates : {e}")
 
     selected_paths = [tpl[1] for tpl in per_year.values()]
+    sig = _compute_files_signature(selected_paths)
+    is_national_full = (echelle is None or str(echelle).lower() == "national") and (code is None or code == "FR") and date_deb is None and date_fin is None
+    if is_national_full:
+        cached_df = _load_disk_cache(root, "point_ctrl_national", sig)
+        if cached_df is not None:
+            return cached_df.copy()
+
     frames: List[pd.DataFrame] = []
     from core.common.utilitaires_metier import get_departements_pour_perimetre
     target_depts = get_departements_pour_perimetre(echelle, code)
@@ -567,6 +652,9 @@ def load_point_ctrl(
     if "date_ctrl" not in df_all.columns:
         raise KeyError("La colonne 'date_ctrl' est absente des données point_ctrl_*")
 
+    if is_national_full:
+        _save_disk_cache(root, "point_ctrl_national", sig, df_all)
+
     # Filtrage optionnel par périmètre et période
     if echelle is not None and code is not None:
         from core.common.utilitaires_metier import get_departements_pour_perimetre, get_bmi_filters
@@ -634,7 +722,8 @@ def load_pej(
                 dept_codes = get_departements_pour_perimetre(echelle, code)
                 if dept_codes and "FR" not in dept_codes:
                     dept_extracted = df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.extract(r'(\d+)')[0]
-                    df = df[dept_extracted.isin(dept_codes)].copy()
+                    pnf_mask = df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.upper().str.contains(r'PNF|PARC|FORET', regex=True, na=False)
+                    df = df[dept_extracted.isin(dept_codes) | pnf_mask].copy()
         if not df.empty and "DC_ID" in df.columns:
             if "DATE_REF" in df.columns:
                 df = df.sort_values("DATE_REF", ascending=False)
@@ -647,6 +736,13 @@ def load_pej(
     prefix = "suivi_procedure_enq_judiciaire_"
     path = _find_latest_dated_file(sources, prefix, (".ods",))
     
+    sig = _compute_files_signature([path])
+    is_national_full = (echelle is None or str(echelle).lower() == "national") and (code is None or code == "FR") and date_deb is None and date_fin is None
+    if is_national_full:
+        cached_df = _load_disk_cache(root, "pej_national", sig)
+        if cached_df is not None:
+            return cached_df.copy()
+
     if path in _PEJ_RAW_CACHE:
         df = _PEJ_RAW_CACHE[path].copy()
     else:
@@ -677,6 +773,8 @@ def load_pej(
         )
         df.attrs["missing_recap_date"] = not has_recap_date
         _PEJ_RAW_CACHE[path] = df.copy()
+        if is_national_full:
+            _save_disk_cache(root, "pej_national", sig, df)
 
     if df.attrs.get("missing_recap_date") and date_deb is not None and date_fin is not None:
         raise KeyError(
@@ -752,13 +850,21 @@ def load_pa(
                 dept_codes = get_departements_pour_perimetre(echelle, code)
                 if dept_codes and "FR" not in dept_codes:
                     entity_sds = [f"SD{d}" for d in dept_codes]
-                    df = df[df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.strip().isin(entity_sds)].copy()
+                    pnf_mask = df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.upper().str.contains(r'PNF|PARC|FORET', regex=True, na=False)
+                    df = df[df["ENTITE_ORIGINE_PROCEDURE"].astype(str).str.strip().isin(entity_sds) | pnf_mask].copy()
         return df
 
     sources = root / "data" / "sources"
     path = _find_latest_dated_file(
         sources, "suivi_procedure_administrative_", (".ods",)
     )
+    sig = _compute_files_signature([path])
+    is_national_full = (echelle is None or str(echelle).lower() == "national") and (code is None or code == "FR") and date_deb is None and date_fin is None
+    if is_national_full:
+        cached_df = _load_disk_cache(root, "pa_national", sig)
+        if cached_df is not None:
+            return cached_df.copy()
+
     if path in _PA_RAW_CACHE:
         df = _PA_RAW_CACHE[path].copy()
     else:
@@ -768,6 +874,8 @@ def load_pa(
         df["DATE_DOSSIER"] = safe_to_datetime(df["DATE_DOSSIER"])
         df["DATE_REF"] = df["DATE_CONTROLE"].fillna(df["DATE_DOSSIER"])
         _PA_RAW_CACHE[path] = df.copy()
+        if is_national_full:
+            _save_disk_cache(root, "pa_national", sig, df)
     if date_deb is not None and date_fin is not None:
         deb_ts = pd.to_datetime(date_deb)
         fin_ts = pd.to_datetime(date_fin)
@@ -2205,6 +2313,13 @@ def load_pve(
     # Fichier le plus récent (date de modification)
     path = max(candidates, key=lambda p: p.stat().st_mtime)
 
+    sig = _compute_files_signature([path])
+    is_national_full = (echelle is None or str(echelle).lower() == "national") and (code is None or code == "FR") and date_deb is None and date_fin is None
+    if is_national_full:
+        cached_df = _load_disk_cache(root, "pve_national", sig)
+        if cached_df is not None:
+            return cached_df.copy()
+
     if path in _PVE_RAW_CACHE:
         df = _PVE_RAW_CACHE[path].copy()
     else:
@@ -2271,6 +2386,8 @@ def load_pve(
 
 
         _PVE_RAW_CACHE[path] = df.copy()
+        if is_national_full:
+            _save_disk_cache(root, "pve_national", sig, df)
 
     if echelle is not None and code is not None:
         from core.common.utilitaires_metier import get_departements_pour_perimetre, get_bmi_filters

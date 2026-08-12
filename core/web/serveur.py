@@ -1020,14 +1020,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         df_pts, df_pej, df_pa, df_pve, project_root, log
                     )
 
-                # 4.ter. Filtrage par organisme / service d'agents (OFB vs PNF)
+                # 4.ter. Filtrage par organisme / service d'agents (OFB vs PNF) - réservé à l'Explorer Web
                 agent_service = params.get("agent_service", "tous")
                 if agent_service and str(agent_service).strip().lower() != "tous":
                     from core.engine.orchestrateur_profils import filter_by_agent_service
-                    df_pts = filter_by_agent_service(df_pts, ["entite_ctrl", "entit_ctrl", "entite", "entit"], agent_service, profile_cfg)
-                    df_pej = filter_by_agent_service(df_pej, ["entite", "ENTITE", "ENTITE_ORIGINE_PROCEDURE"], agent_service, profile_cfg)
-                    df_pa = filter_by_agent_service(df_pa, ["ENTITE_ORIGINE_PROCEDURE", "entite", "UNITE_libelle"], agent_service, profile_cfg)
-                    df_pve = filter_by_agent_service(df_pve, ["UNITE_libelle", "unite_libelle", "UNITE_LIBELLE", "UNITE", "unite"], agent_service, profile_cfg)
+                    agent_cols = ["entite_ctrl", "entit_ctrl", "entite", "entit", "ENTITE", "ENTITE_CTRL", "UNITE_libelle", "unite_libelle", "service", "organisme"]
+                    df_pts = filter_by_agent_service(df_pts, agent_cols, agent_service, profile_cfg)
+                    df_pej = filter_by_agent_service(df_pej, agent_cols + ["ENTITE_ORIGINE_PROCEDURE"], agent_service, profile_cfg)
+                    df_pa = filter_by_agent_service(df_pa, agent_cols + ["ENTITE_ORIGINE_PROCEDURE"], agent_service, profile_cfg)
+                    df_pve = filter_by_agent_service(df_pve, agent_cols + ["UNITE_LIBELLE", "UNITE", "unite"], agent_service, profile_cfg)
 
                 total_controles = len(df_pts)
                 total_pej = len(df_pej)
@@ -1817,8 +1818,14 @@ def preload_data_async():
         try:
             log_preload("  Démarrage du chargement des données en arrière-plan...")
             project_root = Path(__file__).resolve().parents[2]
-            from core.common.chargeurs_donnees import init_session_cache
             
+            try:
+                from core.common.verifier_dependances import verifier_et_installer_accelerateurs
+                verifier_et_installer_accelerateurs(log_preload)
+            except Exception as e:
+                log_server(f"Erreur lors de la vérification des accélérateurs : {e}", level="WARNING")
+
+            from core.common.chargeurs_donnees import init_session_cache
             log_preload("  Chargement des données (points de contrôle, PEJ, PA, PVe)...")
             init_session_cache(project_root)
             log_preload("  Données d'activité chargées en mémoire cache.")

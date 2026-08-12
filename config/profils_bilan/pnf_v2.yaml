@@ -99,7 +99,7 @@ options:
     default: "tous"
 
 agent_rules:
-  pnf_keywords: ["PNF", "PARC", "FORETS", "FORET"]
+  pnf_keywords: ["PNF", "P.N.F", "PARC", "FORETS", "FORET", "FORÊTS", "FORÊT"]
   ofb_keywords: ["OFB", "SD", "BRIGADE"]
 
 mapping_pnf:

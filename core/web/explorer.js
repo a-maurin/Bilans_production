@@ -2177,7 +2177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const maxVal = nonZeroCounts.length > 0 ? nonZeroCounts[nonZeroCounts.length - 1] : 0;
         const minVal = nonZeroCounts.length > 0 ? nonZeroCounts[0] : 0;
 
-        const paletteControles = ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'];
+        const paletteControles = ['#e6f4ea', '#6ee7b7', '#10b981', '#047857', '#064e3b'];
         const palettePej = ['#f3e8ff', '#d8b4fe', '#a855f7', '#7e22ce', '#581c87'];
         const palettePve = ['#e0e7ff', '#c7d2fe', '#818cf8', '#4f46e5', '#312e81'];
         const paletteInfractions = ['#fce7f3', '#fbcfe8', '#f472b6', '#db2777', '#831843'];
@@ -2288,8 +2288,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isZero = (count === 0);
 
                 return {
-                    fillColor: isZero ? '#e2e8f0' : getColor(count),
-                    fillOpacity: isZero ? 0.15 : 0.75,
+                    fillColor: isZero ? 'transparent' : getColor(count),
+                    fillOpacity: isZero ? 0 : 0.75,
                     stroke: false,
                     weight: 0
                 };
@@ -2379,7 +2379,7 @@ document.addEventListener('DOMContentLoaded', () => {
             legendItems.innerHTML = '';
             legendItems.innerHTML += `
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 14px; height: 14px; background: #e2e8f0; border: 1px solid #cbd5e1; opacity: 0.5; border-radius: 2px;"></span>
+                    <span style="width: 14px; height: 14px; background: transparent; border: 1px dashed #cbd5e1; border-radius: 2px;"></span>
                     <span>${zeroLabel}</span>
                 </div>
             `;

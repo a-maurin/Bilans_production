@@ -1649,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     entityMarkersPane.style.zIndex = '650';
 
     const maskRenderer = L.canvas({ pane: 'maskPane' });
-    const choroplethRenderer = L.canvas({ pane: 'choroplethPane' });
+    const choroplethRenderer = L.svg({ pane: 'choroplethPane' });
     const entityRenderer = L.canvas({ pane: 'entityMarkersPane' });
 
     L.tileLayer('https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
@@ -2278,6 +2278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         choroplethLayer = L.geoJSON(currentBoundaryGeojson, {
             pane: 'choroplethPane',
             renderer: choroplethRenderer,
+            interactive: true,
             style: function(feature) {
                 const props = feature.properties || {};
                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);

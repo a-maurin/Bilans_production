@@ -61,6 +61,8 @@ def _normalize_profile(data: dict, profil_id: str) -> dict:
     if not pipeline:
         raise ValueError(f"Profil {profil_id}: clé YAML requise manquante: pipeline")
     data["pipeline"] = pipeline
+    data.setdefault("version", "1.0.0")
+    data.setdefault("date_modification", "2026-08-13")
     data.setdefault("out_subdir", f"bilan_{profil_id}")
     data.setdefault("analyse_PVe", True)
 

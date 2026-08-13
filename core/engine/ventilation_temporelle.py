@@ -40,18 +40,15 @@ VENTILATION_JOURS_DEUX_ANS = 730
 def resolve_ventilation_auto(duree_jours: int, *, seuil_jours: int = 366) -> str:
     """Ventilation en mode ``auto`` selon la durée de la période d'analyse (en jours).
 
-    - ≤ 6 mois (183 j) : hebdomadaire (libellé de période ``YYYY-Sww``)
-    - > 6 mois et ≤ 1 an (366 j) : mensuelle (libellé ``YYYY-MM``)
-    - > 1 an et < 2 ans (730 j) : mensuelle
-    - ≥ 2 ans (730 j) : trimestrielle (2 ans exact inclus)
-    - au-delà du ``seuil_jours`` du profil (si ≥ 2 ans) : annuelle
+    - < 183 j (< 6 mois) : hebdomadaire (libellé de période ``YYYY-Sww``)
+    - 183 j à 366 j (6 mois à 1 an) : mensuelle (libellé ``YYYY-MM``)
+    - 367 j à 730 j (1 an à 2 ans) : trimestrielle
+    - > 730 j (> 2 ans) : annuelle
     """
-    if duree_jours <= VENTILATION_JOURS_SIX_MOIS:
+    if duree_jours < VENTILATION_JOURS_SIX_MOIS:
         return "hebdomadaire"
     if duree_jours <= VENTILATION_JOURS_UN_AN:
         return "mensuelle"
-    if duree_jours < VENTILATION_JOURS_DEUX_ANS:
-        return "mensuelle"
-    if seuil_jours >= VENTILATION_JOURS_DEUX_ANS and duree_jours > seuil_jours:
-        return "annuelle"
-    return "trimestrielle"
+    if duree_jours <= VENTILATION_JOURS_DEUX_ANS:
+        return "trimestrielle"
+    return "annuelle"

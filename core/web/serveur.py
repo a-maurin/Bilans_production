@@ -293,6 +293,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(payload).encode('utf-8'))
             return
 
+        if parsed_path == "/api/system-health":
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            try:
+                from core.common.chargeurs_donnees import get_source_files_metadata
+                import shutil
+                out_dir = SRC_DIR / "data" / "out"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                usage = shutil.disk_usage(out_dir)
+                health_info = {
+                    "status": "OK",
+                    "plugin_version": "1.0.7",
+                    "python_version": sys.version.split()[0],
+                    "platform": sys.platform,
+                    "disk_free_mb": round(usage.free / (1024 * 1024), 1),
+                    "sources": get_source_files_metadata(SRC_DIR),
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+            except Exception as exc:
+                health_info = {"status": "ERROR", "message": str(exc)}
+        if parsed_path == "/api/profile-schema":
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            try:
+                import yaml
+                schema_path = SRC_DIR / "config" / "profils_bilan" / "schema_ui.yaml"
+                if schema_path.exists():
+                    schema_data = yaml.safe_load(schema_path.read_text(encoding="utf-8")) or {}
+                else:
+                    schema_data = {}
+                self.wfile.write(json.dumps(schema_data, ensure_ascii=False).encode('utf-8'))
+            except Exception as exc:
+                self.wfile.write(json.dumps({"error": str(exc)}).encode('utf-8'))
+            return
+
         if parsed_path == "/api/update-sources":
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream; charset=utf-8')

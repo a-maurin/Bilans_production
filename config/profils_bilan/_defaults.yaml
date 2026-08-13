@@ -13,6 +13,8 @@
 # ========================================================================================
 
 schema_version: 2
+version: 1.0.0
+date_modification: "2026-08-13"
 pipeline: thematic
 presentation_scope: thematique
 aggregation:

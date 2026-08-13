@@ -600,3 +600,9 @@ def _generate_pdf_content(
             registry.render(sec_id, ctx)
 
     builder.build()
+
+    try:
+        from core.engine.validation_audit import export_notice_sources
+        export_notice_sources(out_dir, ctx, _ROOT)
+    except Exception as exc:
+        logger.warning("Impossible d'exporter NOTICE_SOURCES.txt : %s", exc)

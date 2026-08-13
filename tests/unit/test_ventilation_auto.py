@@ -69,13 +69,13 @@ def test_hebdomadaire_a_six_mois() -> None:
     assert resolve_ventilation_auto((d2 - d1).days) == "hebdomadaire"
 
 
-def test_mensuelle_entre_un_an_et_deux_ans() -> None:
+def test_trimestrielle_entre_un_an_et_deux_ans() -> None:
     p = _profile_auto()
     d1 = pd.Timestamp("2024-01-01")
     d2 = pd.Timestamp("2025-11-30")
     mode, *_ = op._resolve_ventilation_mode_from_profile(p, date_deb_ts=d1, date_fin_ts=d2)
-    assert mode == "mensuelle"
-    assert resolve_ventilation_mode_global(d1, d2) == "mensuelle"
+    assert mode == "trimestrielle"
+    assert resolve_ventilation_mode_global(d1, d2) == "trimestrielle"
 
 
 def test_trimestrielle_a_exactement_deux_ans() -> None:
@@ -85,19 +85,10 @@ def test_trimestrielle_a_exactement_deux_ans() -> None:
     assert resolve_ventilation_auto((d2 - d1).days, seuil_jours=366) == "trimestrielle"
 
 
-def test_auto_trimestrielle_si_duree_entre_deux_ans_et_seuil() -> None:
-    """Avec un seuil > 2 ans, une période ≥ 2 ans mais ≤ seuil reste trimestrielle."""
-    p = {"periode_analyse": {"ventilation": {"type": "auto", "seuil_jours": 800}}}
+def test_annuelle_si_duree_superieure_a_deux_ans() -> None:
+    p = {"periode_analyse": {"ventilation": {"type": "auto"}}}
     d1 = pd.Timestamp("2020-01-01")
-    d2 = pd.Timestamp("2022-01-10")
-    mode, *_ = op._resolve_ventilation_mode_from_profile(p, date_deb_ts=d1, date_fin_ts=d2)
-    assert mode == "trimestrielle"
-
-
-def test_auto_annuelle_si_duree_au_dela_du_seuil() -> None:
-    p = {"periode_analyse": {"ventilation": {"type": "auto", "seuil_jours": 800}}}
-    d1 = pd.Timestamp("2010-01-01")
-    d2 = pd.Timestamp("2025-01-01")
+    d2 = pd.Timestamp("2023-01-05")
     mode, *_ = op._resolve_ventilation_mode_from_profile(p, date_deb_ts=d1, date_fin_ts=d2)
     assert mode == "annuelle"
 

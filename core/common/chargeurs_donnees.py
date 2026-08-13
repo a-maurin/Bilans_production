@@ -153,6 +153,34 @@ def _compute_files_signature(files: List[Path]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def get_source_files_metadata(root: Path) -> List[Dict[str, str]]:
+    """Retourne la liste des métadonnées des fichiers sources sous data/sources/ pour la traçabilité en annexe."""
+    from datetime import datetime
+    sources_dir = root / "data" / "sources"
+    if not sources_dir.exists():
+        return []
+    results: List[Dict[str, str]] = []
+    for p in sorted(sources_dir.glob("*")):
+        if p.is_file() and not p.name.startswith("."):
+            try:
+                st = p.stat()
+                mtime_str = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M")
+                size_str = f"{st.st_size / 1024:.1f} Ko" if st.st_size < 1024 * 1024 else f"{st.st_size / (1024 * 1024):.2f} Mo"
+                h = hashlib.sha256()
+                with open(p, "rb") as f:
+                    h.update(f.read(8 * 1024 * 1024))
+                sig = h.hexdigest()[:12]
+                results.append({
+                    "nom": p.name,
+                    "taille": size_str,
+                    "date": mtime_str,
+                    "empreinte": sig,
+                })
+            except Exception as e:
+                logger.debug("Impossible d'extraire la signature de %s: %s", p, e)
+    return results
+
+
 def _load_disk_cache(root: Path, cache_key: str, files_sig: str) -> Optional[pd.DataFrame]:
     try:
         cache_dir = _get_cache_dir(root)
@@ -2354,6 +2382,18 @@ def load_pve(
             df["UNITE_libelle"] = df[unite_col]
         if "UNITE_libelle" in df.columns and "unite_libelle" not in df.columns:
             df["unite_libelle"] = df["UNITE_libelle"]
+
+        # Traitement et déduplication des doublons sur INF-ID
+        if "INF-ID" in df.columns:
+            nb_dups = int(df["INF-ID"].duplicated().sum())
+            if nb_dups > 0:
+                pct_dups = (nb_dups / max(1, len(df))) * 100
+                logger.warning(
+                    "PVe : %d doublon(s) détecté(s) sur INF-ID (%.2f%% des lignes). Déduplication automatique sur INF-ID.",
+                    nb_dups,
+                    pct_dups,
+                )
+                df = df.drop_duplicates(subset=["INF-ID"], keep="first").copy()
 
         # Date de mise en force (MIF)
         if "INF-DATE-MIF" in df.columns:

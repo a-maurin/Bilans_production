@@ -3039,6 +3039,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatElement('val-usagers-controles', 'total_usagers_controles');
                 updateStatElement('val-pve', 'total_pve');
 
+                if (isCompare && resN && resN1 && resN.stats && resN1.stats) {
+                    const ctrlN = resN.stats.total_controles || 0;
+                    const ctrlN1 = resN1.stats.total_controles || 0;
+                    const dropPct = ctrlN1 > 0 ? ((ctrlN - ctrlN1) / ctrlN1 * 100) : 0;
+                    const warnEl = document.getElementById('volume-anomaly-warning');
+                    if (warnEl) {
+                        if (ctrlN1 > 0 && dropPct < -30) {
+                            warnEl.style.display = 'block';
+                            warnEl.innerHTML = `⚠️ <b>Alerte volume N-1 :</b> Baisse de ${Math.abs(dropPct.toFixed(1))}% des contrôles vs l'année précédente. Vérifiez la complétude de l'export source.`;
+                        } else {
+                            warnEl.style.display = 'none';
+                        }
+                    }
+                } else {
+                    const warnEl = document.getElementById('volume-anomaly-warning');
+                    if (warnEl) warnEl.style.display = 'none';
+                }
+
                 const inputDom = document.getElementById('domaine-snc');
                 const inputTh = document.getElementById('theme-snc');
                 const inputAct = document.getElementById('type-action-snc');

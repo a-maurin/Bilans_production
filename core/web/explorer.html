@@ -868,6 +868,9 @@ Composants principaux :
                 <div id="profile-warning-banner" class="results-count-badge hidden"
                     style="margin-bottom: 12px; background: #fffbeb; border-color: #f59e0b; color: #b45309; text-align: left; display: none;">
                 </div>
+                <div id="volume-anomaly-warning" class="results-count-badge hidden"
+                    style="margin-bottom: 12px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; text-align: left; padding: 8px 12px; border-radius: 6px; font-size: 12px; display: none;">
+                </div>
                 <form id="config-form">
 
                     <!-- 1. Filtres de profils thématiques (Quoi) -->
@@ -1705,6 +1708,14 @@ Composants principaux :
                             <label for="set-tech-debug" style="margin:0; cursor:pointer;">Activer le mode
                                 Débogage</label>
                         </div>
+                        <div style="margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                            <button type="button" onclick="loadSystemHealth()"
+                                style="background: #059669; color: #ffffff; border: none; border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                🩺 Diagnostic & Santé Système
+                            </button>
+                            <div id="system-health-display" style="display: none; margin-top: 10px; font-size: 12px; background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; max-height: 150px; overflow-y: auto;">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2065,6 +2076,31 @@ Composants principaux :
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
+            }
+        }
+
+        async function loadSystemHealth() {
+            const container = document.getElementById('system-health-display');
+            if (!container) return;
+            container.style.display = 'block';
+            container.innerHTML = '<i>Chargement du bilan de santé système...</i>';
+            try {
+                const res = await fetch('/api/system-health');
+                const data = await res.json();
+                if (data.status === 'OK') {
+                    let html = `<div><b>OFBilan v${data.plugin_version}</b> (${data.platform}, Python ${data.python_version})</div>`;
+                    html += `<div><b>Espace disque disponible :</b> ${data.disk_free_mb} Mo</div>`;
+                    html += `<div style="margin-top:4px;"><b>Fichiers sources (${data.sources.length}) :</b></div><ul style="margin:2px 0; padding-left:16px;">`;
+                    data.sources.forEach(s => {
+                        html += `<li><b>${s.nom}</b> (${s.taille}, ${s.date}, <code>${s.empreinte}</code>)</li>`;
+                    });
+                    html += `</ul>`;
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<span style="color:#ef4444">Erreur : ${data.message || 'Erreur inconnue'}</span>`;
+                }
+            } catch (err) {
+                container.innerHTML = `<span style="color:#ef4444">Erreur réseau lors de l'accès au serveur.</span>`;
             }
         }
 

@@ -102,7 +102,15 @@ def render_sec1(ctx: PdfContext) -> None:
     kf.append((str(ctx.nb_pa), "Nombre de PA"))
     if ctx.nb_pve > 0:
         kf.append((str(ctx.nb_pve), "Nombre de PVe"))
+    if not kf:
+        kf.append(("0", "Aucune activité enregistrée"))
     ctx.builder.add_key_figures(kf)
+
+    if ctx.nb_localisations == 0 and ctx.nb_pve == 0 and ctx.nb_pej == 0 and ctx.nb_pa == 0:
+        ctx.builder.add_paragraph(
+            "<br/><b>Information Bilan Nul :</b> Aucun point de contrôle ni procédure n'a été enregistré sur la période et le périmètre sélectionnés.",
+            style="BodyText",
+        )
 
 
 def render_sec2_chap(ctx: PdfContext) -> None:
@@ -1144,4 +1152,18 @@ def render_sec6(ctx: PdfContext) -> None:
             glossaire_rows,
             col_widths=[ctx.avail_w * 0.25, ctx.avail_w * 0.75],
             col_aligns=["LEFT", "LEFT"],
+        )
+
+    from core.common.chargeurs_donnees import get_source_files_metadata
+    sources_meta = get_source_files_metadata(_ROOT)
+    if sources_meta:
+        ctx.builder.add_paragraph("<br/><b>Traçabilité et empreinte des données sources</b>", style="Heading3")
+        headers = ["Fichier source", "Taille", "Dernière modification", "Signature"]
+        rows = [headers]
+        for src in sources_meta:
+            rows.append([src["nom"], src["taille"], src["date"], src["empreinte"]])
+        ctx.builder.add_table(
+            rows,
+            col_widths=[ctx.avail_w * 0.40, ctx.avail_w * 0.15, ctx.avail_w * 0.25, ctx.avail_w * 0.20],
+            col_aligns=["LEFT", "CENTER", "CENTER", "CENTER"],
         )

@@ -44,8 +44,9 @@ if _IDENTITE_PATH.exists():
     _IDENTITE = yaml.safe_load(_IDENTITE_PATH.read_text(encoding="utf-8")) or {}
 else:
     _IDENTITE = {}
-_NOM = _IDENTITE.get("nom", "Aguirre MAURIN")
-_SERVICE = _IDENTITE.get("service", "OFB")
+_user_dict = _IDENTITE.get("utilisateur", {}) if isinstance(_IDENTITE.get("utilisateur"), dict) else _IDENTITE
+_NOM = _user_dict.get("nom", _IDENTITE.get("nom", "Aguirre MAURIN"))
+_SERVICE = _user_dict.get("service", _IDENTITE.get("service", "OFB"))
 REALISATION = f"<b>Réalisation :</b> {_NOM} — {_SERVICE}"
 from copy import deepcopy
 from pathlib import Path

@@ -767,3 +767,36 @@ def run_profile_aggregations(
         point, pa, pej, pve, echelle, code, out_dir,
         pej_global=pej_global, profil_id=str(profile.get("id", "global"))
     )
+
+
+def compute_n1_deltas(
+    count_current: int,
+    count_previous: int,
+    *,
+    seuil_alerte_baisse_pct: float = -30.0,
+) -> dict[str, Any]:
+    """Calcul de la variation N-1 et détection des anomalies de volume de données."""
+    if count_previous <= 0:
+        return {
+            "count_current": count_current,
+            "count_previous": count_previous,
+            "delta_pct": None,
+            "delta_str": "N/A",
+            "alerte_baisse": False,
+            "message_alerte": None,
+        }
+    delta_pct = round(((count_current - count_previous) / count_previous) * 100, 1)
+    signe = "+" if delta_pct > 0 else ""
+    delta_str = f"{signe}{delta_pct}%"
+    alerte = delta_pct < seuil_alerte_baisse_pct
+    msg = None
+    if alerte:
+        msg = f"Alerte statistique : Baisse de {abs(delta_pct)}% vs N-1 (vérifier la complétude de la source)."
+    return {
+        "count_current": count_current,
+        "count_previous": count_previous,
+        "delta_pct": delta_pct,
+        "delta_str": delta_str,
+        "alerte_baisse": alerte,
+        "message_alerte": msg,
+    }

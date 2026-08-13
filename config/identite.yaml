@@ -1,3 +1,13 @@
-# Identité de l'utilisateur pour les bilans PDF
-nom: "Aguirre MAURIN"
-service: "OFB — Service départemental de la Côte d'Or"
+# Configuration d'identité et de marque (multi-établissements / marque blanche)
+etablissement:
+  nom_court: "OFB"
+  nom_long: "Office Français de la Biodiversité"
+  logo_principal: "ref/programme/logos/bandeau_ofbilan.svg"
+  logo_secondaire: "icon.svg"
+  mentions_legales: "OFB/OSCEAN – MININT/AGC – OpenStreetMap"
+  contact_defaut: "aguirre.maurin@ofb.gouv.fr"
+
+utilisateur:
+  nom: "Aguirre MAURIN"
+  service: "OFB — Service départemental de la Côte d'Or"
+

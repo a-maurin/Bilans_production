@@ -2288,10 +2288,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isZero = (count === 0);
 
                 return {
-                    fillColor: isZero ? 'transparent' : getColor(count),
-                    fillOpacity: isZero ? 0 : 0.75,
-                    stroke: false,
-                    weight: 0
+                    fillColor: isZero ? '#f1f5f9' : getColor(count),
+                    fillOpacity: 1.0,
+                    stroke: true,
+                    color: '#cbd5e1',
+                    weight: 0.5
                 };
             },
             onEachFeature: function(feature, layer) {
@@ -2321,7 +2322,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 layer.on({
                     mouseover: function(e) {
                         const l = e.target;
-                        l.setStyle({ weight: 3, color: '#0f172a', fillOpacity: 0.85 });
+                        l.setStyle({ weight: 2.5, color: '#0f172a', fillOpacity: 1.0 });
                         l.bringToFront();
                     },
                     mouseout: function(e) {
@@ -2379,7 +2380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             legendItems.innerHTML = '';
             legendItems.innerHTML += `
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 14px; height: 14px; background: transparent; border: 1px dashed #cbd5e1; border-radius: 2px;"></span>
+                    <span style="width: 14px; height: 14px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 2px;"></span>
                     <span>${zeroLabel}</span>
                 </div>
             `;

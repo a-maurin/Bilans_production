@@ -1637,6 +1637,21 @@ document.addEventListener('DOMContentLoaded', () => {
         wheelPxPerZoomLevel: 120
     }).setView([46.2276, 2.2137], 6);
 
+    // Panes d'empilement z-index pour garantir que le masque laiteux est au-dessus des tuiles IGN (410) et les entités au-dessus du masque (650)
+    const maskPane = map.createPane('maskPane');
+    maskPane.style.zIndex = '410';
+    maskPane.style.pointerEvents = 'none';
+
+    const choroplethPane = map.createPane('choroplethPane');
+    choroplethPane.style.zIndex = '420';
+
+    const entityMarkersPane = map.createPane('entityMarkersPane');
+    entityMarkersPane.style.zIndex = '650';
+
+    const maskRenderer = L.canvas({ pane: 'maskPane' });
+    const choroplethRenderer = L.canvas({ pane: 'choroplethPane' });
+    const entityRenderer = L.canvas({ pane: 'entityMarkersPane' });
+
     L.tileLayer('https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>'
@@ -1866,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getOrCreateCluster(key, parentFG, byTerritoryMap, extraOpts = {}) {
         if (!byTerritoryMap.has(key)) {
-            const grp = L.markerClusterGroup({ ...baseClusterOpts, ...extraOpts });
+            const grp = L.markerClusterGroup({ clusterPane: 'entityMarkersPane', ...baseClusterOpts, ...extraOpts });
             parentFG.addLayer(grp);
             byTerritoryMap.set(key, grp);
         }
@@ -2261,6 +2276,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         choroplethLayer = L.geoJSON(currentBoundaryGeojson, {
+            pane: 'choroplethPane',
+            renderer: choroplethRenderer,
             style: function(feature) {
                 const props = feature.properties || {};
                 const codeDept = normCode(props.code_dept || props.insee_dep || props.INSEE_DEP || props.code_dep || props.dep);
@@ -3145,7 +3162,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 color: '#FFFFFF',
                                 weight: 1.5,
                                 opacity: 1,
-                                fillOpacity: 1
+                                fillOpacity: 1,
+                                pane: 'entityMarkersPane',
+                                renderer: entityRenderer
                             });
 
                             const resColor = getMarkerColor(pt.resultat);
@@ -3206,7 +3225,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 fillColor: procColor,
                                 fillOpacity: 1,
                                 weight: 1.5,
-                                interactive: true
+                                interactive: true,
+                                pane: 'entityMarkersPane',
+                                renderer: entityRenderer
                             });
                             const precColor = p.precision_loc && p.precision_loc.includes('Approximatif') ? '#D97706' : '#2563EB';
                             const popup = `
@@ -3334,7 +3355,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 color: '#FFFFFF',
                                 weight: 1.5,
                                 opacity: 0.5,
-                                fillOpacity: 0.4
+                                fillOpacity: 0.4,
+                                pane: 'entityMarkersPane',
+                                renderer: entityRenderer
                             });
 
                             const resColor = getMarkerColor(pt.resultat);
@@ -3394,7 +3417,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 opacity: 0.5,
                                 fillOpacity: 0.35,
                                 weight: 1.5,
-                                interactive: true
+                                interactive: true,
+                                pane: 'entityMarkersPane',
+                                renderer: entityRenderer
                             });
                             const popup = `
                             <strong>${p.type} (N-1)</strong><br>
@@ -3530,12 +3555,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         color: 'transparent',
                         fillColor: '#ffffff',
                         fillOpacity: 0.60,
-                        interactive: false
+                        interactive: false,
+                        pane: 'maskPane',
+                        renderer: maskRenderer
                     }).addTo(map);
 
                     if (boundaryLayer && typeof boundaryLayer.bringToFront === 'function') {
                         try { boundaryLayer.bringToFront(); } catch (e) {}
                     }
+                    [clusterParent, pejParent, paParent, pveParent, clusterParentN1, pejParentN1, paParentN1, pveParentN1].forEach(grp => {
+                        if (grp && typeof grp.bringToFront === 'function') {
+                            try { grp.bringToFront(); } catch (e) {}
+                        }
+                    });
                 }
 
                 // Center/zoom map
@@ -5172,11 +5204,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const img = document.createElement('img');
                                 img.src = dataUrl;
                                 img.className = 'print-canvas-snapshot';
+                                const parentPane = canvas.closest('.leaflet-pane');
+                                let zIdx = 450;
+                                if (parentPane && parentPane.style && parentPane.style.zIndex) {
+                                    zIdx = parseInt(parentPane.style.zIndex, 10) || 450;
+                                }
                                 img.style.cssText = [
                                     'position:absolute', 'left:0', 'top:0',
                                     'width:100%', 'height:100%',
                                     'pointer-events:none',
-                                    'z-index:450',
+                                    `z-index:${zIdx}`,
                                     '-webkit-print-color-adjust:exact',
                                     'print-color-adjust:exact'
                                 ].join(';');

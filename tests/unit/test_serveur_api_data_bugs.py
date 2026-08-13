@@ -139,3 +139,29 @@ def test_session_cache_restored_on_success():
         cache["active"] = original
 
     assert cache["active"] is True
+
+
+# ── Bug /api/system-health & _get_plugin_version ───────────────────────────
+
+def test_get_plugin_version():
+    """Vérifie que _get_plugin_version lit metadata.txt ou renvoie la version par défaut."""
+    version = serveur_mod._get_plugin_version()
+    assert isinstance(version, str)
+    assert len(version) > 0
+
+
+def test_system_health_route_has_write_and_return():
+    """Vérifie que le bloc /api/system-health contient wfile.write et return dans serveur.py."""
+    project_root = Path(__file__).resolve().parents[2]
+    serveur_source = (project_root / "core" / "web" / "serveur.py").read_text(encoding="utf-8")
+    
+    health_idx = serveur_source.find('parsed_path == "/api/system-health":')
+    assert health_idx != -1
+    
+    schema_idx = serveur_source.find('parsed_path == "/api/profile-schema":', health_idx)
+    assert schema_idx != -1
+    
+    route_block = serveur_source[health_idx:schema_idx]
+    assert "self.wfile.write" in route_block
+    assert "return" in route_block
+    assert "_get_plugin_version()" in route_block

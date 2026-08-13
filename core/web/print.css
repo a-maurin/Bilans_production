@@ -19,7 +19,7 @@
 
 @page {
     size: A4 landscape;
-    margin: 0.4cm 0.8cm;
+    margin: 0.2cm 0.4cm;
 }
 
 @media print {
@@ -37,9 +37,9 @@
         left: 0;
         width: 100%;
         text-align: center;
-        font-size: 8px;
+        font-size: 7px;
         color: #7f8c8d;
-        padding-bottom: 3px;
+        padding-bottom: 1px;
         z-index: 1000;
         font-style: italic;
     }
@@ -56,13 +56,13 @@
         print-color-adjust: exact !important;
     }
 
-    /* Titre d'impression */
+    /* Titre d'impression (sans ligne inférieure) */
     #print-title-container {
         display: flex !important;
         align-items: center;
-        border-bottom: 2px solid #00A3A6;
-        padding-bottom: 5px;
-        margin-bottom: 6px;
+        border-bottom: none !important;
+        padding-bottom: 2px !important;
+        margin-bottom: 2px !important;
         page-break-after: avoid;
     }
 
@@ -103,14 +103,14 @@
     /* #print-title-container injecté dans col gauche par JS — visible dans le flux */
     #print-title-container {
         display: flex !important;
-        margin-bottom: 4px !important;
+        margin-bottom: 2px !important;
     }
 
     /* Grille principale */
     .dashboard-split-grid {
         display: flex !important;
         flex-direction: row !important;
-        gap: 8px !important;
+        gap: 4px !important;
         margin: 0 !important;
         padding: 0 !important;
         page-break-inside: avoid;
@@ -121,7 +121,7 @@
         flex: 0 0 610px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 6px !important;
+        gap: 2px !important;
         overflow: hidden !important;
     }
 
@@ -130,7 +130,7 @@
         flex: 0 0 442px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 6px !important;
+        gap: 2px !important;
     }
 
     div[style*="display: flex; flex-direction: column"] {
@@ -141,16 +141,16 @@
     .card {
         border: none !important;
         box-shadow: none !important;
-        margin-bottom: 6px !important;
-        padding: 4px 6px !important;
+        margin-bottom: 2px !important;
+        padding: 2px 4px !important;
     }
 
     .card h2 {
-        font-size: 9pt !important;
+        font-size: 8.5pt !important;
         color: #00A3A6 !important;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 2px !important;
-        margin-bottom: 4px !important;
+        border-bottom: none !important;
+        padding-bottom: 0px !important;
+        margin-bottom: 2px !important;
         margin-top: 0 !important;
         page-break-after: avoid;
     }
@@ -169,19 +169,19 @@
     .stats-grid {
         display: flex !important;
         justify-content: space-between;
-        margin-bottom: 6px !important;
-        gap: 4px !important;
+        margin-bottom: 2px !important;
+        gap: 2px !important;
         page-break-inside: avoid;
     }
 
     .stat-card {
         flex: 1;
-        margin: 0 2px;
+        margin: 0 1px;
         border: 1px solid #002F4B !important;
         border-radius: 4px !important;
         box-sizing: border-box;
         background: #f0fdf4 !important;
-        padding: 4px 6px !important;
+        padding: 2px 4px !important;
     }
 
     .stat-card .value {
@@ -283,8 +283,8 @@
     div[style*="grid-template-columns: 1fr 1fr"] {
         display: flex !important;
         justify-content: space-between;
-        gap: 4px !important;
-        margin-bottom: 5px !important;
+        gap: 2px !important;
+        margin-bottom: 2px !important;
     }
 
     div[style*="grid-template-columns: 1fr 1fr"] > div {
@@ -293,7 +293,7 @@
         height: 190px !important;
         page-break-inside: avoid;
         border: 1px solid #ddd !important;
-        padding: 4px !important;
+        padding: 2px !important;
         min-height: unset !important;
         box-sizing: border-box !important;
     }
@@ -329,11 +329,11 @@
 
     /* Réduire les gaps entre sections de la col droite */
     .dashboard-split-grid > div:last-child .card {
-        gap: 4px !important;
+        gap: 2px !important;
     }
     .dashboard-split-grid > div:last-child .card > div[style*="gap: 10px"],
     .dashboard-split-grid > div:last-child .card > div[style*="gap: 15px"] {
-        gap: 4px !important;
+        gap: 2px !important;
     }
 
     /* Canvas global : NE PAS mettre height:auto — ça écrase chart.resize() */
@@ -356,14 +356,15 @@
     /* Titres h3 dans les graphiques */
     h3[style*="font-size:11px"] {
         font-size: 8pt !important;
-        margin-bottom: 2px !important;
+        margin-top: 0px !important;
+        margin-bottom: 1px !important;
     }
 
     /* Légendes DOM des donuts */
     #legend-results,
     #legend-usagers {
-        gap: 2px 4px !important;
-        margin-top: 2px !important;
+        gap: 1px 3px !important;
+        margin-top: 0px !important;
         font-size: 6pt !important;
     }
 }

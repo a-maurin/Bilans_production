@@ -154,31 +154,59 @@ def _compute_files_signature(files: List[Path]) -> str:
 
 
 def get_source_files_metadata(root: Path) -> List[Dict[str, str]]:
-    """Retourne la liste des métadonnées des fichiers sources sous data/sources/ pour la traçabilité en annexe."""
+    """Retourne la liste des métadonnées des fichiers sources sous data/sources/ (y compris sous-dossiers récursifs SIG) pour la traçabilité en annexe."""
     from datetime import datetime
     sources_dir = root / "data" / "sources"
     if not sources_dir.exists():
         return []
+
+    # 1. Parcours récursif des seuls fichiers ayant une extension de données métiers
+    allowed_exts = {".xlsx", ".ods", ".csv", ".gpkg", ".shp", ".geojson", ".parquet"}
+    all_files: List[Path] = [
+        p for p in sources_dir.rglob("*")
+        if p.is_file()
+        and p.suffix.lower() in allowed_exts
+        and not p.name.startswith(".")
+        and not p.name.startswith("~$")
+    ]
+
+    # 2. Filtrage des sidecars Shapefile (.shx, .dbf, .prj...) si un fichier .shp principal existe
+    shp_stems = {p.with_suffix("").as_posix() for p in all_files if p.suffix.lower() == ".shp"}
+    sidecar_exts = {".shx", ".dbf", ".prj", ".cpg", ".qpj", ".sbn", ".sbx"}
+
+    filtered_files: List[Path] = []
+    for p in all_files:
+        ext = p.suffix.lower()
+        posix_stem = p.with_suffix("").as_posix()
+        if ext in sidecar_exts and posix_stem in shp_stems:
+            continue
+        filtered_files.append(p)
+
+
+    # 3. Construction des métadonnées avec chemins relatifs POSIX
     results: List[Dict[str, str]] = []
-    for p in sorted(sources_dir.glob("*")):
-        if p.is_file() and not p.name.startswith("."):
-            try:
-                st = p.stat()
-                mtime_str = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M")
-                size_str = f"{st.st_size / 1024:.1f} Ko" if st.st_size < 1024 * 1024 else f"{st.st_size / (1024 * 1024):.2f} Mo"
-                h = hashlib.sha256()
-                with open(p, "rb") as f:
-                    h.update(f.read(8 * 1024 * 1024))
-                sig = h.hexdigest()[:12]
-                results.append({
-                    "nom": p.name,
-                    "taille": size_str,
-                    "date": mtime_str,
-                    "empreinte": sig,
-                })
-            except Exception as e:
-                logger.debug("Impossible d'extraire la signature de %s: %s", p, e)
+    for p in filtered_files:
+        try:
+            rel_path = p.relative_to(sources_dir).as_posix()
+            st = p.stat()
+            mtime_str = datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M")
+            size_str = f"{st.st_size / 1024:.1f} Ko" if st.st_size < 1024 * 1024 else f"{st.st_size / (1024 * 1024):.2f} Mo"
+            h = hashlib.sha256()
+            with open(p, "rb") as f:
+                h.update(f.read(8 * 1024 * 1024))
+            sig = h.hexdigest()[:12]
+            results.append({
+                "nom": rel_path,
+                "taille": size_str,
+                "date": mtime_str,
+                "empreinte": sig,
+            })
+        except Exception as e:
+            logger.debug("Impossible d'extraire la signature de %s: %s", p, e)
+
+    results.sort(key=lambda x: x["nom"].lower())
     return results
+
 
 
 def _load_disk_cache(root: Path, cache_key: str, files_sig: str) -> Optional[pd.DataFrame]:

@@ -88,6 +88,21 @@ except Exception:
     PORT = 8000
 
 _PRELOAD_LOGS = []
+
+def _get_plugin_version(default: str = "1.0.7") -> str:
+    metadata_path = SRC_DIR / "metadata.txt"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, 'r', encoding='utf8') as f:
+                for line in f:
+                    if line.startswith('version='):
+                        val = line.strip().split('=')[1].strip()
+                        if val:
+                            return val
+        except Exception:
+            pass
+    return default
+
 _PRELOAD_STATUS = "loading"
 _preload_lock = threading.Lock()
 
@@ -306,7 +321,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 usage = shutil.disk_usage(out_dir)
                 health_info = {
                     "status": "OK",
-                    "plugin_version": "1.0.7",
+                    "plugin_version": _get_plugin_version(),
                     "python_version": sys.version.split()[0],
                     "platform": sys.platform,
                     "disk_free_mb": round(usage.free / (1024 * 1024), 1),
@@ -315,6 +330,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 }
             except Exception as exc:
                 health_info = {"status": "ERROR", "message": str(exc)}
+            self.wfile.write(json.dumps(health_info, ensure_ascii=False).encode('utf-8'))
+            return
         if parsed_path == "/api/profile-schema":
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -383,18 +400,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             import urllib.request
             import ssl
             
-            metadata_path = Path(__file__).resolve().parents[2] / "metadata.txt"
-            current_version = "0.0.0"
-            if metadata_path.exists():
-                try:
-                    with open(metadata_path, 'r', encoding='utf8') as f:
-                        for line in f:
-                            if line.startswith('version='):
-                                current_version = line.strip().split('=')[1]
-                                break
-                except Exception:
-                    pass
-
+            current_version = _get_plugin_version(default="0.0.0")
             update_data = {"update_available": False, "latest_version": current_version, "zip_url": ""}
             
             try:
